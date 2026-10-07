@@ -3,18 +3,12 @@
 import { useState } from "react";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
-import {
-  initialFriends,
-  initialSentNotifications,
-  upcomingEvents,
-  SentNotification,
-} from "@/lib/mock-data";
+import { useAppData } from "@/lib/store";
 
 export default function NotificationsPage() {
-  const friends = initialFriends.filter((f) => f.status === "friend");
-  const [sent, setSent] = useState<SentNotification[]>(initialSentNotifications);
+  const { friends, events, notifications, sendNotification } = useAppData();
   const [composing, setComposing] = useState(false);
-  const [eventId, setEventId] = useState(upcomingEvents[0]?.id ?? "");
+  const [eventId, setEventId] = useState(events[0]?.id ?? "");
   const [selected, setSelected] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState("");
@@ -24,24 +18,22 @@ export default function NotificationsPage() {
   }
 
   function resetForm() {
-    setEventId(upcomingEvents[0]?.id ?? "");
+    setEventId(events[0]?.id ?? "");
     setSelected([]);
     setMessage("");
     setComposing(false);
   }
 
   function handleSend() {
-    const event = upcomingEvents.find((e) => e.id === eventId);
+    const event = events.find((e) => e.id === eventId);
     if (!event || selected.length === 0) return;
     const names = friends.filter((f) => selected.includes(f.id)).map((f) => f.name);
-    const newNotification: SentNotification = {
-      id: `n${Date.now()}`,
+    sendNotification({
       eventTitle: event.title,
       recipients: names,
       message: message || `邀請你一起參加「${event.title}」！`,
       sentAt: "剛剛",
-    };
-    setSent((prev) => [newNotification, ...prev]);
+    });
     setToast(`已發送給 ${names.length} 位好友`);
     resetForm();
     setTimeout(() => setToast(""), 2500);
@@ -68,10 +60,10 @@ export default function NotificationsPage() {
 
         {!composing && (
           <div className="flex flex-col gap-3">
-            {sent.length === 0 && (
+            {notifications.length === 0 && (
               <p className="text-sm text-lion-muted text-center py-8">尚未發送任何活動通知</p>
             )}
-            {sent.map((n) => (
+            {notifications.map((n) => (
               <div key={n.id} className="rounded-xl bg-lion-card border border-white/[0.06] p-3">
                 <div className="flex items-center justify-between mb-1">
                   <p className="font-medium text-sm">{n.eventTitle}</p>
@@ -87,22 +79,26 @@ export default function NotificationsPage() {
         {composing && (
           <div className="flex flex-col gap-4">
             <div>
-              <label className="text-xs text-lion-cream/60 mb-1 block">選擇活動</label>
-              <select
-                value={eventId}
-                onChange={(e) => setEventId(e.target.value)}
-                className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-lion-cream outline-none focus:border-lion-gold"
-              >
-                {upcomingEvents.map((ev) => (
-                  <option key={ev.id} value={ev.id} className="text-black">
-                    {ev.title}（{ev.date}）
-                  </option>
-                ))}
-              </select>
+              <label className="text-xs text-lion-muted mb-1 block">選擇活動</label>
+              {events.length === 0 ? (
+                <p className="text-xs text-lion-muted">目前沒有可選擇的活動，請先到「活動」頁發布一個活動。</p>
+              ) : (
+                <select
+                  value={eventId}
+                  onChange={(e) => setEventId(e.target.value)}
+                  className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-lion-cream outline-none focus:border-lion-gold"
+                >
+                  {events.map((ev) => (
+                    <option key={ev.id} value={ev.id} className="text-black">
+                      {ev.title}（{ev.date}）
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div>
-              <label className="text-xs text-lion-cream/60 mb-2 block">
+              <label className="text-xs text-lion-muted mb-2 block">
                 選擇好友（已選 {selected.length} 位）
               </label>
               <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
@@ -133,7 +129,7 @@ export default function NotificationsPage() {
             </div>
 
             <div>
-              <label className="text-xs text-lion-cream/60 mb-1 block">通知訊息（選填）</label>
+              <label className="text-xs text-lion-muted mb-1 block">通知訊息（選填）</label>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -152,7 +148,7 @@ export default function NotificationsPage() {
               </button>
               <button
                 onClick={handleSend}
-                disabled={selected.length === 0}
+                disabled={selected.length === 0 || events.length === 0}
                 className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-2.5 text-sm disabled:opacity-40"
               >
                 發送給 {selected.length} 位好友
