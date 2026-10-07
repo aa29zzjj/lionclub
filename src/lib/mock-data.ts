@@ -41,6 +41,31 @@ export const upcomingEvents: EventItem[] = [
   { id: "e3", title: "新舊任職員交接典禮", date: "2026/11/02 (一) 18:30", location: "晶華酒店 3F 宴會廳" },
 ];
 
+// 組織階層：複合區 → 專區 → 分區 → 分會（對照後台 Club/Zone/District/MultiDistrict）
+export type ClubOption = {
+  id: string;
+  name: string;
+  path: string; // 複合區／專區／分區
+};
+
+export const clubOptions: ClubOption[] = [
+  { id: "c1", name: "台北曙光獅子會", path: "A 複合區 ／ 台北專區 ／ 中正分區" },
+  { id: "c2", name: "台北晨曦獅子會", path: "A 複合區 ／ 台北專區 ／ 大安分區" },
+  { id: "c3", name: "板橋大觀獅子會", path: "A 複合區 ／ 新北專區 ／ 板橋分區" },
+  { id: "c4", name: "新竹東區獅子會", path: "B 複合區 ／ 新竹專區 ／ 東區分區" },
+  { id: "c5", name: "台中中區獅子會", path: "C 複合區 ／ 台中專區 ／ 中區分區" },
+];
+
+// 模擬 QR Code 邀請連結所攜帶的資訊：分會 + 當屆 PIN
+export const mockInvite = {
+  clubId: "c1",
+  pin: "248613",
+};
+
+export const memberTitleOptions = ["新會員", "會員", "幹事", "總幹事", "副會長", "會長", "財務", "秘書"];
+
+export const tagOptions = ["財務規劃", "法律諮詢", "餐飲經營", "品牌行銷", "不動產", "醫療保健", "教育培訓", "公益服務"];
+
 export type SentNotification = {
   id: string;
   eventTitle: string;

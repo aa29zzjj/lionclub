@@ -13,7 +13,7 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <div className="shrink-0 bg-lion-navy/95 border-t border-white/10 flex items-stretch px-2 pb-2 pt-1 backdrop-blur">
+    <div className="sticky bottom-0 shrink-0 bg-lion-navy/95 border-t border-white/10 flex items-stretch px-2 pb-2 pt-1 backdrop-blur z-10">
       {tabs.map((tab) => {
         const active = pathname?.startsWith(tab.href);
         return (

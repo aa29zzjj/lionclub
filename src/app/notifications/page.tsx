@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import PhoneShell from "@/components/PhoneShell";
+import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import {
   initialFriends,
@@ -48,8 +48,8 @@ export default function NotificationsPage() {
   }
 
   return (
-    <PhoneShell>
-      <div className="px-5 pt-10 pb-4">
+    <AppShell>
+      <div className="px-5 pt-6 pb-4">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold">活動通知</h1>
           <button
@@ -161,6 +161,6 @@ export default function NotificationsPage() {
           </div>
         )}
       </div>
-    </PhoneShell>
+    </AppShell>
   );
 }

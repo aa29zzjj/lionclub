@@ -1,13 +1,13 @@
 "use client";
 
-import PhoneShell from "@/components/PhoneShell";
+import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { currentUser, upcomingEvents, initialFriends } from "@/lib/mock-data";
 
 export default function HomePage() {
   return (
-    <PhoneShell>
-      <div className="px-5 pt-10 pb-4">
+    <AppShell>
+      <div className="px-5 pt-6 pb-4">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Avatar name={currentUser.name} color={currentUser.avatarColor} />
@@ -52,6 +52,6 @@ export default function HomePage() {
           ))}
         </div>
       </div>
-    </PhoneShell>
+    </AppShell>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import PhoneShell from "@/components/PhoneShell";
+import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { Friend, initialFriends, suggestedFriends } from "@/lib/mock-data";
 
@@ -35,8 +35,8 @@ export default function FriendsPage() {
   }
 
   return (
-    <PhoneShell>
-      <div className="px-5 pt-10 pb-4">
+    <AppShell>
+      <div className="px-5 pt-6 pb-4">
         <h1 className="text-xl font-bold mb-4">好友</h1>
 
         <div className="flex gap-2 mb-4">
@@ -139,6 +139,6 @@ export default function FriendsPage() {
           </div>
         )}
       </div>
-    </PhoneShell>
+    </AppShell>
   );
 }
