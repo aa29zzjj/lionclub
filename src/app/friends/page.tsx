@@ -49,7 +49,7 @@ export default function FriendsPage() {
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`flex-1 text-xs font-medium py-2 rounded-full transition-colors ${
-                tab === t.id ? "bg-lion-gold text-lion-navyDeep" : "bg-white/5 text-lion-cream/60"
+                tab === t.id ? "bg-lion-gold text-lion-navyDeep" : "bg-white/[0.04] text-lion-muted"
               }`}
             >
               {t.label}
@@ -63,18 +63,18 @@ export default function FriendsPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="搜尋好友姓名或分會"
-              className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-2.5 text-sm text-lion-cream placeholder:text-lion-cream/30 outline-none focus:border-lion-gold mb-4"
+              className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm text-lion-cream placeholder:text-lion-cream/30 outline-none focus:border-lion-gold mb-4"
             />
             <div className="flex flex-col gap-2">
               {filteredFriends.length === 0 && (
-                <p className="text-sm text-lion-cream/40 text-center py-8">找不到符合的好友</p>
+                <p className="text-sm text-lion-muted text-center py-8">找不到符合的好友</p>
               )}
               {filteredFriends.map((f) => (
-                <div key={f.id} className="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 p-3">
+                <div key={f.id} className="flex items-center gap-3 rounded-xl bg-lion-card border border-white/[0.06] p-3">
                   <Avatar name={f.name} color={f.avatarColor} />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{f.name}</p>
-                    <p className="text-xs text-lion-cream/50 truncate">
+                    <p className="text-xs text-lion-muted truncate">
                       {f.chapter}
                       {f.title ? ` · ${f.title}` : ""}
                     </p>
@@ -87,13 +87,13 @@ export default function FriendsPage() {
 
         {tab === "requests" && (
           <div className="flex flex-col gap-2">
-            {incoming.length === 0 && <p className="text-sm text-lion-cream/40 text-center py-8">目前沒有好友邀請</p>}
+            {incoming.length === 0 && <p className="text-sm text-lion-muted text-center py-8">目前沒有好友邀請</p>}
             {incoming.map((f) => (
-              <div key={f.id} className="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 p-3">
+              <div key={f.id} className="flex items-center gap-3 rounded-xl bg-lion-card border border-white/[0.06] p-3">
                 <Avatar name={f.name} color={f.avatarColor} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm truncate">{f.name}</p>
-                  <p className="text-xs text-lion-cream/50 truncate">{f.chapter}</p>
+                  <p className="text-xs text-lion-muted truncate">{f.chapter}</p>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <button
@@ -116,13 +116,13 @@ export default function FriendsPage() {
 
         {tab === "add" && (
           <div className="flex flex-col gap-2">
-            <p className="text-xs text-lion-cream/50 mb-1">推薦好友</p>
+            <p className="text-xs text-lion-muted mb-1">推薦好友</p>
             {suggestions.map((f) => (
-              <div key={f.id} className="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 p-3">
+              <div key={f.id} className="flex items-center gap-3 rounded-xl bg-lion-card border border-white/[0.06] p-3">
                 <Avatar name={f.name} color={f.avatarColor} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm truncate">{f.name}</p>
-                  <p className="text-xs text-lion-cream/50 truncate">
+                  <p className="text-xs text-lion-muted truncate">
                     {f.chapter}
                     {f.title ? ` · ${f.title}` : ""}
                   </p>
@@ -130,7 +130,7 @@ export default function FriendsPage() {
                 <button
                   disabled={f.status === "pending-out"}
                   onClick={() => sendRequest(f.id)}
-                  className="text-xs shrink-0 font-medium px-3 py-1.5 rounded-full bg-lion-gold text-lion-navyDeep disabled:bg-white/10 disabled:text-lion-cream/40"
+                  className="text-xs shrink-0 font-medium px-3 py-1.5 rounded-full bg-lion-gold text-lion-navyDeep disabled:bg-white/10 disabled:text-lion-muted"
                 >
                   {f.status === "pending-out" ? "已送出" : "加好友"}
                 </button>

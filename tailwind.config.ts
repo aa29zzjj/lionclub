@@ -8,10 +8,12 @@ const config: Config = {
         lion: {
           gold: "#C8A951",
           goldLight: "#E3CB85",
-          navy: "#12224A",
-          navyLight: "#1E3A6E",
-          navyDeep: "#0B1733",
-          cream: "#FBF7EE",
+          navy: "#141B30",
+          navyLight: "#232C4A",
+          navyDeep: "#0A0D18",
+          card: "#141A2B",
+          cream: "#F3F1EA",
+          muted: "#8B92A8",
         },
       },
       fontFamily: {

@@ -72,8 +72,8 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#e9ebf1] flex justify-center">
-      <div className="w-full max-w-[480px] min-h-screen bg-lion-navyDeep text-lion-cream flex flex-col px-6 py-10 shadow-xl">
+    <div className="min-h-screen w-full bg-[#eef0f4] flex justify-center">
+      <div className="w-full max-w-[480px] min-h-screen bg-lion-navyDeep text-lion-cream flex flex-col px-6 py-10">
         <div className="flex items-center gap-3 mb-8">
           <span className="text-2xl">🦁</span>
           <div>
@@ -88,7 +88,7 @@ export default function RegisterPage() {
 
         {step === "invite" && (
           <form onSubmit={handleInviteSubmit} className="flex flex-col gap-5">
-            <div className="rounded-2xl bg-white/5 border border-white/10 p-5 flex flex-col items-center">
+            <div className="rounded-2xl bg-lion-card border border-white/[0.06] p-5 flex flex-col items-center">
               <div className="w-36 h-36 rounded-xl overflow-hidden mb-3">
                 <QrCode seed="lionclub-invite" />
               </div>
@@ -113,11 +113,11 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="text-xs text-lion-cream/60 mb-1 block">所屬分會</label>
+              <label className="text-xs text-lion-muted mb-1 block">所屬分會</label>
               <select
                 value={clubId}
                 onChange={(e) => setClubId(e.target.value)}
-                className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-3 text-sm outline-none focus:border-lion-gold"
+                className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-3 text-sm outline-none focus:border-lion-gold"
               >
                 <option value="" className="text-black">
                   請選擇分會
@@ -132,12 +132,12 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="text-xs text-lion-cream/60 mb-1 block">邀請 PIN 碼</label>
+              <label className="text-xs text-lion-muted mb-1 block">邀請 PIN 碼</label>
               <input
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 placeholder="請輸入 6 碼 PIN"
-                className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-3 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold tracking-widest"
+                className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-3 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold tracking-widest"
               />
               <p className="text-[11px] text-lion-cream/40 mt-1">PIN 碼由分會會長／財務每年度發放，demo 碼：{mockInvite.pin}</p>
             </div>
@@ -190,29 +190,29 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="text-xs text-lion-cream/60 mb-1 block">姓名</label>
+                <label className="text-xs text-lion-muted mb-1 block">姓名</label>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="王小明"
-                  className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-2.5 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold"
+                  className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold"
                 />
               </div>
               <div>
-                <label className="text-xs text-lion-cream/60 mb-1 block">生日</label>
+                <label className="text-xs text-lion-muted mb-1 block">生日</label>
                 <input
                   type="date"
                   value={birthday}
                   onChange={(e) => setBirthday(e.target.value)}
-                  className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
+                  className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
                 />
               </div>
               <div>
-                <label className="text-xs text-lion-cream/60 mb-1 block">職稱／身分</label>
+                <label className="text-xs text-lion-muted mb-1 block">職稱／身分</label>
                 <select
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
+                  className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
                 >
                   {memberTitleOptions.map((t) => (
                     <option key={t} value={t} className="text-black">
@@ -222,28 +222,28 @@ export default function RegisterPage() {
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-lion-cream/60 mb-1 block">Email</label>
+                <label className="text-xs text-lion-muted mb-1 block">Email</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@lions.tw"
-                  className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-2.5 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold"
+                  className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold"
                 />
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-lion-cream/60 mb-1 block">手機</label>
+                <label className="text-xs text-lion-muted mb-1 block">手機</label>
                 <input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="09xx-xxx-xxx"
-                  className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-2.5 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold"
+                  className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-xs text-lion-cream/60 mb-1 block">專長／興趣標籤（選填）</label>
+              <label className="text-xs text-lion-muted mb-1 block">專長／興趣標籤（選填）</label>
               <div className="flex flex-wrap gap-2">
                 {tagOptions.map((tag) => {
                   const active = selectedTags.includes(tag);
@@ -266,13 +266,13 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="text-xs text-lion-cream/60 mb-1 block">簡介／經歷（選填）</label>
+              <label className="text-xs text-lion-muted mb-1 block">簡介／經歷（選填）</label>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 rows={3}
                 placeholder="簡單介紹自己的專業背景或參與獅子會的經歷"
-                className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-2.5 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold resize-none"
+                className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold resize-none"
               />
             </div>
 

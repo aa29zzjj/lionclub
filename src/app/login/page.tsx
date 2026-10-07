@@ -27,7 +27,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full bg-[#e9ebf1] flex justify-center">
-      <div className="w-full max-w-[480px] min-h-screen bg-gradient-to-b from-lion-navy to-lion-navyDeep text-lion-cream flex flex-col justify-center px-8 py-12 shadow-xl">
+      <div className="w-full max-w-[480px] min-h-screen bg-lion-navyDeep text-lion-cream flex flex-col justify-center px-8 py-12">
         <div className="flex flex-col items-center mb-10">
           <div className="w-20 h-20 rounded-full bg-lion-gold/15 border-2 border-lion-gold flex items-center justify-center text-3xl mb-4">
             🦁
@@ -38,23 +38,23 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
-            <label className="text-xs text-lion-cream/60 mb-1 block">會員信箱</label>
+            <label className="text-xs text-lion-muted mb-1 block">會員信箱</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@lions.tw"
-              className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-3 text-lion-cream placeholder:text-lion-cream/30 outline-none focus:border-lion-gold transition-colors"
+              className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-3 text-lion-cream placeholder:text-lion-cream/30 outline-none focus:border-lion-gold transition-colors"
             />
           </div>
           <div>
-            <label className="text-xs text-lion-cream/60 mb-1 block">密碼</label>
+            <label className="text-xs text-lion-muted mb-1 block">密碼</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-3 text-lion-cream placeholder:text-lion-cream/30 outline-none focus:border-lion-gold transition-colors"
+              className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-3 text-lion-cream placeholder:text-lion-cream/30 outline-none focus:border-lion-gold transition-colors"
             />
           </div>
 
@@ -75,7 +75,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-xs text-lion-cream/40 mt-8">
+        <p className="text-center text-xs text-lion-muted mt-8">
           還不是會員？
           <Link href="/register" className="text-lion-gold">
             掃描邀請 QR Code 加入

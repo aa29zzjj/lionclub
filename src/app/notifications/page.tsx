@@ -69,16 +69,16 @@ export default function NotificationsPage() {
         {!composing && (
           <div className="flex flex-col gap-3">
             {sent.length === 0 && (
-              <p className="text-sm text-lion-cream/40 text-center py-8">尚未發送任何活動通知</p>
+              <p className="text-sm text-lion-muted text-center py-8">尚未發送任何活動通知</p>
             )}
             {sent.map((n) => (
-              <div key={n.id} className="rounded-xl bg-white/5 border border-white/10 p-3">
+              <div key={n.id} className="rounded-xl bg-lion-card border border-white/[0.06] p-3">
                 <div className="flex items-center justify-between mb-1">
                   <p className="font-medium text-sm">{n.eventTitle}</p>
-                  <span className="text-[11px] text-lion-cream/40">{n.sentAt}</span>
+                  <span className="text-[11px] text-lion-muted">{n.sentAt}</span>
                 </div>
                 <p className="text-xs text-lion-cream/60 mb-2">{n.message}</p>
-                <p className="text-[11px] text-lion-cream/40">已通知：{n.recipients.join("、")}</p>
+                <p className="text-[11px] text-lion-muted">已通知：{n.recipients.join("、")}</p>
               </div>
             ))}
           </div>
@@ -91,7 +91,7 @@ export default function NotificationsPage() {
               <select
                 value={eventId}
                 onChange={(e) => setEventId(e.target.value)}
-                className="w-full rounded-xl bg-white/10 border border-white/15 px-3 py-2.5 text-sm text-lion-cream outline-none focus:border-lion-gold"
+                className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-lion-cream outline-none focus:border-lion-gold"
               >
                 {upcomingEvents.map((ev) => (
                   <option key={ev.id} value={ev.id} className="text-black">
@@ -139,7 +139,7 @@ export default function NotificationsPage() {
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="寫點話邀請好友一起參加吧！"
                 rows={3}
-                className="w-full rounded-xl bg-white/10 border border-white/15 px-3 py-2.5 text-sm text-lion-cream placeholder:text-lion-cream/30 outline-none focus:border-lion-gold resize-none"
+                className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-lion-cream placeholder:text-lion-cream/30 outline-none focus:border-lion-gold resize-none"
               />
             </div>
 

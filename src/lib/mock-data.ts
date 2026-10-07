@@ -12,6 +12,9 @@ export const currentUser = {
   chapter: "台北曙光獅子會",
   title: "會員",
   avatarColor: "#C8A951",
+  memberNo: "A1-1-1-0023",
+  joinYear: "2022",
+  validUntil: "2026/12/31",
 };
 
 export const initialFriends: Friend[] = [
