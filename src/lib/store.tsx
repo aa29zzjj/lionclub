@@ -13,10 +13,16 @@ import {
   initialSentNotifications,
   qrScanCandidate,
 } from "./mock-data";
+import { initialMemberExperiences, MemberExperience } from "./experience-data";
 
 type AppData = {
   profile: UserProfile;
   updateProfile: (patch: Partial<UserProfile>) => void;
+
+  experiences: MemberExperience[];
+  addExperience: (experience: Omit<MemberExperience, "id">) => MemberExperience;
+  updateExperience: (id: string, patch: Partial<MemberExperience>) => void;
+  removeExperience: (id: string) => void;
 
   friends: Friend[];
   incoming: Friend[];
@@ -37,6 +43,7 @@ const AppDataContext = createContext<AppData | null>(null);
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(initialUser);
+  const [experiences, setExperiences] = useState<MemberExperience[]>(initialMemberExperiences);
   const [friends, setFriends] = useState<Friend[]>(initialFriends.filter((f) => f.status === "friend"));
   const [incoming, setIncoming] = useState<Friend[]>(initialFriends.filter((f) => f.status === "pending-in"));
   const [suggestions, setSuggestions] = useState<Friend[]>(initialSuggested);
@@ -45,6 +52,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   function updateProfile(patch: Partial<UserProfile>) {
     setProfile((prev) => ({ ...prev, ...patch }));
+  }
+
+  function addExperience(experience: Omit<MemberExperience, "id">) {
+    const newExperience = { ...experience, id: `experience-${Date.now()}` };
+    setExperiences((prev) => [newExperience, ...prev]);
+    return newExperience;
+  }
+
+  function updateExperience(id: string, patch: Partial<MemberExperience>) {
+    setExperiences((prev) => prev.map((experience) => (experience.id === id ? { ...experience, ...patch } : experience)));
+  }
+
+  function removeExperience(id: string) {
+    setExperiences((prev) => prev.filter((experience) => experience.id !== id));
   }
 
   function acceptRequest(id: string) {
@@ -82,6 +103,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     () => ({
       profile,
       updateProfile,
+      experiences,
+      addExperience,
+      updateExperience,
+      removeExperience,
       friends,
       incoming,
       suggestions,
@@ -94,7 +119,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       notifications,
       sendNotification,
     }),
-    [profile, friends, incoming, suggestions, events, notifications]
+    [profile, experiences, friends, incoming, suggestions, events, notifications]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

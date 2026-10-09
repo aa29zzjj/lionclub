@@ -2,14 +2,16 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { memberTitleOptions, tagOptions } from "@/lib/mock-data";
 import { useAppData } from "@/lib/store";
+import { calculateLionYears } from "@/lib/experience-data";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { profile, updateProfile } = useAppData();
+  const { profile, updateProfile, experiences } = useAppData();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [editing, setEditing] = useState(false);
@@ -21,6 +23,8 @@ export default function ProfilePage() {
   const [bio, setBio] = useState(profile.bio);
   const [tags, setTags] = useState<string[]>(profile.tags);
   const [toast, setToast] = useState("");
+  const lionYears = calculateLionYears(profile.joinYear);
+  const currentPositions = experiences.filter((experience) => experience.isCurrent && experience.kind !== "membership");
 
   function startEditing() {
     setAvatarUrl(profile.avatarUrl);
@@ -81,6 +85,13 @@ export default function ProfilePage() {
                 <p className="text-sm text-lion-muted">
                   {profile.chapter} · {profile.title}
                 </p>
+                {profile.districtCode && (
+                  <p className="text-[11px] text-lion-gold/80 mt-1">
+                    MD{profile.multipleDistrictCode} · {profile.districtCode} 區
+                    {profile.regionName ? ` · ${profile.regionName}` : ""}
+                    {profile.zoneName ? ` · ${profile.zoneName}` : ""}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -97,7 +108,25 @@ export default function ProfilePage() {
                 <span className="text-lion-muted">會員編號</span>
                 <span>{profile.memberNo}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-lion-muted">入會年／獅齡</span>
+                <span>{profile.joinYear}／{lionYears ?? "—"} 年</span>
+              </div>
             </div>
+
+            <Link
+              href="/profile/experience"
+              className="rounded-2xl bg-gradient-to-br from-lion-navyLight to-[#243968] border border-lion-gold/25 p-4 flex items-center justify-between"
+            >
+              <div>
+                <p className="text-[11px] tracking-[0.18em] text-lion-gold mb-1">LIONS EXPERIENCE</p>
+                <p className="font-semibold">獅子會資歷</p>
+                <p className="text-xs text-lion-muted mt-1">
+                  {currentPositions.length > 0 ? `現任 ${currentPositions[0].positionName}` : `${experiences.length} 筆會籍與任職紀錄`}
+                </p>
+              </div>
+              <span className="w-9 h-9 rounded-full bg-lion-gold text-lion-navyDeep flex items-center justify-center text-lg">→</span>
+            </Link>
 
             {profile.tags.length > 0 && (
               <div className="flex flex-wrap gap-2">

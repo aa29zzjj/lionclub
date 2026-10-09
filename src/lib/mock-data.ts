@@ -11,6 +11,10 @@ export type UserProfile = {
   id: string;
   name: string;
   chapter: string;
+  multipleDistrictCode?: string;
+  districtCode?: string;
+  regionName?: string;
+  zoneName?: string;
   title: string;
   avatarColor: string;
   avatarUrl: string | null;
@@ -26,7 +30,11 @@ export type UserProfile = {
 export const currentUser: UserProfile = {
   id: "u1",
   name: "黃子杰",
-  chapter: "台北曙光獅子會",
+  chapter: "台北市獅子會",
+  multipleDistrictCode: "300A",
+  districtCode: "300A-1",
+  regionName: "第一專區",
+  zoneName: "第二分區",
   title: "會員",
   avatarColor: "#C8A951",
   avatarUrl: null,
@@ -40,9 +48,9 @@ export const currentUser: UserProfile = {
 };
 
 export const initialFriends: Friend[] = [
-  { id: "f1", name: "陳怡君", chapter: "台北曙光獅子會", title: "總幹事", avatarColor: "#E07A5F", status: "friend" },
-  { id: "f2", name: "林志明", chapter: "台北晨曦獅子會", title: "會長", avatarColor: "#3D8361", status: "friend" },
-  { id: "f3", name: "王美華", chapter: "台北曙光獅子會", title: "財務", avatarColor: "#5B6EE1", status: "friend" },
+  { id: "f1", name: "陳怡君", chapter: "台北市獅子會", title: "總幹事", avatarColor: "#E07A5F", status: "friend" },
+  { id: "f2", name: "林志明", chapter: "中央獅子會", title: "會長", avatarColor: "#3D8361", status: "friend" },
+  { id: "f3", name: "王美華", chapter: "台北市獅子會", title: "財務", avatarColor: "#5B6EE1", status: "friend" },
   { id: "f4", name: "李建國", chapter: "新竹東區獅子會", avatarColor: "#D4A373", status: "friend" },
   { id: "f5", name: "張雅婷", chapter: "台中中區獅子會", avatarColor: "#9B5DE5", status: "pending-in" },
 ];
@@ -58,7 +66,7 @@ export const qrScanCandidate: Friend = {
 };
 
 export const suggestedFriends: Friend[] = [
-  { id: "s1", name: "吳俊宏", chapter: "台北曙光獅子會", title: "新會員", avatarColor: "#48A9A6", status: "none" },
+  { id: "s1", name: "吳俊宏", chapter: "台北市獅子會", title: "新會員", avatarColor: "#48A9A6", status: "none" },
   { id: "s2", name: "周佳穎", chapter: "板橋大觀獅子會", avatarColor: "#E3B23C", status: "none" },
   { id: "s3", name: "蔡宗翰", chapter: "桃園龍潭獅子會", avatarColor: "#C1666B", status: "none" },
 ];
@@ -81,7 +89,7 @@ export const upcomingEvents: EventItem[] = [
     location: "台北國際會議中心",
     description: "本年度會員大會將選舉新任理監事，並頒發年度服務獎項，歡迎所有會員出席並邀請新朋友參加。",
     capacity: 200,
-    hostChapter: "台北曙光獅子會",
+    hostChapter: "台北市獅子會",
   },
   {
     id: "e2",
@@ -99,7 +107,7 @@ export const upcomingEvents: EventItem[] = [
     location: "晶華酒店 3F 宴會廳",
     description: "歡送卸任幹部並歡迎新任理監事團隊，典禮後安排餐敘。",
     capacity: 120,
-    hostChapter: "台北曙光獅子會",
+    hostChapter: "台北市獅子會",
   },
 ];
 
@@ -111,8 +119,8 @@ export type ClubOption = {
 };
 
 export const clubOptions: ClubOption[] = [
-  { id: "c1", name: "台北曙光獅子會", path: "A 複合區 ／ 台北專區 ／ 中正分區" },
-  { id: "c2", name: "台北晨曦獅子會", path: "A 複合區 ／ 台北專區 ／ 大安分區" },
+  { id: "c1", name: "台北市獅子會", path: "300A-1 區" },
+  { id: "c2", name: "中央獅子會", path: "300A-1 區" },
   { id: "c3", name: "板橋大觀獅子會", path: "A 複合區 ／ 新北專區 ／ 板橋分區" },
   { id: "c4", name: "新竹東區獅子會", path: "B 複合區 ／ 新竹專區 ／ 東區分區" },
   { id: "c5", name: "台中中區獅子會", path: "C 複合區 ／ 台中專區 ／ 中區分區" },

@@ -60,6 +60,11 @@ export default function HomePage() {
               <p className="text-xs text-lion-muted">
                 {profile.chapter} · {profile.title}
               </p>
+              {profile.districtCode && (
+                <p className="text-[10px] text-lion-gold/75 mt-0.5">
+                  MD{profile.multipleDistrictCode} · {profile.districtCode} 區
+                </p>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-y-2 border-t border-white/10 pt-3 text-xs">

@@ -9,7 +9,10 @@
 - **會員登入** [src/app/login/page.tsx](src/app/login/page.tsx)
 - **好友系統**（好友列表／邀請中／加好友）[src/app/friends/page.tsx](src/app/friends/page.tsx)
 - **活動通知**（選活動、勾選好友、發送通知）[src/app/notifications/page.tsx](src/app/notifications/page.tsx)
+- **會員／幹部資歷**（組織、職位、年度、審核狀態）[src/app/profile/experience/page.tsx](src/app/profile/experience/page.tsx)
 - 另附簡易首頁架構 [src/app/home/page.tsx](src/app/home/page.tsx)，供导覽與後續串接使用
+
+資歷功能的更新內容、後端串接建議與待辦事項請見 [docs/MEMBER_EXPERIENCE_HANDOFF.md](docs/MEMBER_EXPERIENCE_HANDOFF.md)。
 
 ## 開發
 
