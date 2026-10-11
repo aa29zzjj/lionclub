@@ -1,49 +1,85 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import QrCode from "@/components/QrCode";
-import { clubOptions, mockInvite, memberTitleOptions, tagOptions } from "@/lib/mock-data";
+import { memberTitleOptions, tagOptions } from "@/lib/mock-data";
 
 type Step = "invite" | "profile" | "done";
+type OrgOption = { id: string; name: string; districtCode: string | null };
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<Step>("invite");
+  const [verifying, setVerifying] = useState(false);
 
-  const [clubId, setClubId] = useState("");
+  const [organizations, setOrganizations] = useState<OrgOption[]>([]);
+  const [organizationId, setOrganizationId] = useState("");
   const [pin, setPin] = useState("");
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState("");
 
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [birthday, setBirthday] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [title, setTitle] = useState(memberTitleOptions[0]);
   const [bio, setBio] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [profileError, setProfileError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const selectedClub = clubOptions.find((c) => c.id === clubId);
+  const selectedOrg = organizations.find((o) => o.id === organizationId);
 
-  function fillFromQrDemo() {
-    setClubId(mockInvite.clubId);
-    setPin(mockInvite.pin);
-    setInviteError("");
-  }
+  useEffect(() => {
+    fetch("/api/organizations?level=club")
+      .then((res) => res.json())
+      .then((data) => setOrganizations(data.organizations ?? []))
+      .catch(() => setOrganizations([]));
+  }, []);
+
+  // 真的掃到 QR 連結時（/register?org=xxx&token=yyy）自動驗證並跳過手動輸入
+  useEffect(() => {
+    const org = searchParams.get("org");
+    const token = searchParams.get("token");
+    if (!org || !token) return;
+
+    setVerifying(true);
+    fetch(`/api/invites/verify?token=${encodeURIComponent(token)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.valid && data.organizationId === org) {
+          setOrganizationId(data.organizationId);
+          setPin(data.pin);
+          setInviteToken(token);
+          setStep("profile");
+        } else {
+          setInviteError("這個邀請連結已失效，請用手動輸入或聯絡分會幹部索取新的邀請。");
+        }
+      })
+      .catch(() => setInviteError("驗證邀請連結時發生錯誤，請改用手動輸入。"))
+      .finally(() => setVerifying(false));
+  }, [searchParams]);
 
   function handleInviteSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!clubId || !pin) {
+    if (!organizationId || !pin) {
       setInviteError("請選擇分會並輸入邀請 PIN 碼");
-      return;
-    }
-    if (pin !== mockInvite.pin) {
-      setInviteError("PIN 碼不正確，請向分會幹部確認");
       return;
     }
     setInviteError("");
@@ -53,22 +89,59 @@ export default function RegisterPage() {
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setAvatarPreview(url);
+    setAvatarPreview(URL.createObjectURL(file));
   }
 
   function toggleTag(tag: string) {
     setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   }
 
-  function handleProfileSubmit(e: React.FormEvent) {
+  async function handleProfileSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !email) {
       setProfileError("請填寫姓名與 Email");
       return;
     }
+    if (password.length < 8) {
+      setProfileError("密碼至少需要 8 個字元");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setProfileError("兩次輸入的密碼不一致");
+      return;
+    }
+
     setProfileError("");
-    setStep("done");
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId,
+          pin,
+          name,
+          email,
+          password,
+          birthday: birthday || undefined,
+          phone: phone || undefined,
+          title,
+          bio: bio || undefined,
+          tags: selectedTags,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setProfileError(data.error ?? "送出失敗，請稍後再試");
+        return;
+      }
+      void inviteToken; // token 僅用於驗證階段，註冊以 pin 送出即可
+      setStep("done");
+    } catch {
+      setProfileError("連線失敗，請稍後再試");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -86,7 +159,9 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {step === "invite" && (
+        {verifying && <p className="text-sm text-lion-muted text-center py-8">正在驗證邀請連結...</p>}
+
+        {!verifying && step === "invite" && (
           <form onSubmit={handleInviteSubmit} className="flex flex-col gap-5">
             <div className="rounded-2xl bg-lion-card border border-white/[0.06] p-5 flex flex-col items-center">
               <div className="w-36 h-36 rounded-xl overflow-hidden mb-3">
@@ -95,15 +170,8 @@ export default function RegisterPage() {
               <p className="text-xs text-lion-cream/50 text-center">
                 請用手機掃描分會幹部提供的邀請 QR Code
                 <br />
-                （示意圖，掃描後會自動帶入下方分會與 PIN 碼）
+                （掃描後會直接帶到這一頁並自動驗證，不用手動輸入）
               </p>
-              <button
-                type="button"
-                onClick={fillFromQrDemo}
-                className="mt-3 text-xs text-lion-gold underline underline-offset-2"
-              >
-                模擬掃描成功
-              </button>
             </div>
 
             <div className="flex items-center gap-3 text-xs text-lion-cream/40">
@@ -115,20 +183,22 @@ export default function RegisterPage() {
             <div>
               <label className="text-xs text-lion-muted mb-1 block">所屬分會</label>
               <select
-                value={clubId}
-                onChange={(e) => setClubId(e.target.value)}
+                value={organizationId}
+                onChange={(e) => setOrganizationId(e.target.value)}
                 className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-3 text-sm outline-none focus:border-lion-gold"
               >
                 <option value="" className="text-black">
                   請選擇分會
                 </option>
-                {clubOptions.map((c) => (
-                  <option key={c.id} value={c.id} className="text-black">
-                    {c.name}
+                {organizations.map((o) => (
+                  <option key={o.id} value={o.id} className="text-black">
+                    {o.name}
                   </option>
                 ))}
               </select>
-              {selectedClub && <p className="text-[11px] text-lion-cream/40 mt-1">{selectedClub.path}</p>}
+              {selectedOrg?.districtCode && (
+                <p className="text-[11px] text-lion-cream/40 mt-1">{selectedOrg.districtCode}</p>
+              )}
             </div>
 
             <div>
@@ -139,7 +209,7 @@ export default function RegisterPage() {
                 placeholder="請輸入 6 碼 PIN"
                 className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-3 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold tracking-widest"
               />
-              <p className="text-[11px] text-lion-cream/40 mt-1">PIN 碼由分會會長／財務每年度發放，demo 碼：{mockInvite.pin}</p>
+              <p className="text-[11px] text-lion-cream/40 mt-1">PIN 碼由分會會長／財務每年度發放</p>
             </div>
 
             {inviteError && <p className="text-sm text-red-400">{inviteError}</p>}
@@ -159,9 +229,9 @@ export default function RegisterPage() {
 
         {step === "profile" && (
           <form onSubmit={handleProfileSubmit} className="flex flex-col gap-5">
-            {selectedClub && (
+            {selectedOrg && (
               <div className="rounded-xl bg-lion-gold/10 border border-lion-gold/30 px-4 py-2.5 text-xs text-lion-gold">
-                加入分會：{selectedClub.name}
+                加入分會：{selectedOrg.name}
               </div>
             )}
 
@@ -185,7 +255,7 @@ export default function RegisterPage() {
                 className="hidden"
                 onChange={handleAvatarChange}
               />
-              <p className="text-xs text-lion-cream/50 mt-2">上傳大頭貼</p>
+              <p className="text-xs text-lion-cream/50 mt-2">上傳大頭貼（暫存預覽，尚未串接雲端上傳）</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -240,6 +310,26 @@ export default function RegisterPage() {
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold"
                 />
               </div>
+              <div className="col-span-2">
+                <label className="text-xs text-lion-muted mb-1 block">設定密碼</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="至少 8 個字元"
+                  className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-lion-muted mb-1 block">確認密碼</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="再輸入一次密碼"
+                  className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm placeholder:text-lion-cream/30 outline-none focus:border-lion-gold"
+                />
+              </div>
             </div>
 
             <div>
@@ -288,9 +378,10 @@ export default function RegisterPage() {
               </button>
               <button
                 type="submit"
-                className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-3 text-sm hover:bg-lion-goldLight transition-colors"
+                disabled={submitting}
+                className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-3 text-sm hover:bg-lion-goldLight transition-colors disabled:opacity-60"
               >
-                送出申請
+                {submitting ? "送出中..." : "送出申請"}
               </button>
             </div>
           </form>
@@ -308,7 +399,7 @@ export default function RegisterPage() {
             </div>
             <h2 className="text-lg font-bold">已送出入會申請</h2>
             <p className="text-sm text-lion-cream/60 max-w-xs">
-              {name} 您好，您的申請將由「{selectedClub?.name}」幹部審核後開通帳號，審核結果將寄送至 {email}。
+              {name} 您好，您的申請將由「{selectedOrg?.name}」幹部審核後開通帳號，審核結果將寄送至 {email}。
             </p>
             <button
               onClick={() => router.push("/login")}

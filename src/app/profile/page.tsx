@@ -264,12 +264,24 @@ export default function ProfilePage() {
         )}
 
         {!editing && (
-          <button
-            onClick={() => router.push("/login")}
-            className="mt-8 w-full text-center text-xs text-lion-muted"
-          >
-            登出
-          </button>
+          <>
+            <Link
+              href="/admin/invites"
+              className="mt-8 block w-full text-center text-xs text-lion-gold"
+            >
+              幹部專用：產生入會邀請 QR
+            </Link>
+            <button
+              onClick={async () => {
+                await fetch("/api/auth/logout", { method: "POST" });
+                router.push("/login");
+                router.refresh();
+              }}
+              className="mt-3 w-full text-center text-xs text-lion-muted"
+            >
+              登出
+            </button>
+          </>
         )}
       </div>
     </AppShell>

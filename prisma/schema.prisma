@@ -297,17 +297,21 @@ model ClubInvite {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  pin          String
+  pin          String // 給人看著畫面手動輸入
+  token        String   @unique // 長隨機字串，只放在 QR 碼編碼的網址裡，掃描後免輸入 PIN
   issuedById   String
   issuedBy     Member   @relation("InviteIssuedBy", fields: [issuedById], references: [id], onDelete: Cascade)
 
   validFrom  DateTime @default(now())
   validUntil DateTime
+  revokedAt  DateTime? // 幹部手動停用
 
   usageCount Int @default(0)
   usageLimit Int?
 
   createdAt DateTime @default(now())
+
+  @@index([organizationId])
 }
 
 // ────────────────────────────────

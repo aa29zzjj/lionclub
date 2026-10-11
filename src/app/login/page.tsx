@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email || !password) {
       setError("請輸入帳號與密碼");
@@ -19,10 +19,24 @@ export default function LoginPage() {
     }
     setError("");
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "登入失敗，請再試一次");
+        return;
+      }
       router.push("/home");
-    }, 500);
+      router.refresh();
+    } catch {
+      setError("連線失敗，請稍後再試");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -34,6 +48,7 @@ export default function LoginPage() {
           </div>
           <h1 className="text-2xl font-bold text-lion-cream tracking-wide">獅子會 App</h1>
           <p className="text-lion-cream/50 text-sm mt-1">LIONS CLUB MEMBER PORTAL</p>
+          <p className="text-lion-gold/70 text-xs mt-3">展示帳號：demo@lions.tw ／ 密碼：demo1234</p>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
