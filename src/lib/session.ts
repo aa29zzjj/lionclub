@@ -1,13 +1,13 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { getAppSecrets } from "./secrets";
 
 const COOKIE_NAME = "lionclub_session";
 const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 30; // 30 天
 
-function getSecretKey() {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) throw new Error("AUTH_SECRET is not set");
-  return new TextEncoder().encode(secret);
+async function getSecretKey() {
+  const { AUTH_SECRET } = await getAppSecrets();
+  return new TextEncoder().encode(AUTH_SECRET);
 }
 
 export type SessionPayload = {
@@ -21,7 +21,7 @@ export async function createSession(payload: SessionPayload) {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${SESSION_DURATION_SECONDS}s`)
-    .sign(getSecretKey());
+    .sign(await getSecretKey());
 
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, token, {
@@ -44,7 +44,7 @@ export async function getSession(): Promise<SessionPayload | null> {
   if (!token) return null;
 
   try {
-    const { payload } = await jwtVerify(token, getSecretKey());
+    const { payload } = await jwtVerify(token, await getSecretKey());
     return payload as unknown as SessionPayload;
   } catch {
     return null;

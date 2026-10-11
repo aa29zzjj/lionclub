@@ -1,10 +1,11 @@
-import { prisma } from "./prisma";
+import { getPrisma } from "./prisma";
 import { getSession } from "./session";
 
 export async function getCurrentMember() {
   const session = await getSession();
   if (!session) return null;
 
+  const prisma = await getPrisma();
   const member = await prisma.member.findUnique({
     where: { id: session.memberId },
     include: {
@@ -26,6 +27,7 @@ export async function hasAdminRoleForOrganization(
   allowedRoles: string[]
 ) {
   const now = new Date();
+  const prisma = await getPrisma();
 
   const roles = await prisma.adminRole.findMany({
     where: {

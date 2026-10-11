@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { getPrisma } from "@/lib/prisma";
 
 const bodySchema = z.object({
   organizationId: z.string().min(1),
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
   }
   const { organizationId, pin, name, email, password, birthday, phone, title, bio, tags } = parsed.data;
 
+  const prisma = await getPrisma();
   const invite = await prisma.clubInvite.findFirst({
     where: {
       organizationId,

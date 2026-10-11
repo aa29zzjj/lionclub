@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { getPrisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "缺少邀請 token" }, { status: 400 });
   }
 
+  const prisma = await getPrisma();
   const invite = await prisma.clubInvite.findUnique({
     where: { token },
     include: { organization: { select: { id: true, name: true } } },

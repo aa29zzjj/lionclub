@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
-import { prisma } from "@/lib/prisma";
+import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-member";
 
 const ALLOWED_ISSUER_ROLES = [
@@ -22,6 +22,7 @@ export async function GET() {
   const member = await getCurrentMember();
   if (!member) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
+  const prisma = await getPrisma();
   const invites = await prisma.clubInvite.findMany({
     where: { organizationId: member.organizationId },
     orderBy: { createdAt: "desc" },
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
   const validDays = parsed.success && parsed.data.validDays ? parsed.data.validDays : 365;
   const usageLimit = parsed.success ? parsed.data.usageLimit : undefined;
 
+  const prisma = await getPrisma();
   const invite = await prisma.clubInvite.create({
     data: {
       organizationId: member.organizationId,

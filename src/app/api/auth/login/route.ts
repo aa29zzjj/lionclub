@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { getPrisma } from "@/lib/prisma";
 import { createSession } from "@/lib/session";
 
 const bodySchema = z.object({
@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
   }
   const { email, password } = parsed.data;
 
+  const prisma = await getPrisma();
   const user = await prisma.user.findUnique({
     where: { email },
     include: { member: true },

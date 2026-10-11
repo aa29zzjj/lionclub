@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { getPrisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
   const districtCode = searchParams.get("districtCode") ?? undefined;
   const q = searchParams.get("q") ?? undefined;
 
+  const prisma = await getPrisma();
   const organizations = await prisma.organization.findMany({
     where: {
       level: level ? (level as never) : undefined,
