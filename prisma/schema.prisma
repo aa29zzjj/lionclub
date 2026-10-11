@@ -1,0 +1,336 @@
+// lionclub 會員端資料庫 schema
+// 對照 docs/MEMBER_EXPERIENCE_HANDOFF.md 的資歷資料契約，
+// 以及組織架構採單表 + level 欄位（非巢狀四表），對齊前端 club-directory.ts / experience-data.ts 的資料形狀。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────────
+// 組織架構：單一表 + level 區分複合區／專區／分區／分會／基金會等
+// ────────────────────────────────
+
+enum OrganizationLevel {
+  international
+  md
+  district
+  region
+  zone
+  club
+  foundation
+}
+
+model Organization {
+  id           String            @id @default(cuid())
+  level        OrganizationLevel
+  code         String?
+  name         String
+  parentId     String?
+  parent       Organization?     @relation("OrgHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Organization[]    @relation("OrgHierarchy")
+  districtCode String?
+
+  isActive  Boolean   @default(true)
+  validFrom DateTime?
+  validTo   DateTime?
+
+  sourceLabel String?
+  sourceUrl   String?
+  verifiedAt  DateTime?
+
+  members            Member[]
+  hostedEvents        Event[]
+  clubInvites         ClubInvite[]
+  memberExperiences   MemberExperience[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([level])
+  @@index([districtCode])
+}
+
+// ────────────────────────────────
+// 會員與帳號
+// role:   MEMBER | CLUB_OFFICER | CLUB_PRESIDENT | FINANCE | DISTRICT_ADMIN | SUPER_ADMIN（顯示用，非權限判斷依據）
+// status: PENDING | ACTIVE | SUSPENDED
+// ────────────────────────────────
+
+model Member {
+  id       String    @id @default(cuid())
+  name     String
+  birthday DateTime?
+  photoUrl String?
+  title    String? // 職缺／職稱（顯示用文字，不等於系統權限）
+  bio      String?
+  email    String?   @unique
+  phone    String?
+  memberNo String?
+  joinYear Int?
+  validUntil DateTime?
+
+  lineUserId String? @unique
+
+  role   String @default("MEMBER")
+  status String @default("PENDING")
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  tags Tag[] @relation("MemberTags")
+
+  user User?
+
+  experiences         MemberExperience[]       @relation("MemberExperiences")
+  verifiedExperiences MemberExperience[]       @relation("ExperienceVerifiedBy")
+
+  friendRequestsSent     Friendship[] @relation("FriendshipRequester")
+  friendRequestsReceived Friendship[] @relation("FriendshipAddressee")
+
+  eventRegistrations EventRegistration[]
+  createdEvents       Event[]              @relation("EventCreatedBy")
+
+  sentNotifications      EventNotification[]          @relation("NotificationSender")
+  receivedNotifications  EventNotificationRecipient[]
+
+  issuedInvites ClubInvite[] @relation("InviteIssuedBy")
+
+  adminRoles      AdminRole[] @relation("AdminRoleMember")
+  grantedRoles    AdminRole[] @relation("AdminRoleGrantedBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  memberId     String?  @unique
+  member       Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+}
+
+// ────────────────────────────────
+// 會員／幹部資歷（對照 docs/MEMBER_EXPERIENCE_HANDOFF.md）
+// ────────────────────────────────
+
+enum ExperienceKind {
+  membership
+  position
+  honorary
+  advisor
+  other
+}
+
+enum DatePrecision {
+  month
+  lions_year
+  approximate
+}
+
+enum VerificationStatus {
+  self_declared
+  under_review
+  verified
+  rejected
+}
+
+enum ExperienceVisibility {
+  public
+  members
+  only_me
+}
+
+model Position {
+  code  String         @id
+  name  String
+  level OrganizationLevel
+  kind  ExperienceKind
+}
+
+model MemberExperience {
+  id     String @id @default(cuid())
+  memberId String
+  member   Member @relation("MemberExperiences", fields: [memberId], references: [id], onDelete: Cascade)
+
+  kind         ExperienceKind
+  level        OrganizationLevel
+  positionCode String
+
+  organizationId         String?
+  organization           Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationName       String // 顯示用；官方名單找不到時手動輸入
+  organizationIsUnlisted Boolean @default(false)
+  multipleDistrictCode   String?
+  districtCode           String?
+
+  startYear Int
+  endYear   Int?
+  datePrecision DatePrecision
+  isCurrent     Boolean
+
+  verificationStatus VerificationStatus @default(self_declared)
+  visibility         ExperienceVisibility @default(members)
+  note               String?
+
+  verifiedById String?
+  verifiedBy   Member?   @relation("ExperienceVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedAt   DateTime?
+  rejectedReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([memberId])
+  @@index([organizationId])
+}
+
+// ────────────────────────────────
+// 好友系統
+// status: PENDING | ACCEPTED | BLOCKED
+// source: SEARCH | QR_SCAN
+// ────────────────────────────────
+
+model Friendship {
+  id String @id @default(cuid())
+
+  requesterId String
+  requester   Member @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  addresseeId String
+  addressee   Member @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  status String @default("PENDING")
+  source String @default("SEARCH")
+
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  @@unique([requesterId, addresseeId])
+}
+
+// ────────────────────────────────
+// 標籤（專長／資源／興趣）
+// category: PROFESSIONAL | RESOURCE | INTEREST
+// ────────────────────────────────
+
+model Tag {
+  id       String   @id @default(cuid())
+  name     String   @unique
+  category String   @default("PROFESSIONAL")
+  members  Member[] @relation("MemberTags")
+}
+
+// ────────────────────────────────
+// 活動發布 ＋ 通知
+// scope: CLUB | ZONE | DISTRICT | MULTIDISTRICT
+// ────────────────────────────────
+
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  location    String?
+  startAt     DateTime
+  capacity    Int?
+  scope       String   @default("CLUB")
+
+  hostOrganizationId String
+  hostOrganization   Organization @relation(fields: [hostOrganizationId], references: [id], onDelete: Cascade)
+
+  createdById String
+  createdBy   Member @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  registrations EventRegistration[]
+  notifications EventNotification[]
+
+  createdAt DateTime @default(now())
+}
+
+model EventRegistration {
+  id           String   @id @default(cuid())
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  memberId     String
+  member       Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  status       String   @default("REGISTERED")
+  registeredAt DateTime @default(now())
+
+  @@unique([eventId, memberId])
+}
+
+model EventNotification {
+  id       String   @id @default(cuid())
+  eventId  String
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  senderId String
+  sender   Member   @relation("NotificationSender", fields: [senderId], references: [id], onDelete: Cascade)
+  message  String
+  sentAt   DateTime @default(now())
+
+  recipients EventNotificationRecipient[]
+}
+
+model EventNotificationRecipient {
+  id             String             @id @default(cuid())
+  notificationId String
+  notification   EventNotification  @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  recipientId    String
+  recipient      Member             @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  readAt         DateTime?
+
+  @@unique([notificationId, recipientId])
+}
+
+// ────────────────────────────────
+// QR + PIN 入會邀請
+// ────────────────────────────────
+
+model ClubInvite {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  pin          String
+  issuedById   String
+  issuedBy     Member   @relation("InviteIssuedBy", fields: [issuedById], references: [id], onDelete: Cascade)
+
+  validFrom  DateTime @default(now())
+  validUntil DateTime
+
+  usageCount Int @default(0)
+  usageLimit Int?
+
+  createdAt DateTime @default(now())
+}
+
+// ────────────────────────────────
+// 管理權限（與職稱／資歷完全分開）
+// role:      CLUB_OFFICER | CLUB_PRESIDENT | CLUB_FINANCE | ZONE_ADMIN | DISTRICT_ADMIN | MULTIDISTRICT_ADMIN | SUPER_ADMIN
+// scopeType: 同 OrganizationLevel，SUPER_ADMIN 用 GLOBAL（scopeId 為 null）
+// ────────────────────────────────
+
+model AdminRole {
+  id       String @id @default(cuid())
+  memberId String
+  member   Member @relation("AdminRoleMember", fields: [memberId], references: [id], onDelete: Cascade)
+
+  role      String
+  scopeType String
+  scopeId   String?
+
+  grantedById String?
+  grantedBy   Member? @relation("AdminRoleGrantedBy", fields: [grantedById], references: [id], onDelete: SetNull)
+
+  validFrom  DateTime  @default(now())
+  validUntil DateTime?
+
+  @@index([memberId])
+  @@index([scopeType, scopeId])
+}
