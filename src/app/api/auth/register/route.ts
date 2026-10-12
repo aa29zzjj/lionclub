@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
+import { sendSesEmail } from "@/lib/aws-http";
+
+const APPROVER_ROLES = [
+  "CLUB_OFFICER",
+  "CLUB_PRESIDENT",
+  "CLUB_FINANCE",
+  "ZONE_ADMIN",
+  "DISTRICT_ADMIN",
+  "MULTIDISTRICT_ADMIN",
+  "SUPER_ADMIN",
+];
 
 const bodySchema = z.object({
   organizationId: z.string().min(1),
@@ -83,9 +94,79 @@ export async function POST(req: NextRequest) {
     return created;
   });
 
+  void sendRegistrationEmails(prisma, {
+    memberName: name,
+    memberEmail: email,
+    organizationId: invite.organizationId,
+    organizationName: invite.organization.name,
+    req,
+  }).catch((error) => console.error("Registration email failed", error));
+
   return NextResponse.json({
     ok: true,
     memberId: member.id,
     organizationName: invite.organization.name,
   });
+}
+
+async function getOrganizationAncestorIds(prisma: Awaited<ReturnType<typeof getPrisma>>, organizationId: string) {
+  const ids = [organizationId];
+  let currentId: string | null = organizationId;
+  while (currentId) {
+    const org: { parentId: string | null } | null = await prisma.organization.findUnique({
+      where: { id: currentId },
+      select: { parentId: true },
+    });
+    if (!org?.parentId) break;
+    ids.push(org.parentId);
+    currentId = org.parentId;
+  }
+  return ids;
+}
+
+async function sendRegistrationEmails(
+  prisma: Awaited<ReturnType<typeof getPrisma>>,
+  input: { memberName: string; memberEmail: string; organizationId: string; organizationName: string; req: NextRequest }
+) {
+  const from = process.env.PASSWORD_RESET_FROM_EMAIL;
+  if (!from) return;
+  const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-northeast-1";
+  const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || input.req.nextUrl.origin).replace(/\/$/, "");
+
+  await sendSesEmail({
+    region,
+    from,
+    to: input.memberEmail,
+    subject: "獅子會 App 入會申請已收到",
+    text: `${input.memberName} 您好，\n\n我們已收到您加入「${input.organizationName}」的申請，待分會幹部審核通過後即可登入使用。\n\n如果這不是你本人提出的申請，請忽略此信。`,
+  });
+
+  const scopeIds = await getOrganizationAncestorIds(prisma, input.organizationId);
+  const approvers = await prisma.member.findMany({
+    where: {
+      email: { not: null },
+      adminRoles: {
+        some: {
+          role: { in: APPROVER_ROLES },
+          validUntil: null,
+          OR: [{ scopeId: null }, { scopeId: { in: scopeIds } }],
+        },
+      },
+    },
+    select: { email: true },
+  });
+
+  await Promise.all(
+    approvers
+      .filter((approver): approver is { email: string } => Boolean(approver.email))
+      .map((approver) =>
+        sendSesEmail({
+          region,
+          from,
+          to: approver.email,
+          subject: "獅子會 App 有新的入會申請待審核",
+          text: `${input.memberName}（${input.memberEmail}）申請加入「${input.organizationName}」，目前狀態為待審核，請登入系統查看。\n\n${appOrigin}`,
+        })
+      )
+  );
 }
