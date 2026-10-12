@@ -1,6 +1,8 @@
 import { createHash, createHmac } from "crypto";
 import { defaultProvider } from "@aws-sdk/credential-provider-node";
 import { SignatureV4 } from "@smithy/signature-v4";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 class NodeSha256 {
   private readonly hash;
@@ -35,17 +37,9 @@ export async function createS3UploadUrl(input: {
   key: string;
   contentType: string;
 }) {
-  const hostname = `${input.bucket}.s3.${input.region}.amazonaws.com`;
-  const path = `/${input.key.split("/").map(encodeURIComponent).join("/")}`;
-  const request = {
-    protocol: "https:",
-    hostname,
-    method: "PUT",
-    path,
-    headers: { host: hostname, "content-type": input.contentType },
-  };
-  const presigned = await signer("s3", input.region).presign(request, { expiresIn: 300 });
-  return signedUrl({ ...request, query: presigned.query as Record<string, string | undefined> });
+  const client = new S3Client({ region: input.region });
+  const command = new PutObjectCommand({ Bucket: input.bucket, Key: input.key, ContentType: input.contentType });
+  return getSignedUrl(client, command, { expiresIn: 300 });
 }
 
 export async function sendSesEmail(input: {
