@@ -28,6 +28,7 @@ export async function GET() {
       startAt: ev.startAt,
       registeredCount: ev._count.registrations,
       isRegistered: ev.registrations.length > 0,
+      isFull: ev.capacity !== null && ev._count.registrations >= ev.capacity,
     })),
   });
 }

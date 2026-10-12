@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import FriendQrScanner from "@/components/FriendQrScanner";
@@ -178,7 +179,11 @@ export default function FriendsPage() {
                 <p className="text-sm text-lion-muted text-center py-8">找不到符合的好友</p>
               )}
               {filteredFriends.map((f) => (
-                <div key={f.id} className="flex items-center gap-3 rounded-xl bg-lion-card border border-white/[0.06] p-3">
+                <Link
+                  key={f.id}
+                  href={`/members/${f.id}`}
+                  className="flex items-center gap-3 rounded-xl bg-lion-card border border-white/[0.06] p-3"
+                >
                   <Avatar name={f.name} color={colorFromId(f.id)} />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{f.name}</p>
@@ -187,7 +192,8 @@ export default function FriendsPage() {
                       {f.title ? ` · ${f.title}` : ""}
                     </p>
                   </div>
-                </div>
+                  <span className="text-lion-gold">→</span>
+                </Link>
               ))}
             </div>
           </>

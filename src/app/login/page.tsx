@@ -76,9 +76,9 @@ export default function LoginPage() {
           {error && <p className="text-sm text-red-400">{error}</p>}
 
           <div className="flex justify-end">
-            <button type="button" className="text-xs text-lion-gold/80 hover:text-lion-gold">
+            <Link href="/forgot-password" className="text-xs text-lion-gold/80 hover:text-lion-gold">
               忘記密碼？
-            </button>
+            </Link>
           </div>
 
           <button

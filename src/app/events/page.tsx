@@ -19,6 +19,8 @@ type EventCard = {
   location: string;
   description?: string;
   capacity?: number;
+  registeredCount: number;
+  isFull: boolean;
   hostChapter: string;
   startAt: string;
 };
@@ -159,6 +161,11 @@ export default function EventsPage() {
                   </p>
                   <span className="text-xs text-lion-gold font-medium">查看詳情 →</span>
                 </div>
+                {ev.capacity && (
+                  <div className="px-3.5 pb-3 text-[11px] text-lion-muted">
+                    已報名 {ev.registeredCount}／{ev.capacity} 人{ev.isFull ? " · 名額已滿" : ""}
+                  </div>
+                )}
               </Link>
             ))}
           </div>

@@ -21,6 +21,7 @@ type Me = {
   joinYear: number | null;
   organization: { name: string };
   tags: { name: string }[];
+  adminRoles: { role: string }[];
 };
 
 export default function ProfilePage() {
@@ -31,6 +32,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [email, setEmail] = useState("");
@@ -63,6 +65,7 @@ export default function ProfilePage() {
   function startEditing() {
     if (!me) return;
     setAvatarPreview(me.photoUrl);
+    setAvatarFile(null);
     setName(me.name);
     setTitle(me.title ?? "");
     setEmail(me.email);
@@ -75,6 +78,12 @@ export default function ProfilePage() {
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setToast("請選擇 5 MB 內的 JPG、PNG 或 WebP 圖片");
+      return;
+    }
+    if (avatarPreview?.startsWith("blob:")) URL.revokeObjectURL(avatarPreview);
+    setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
   }
 
@@ -84,10 +93,33 @@ export default function ProfilePage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    let photoUrl = me?.photoUrl ?? null;
+    if (avatarFile) {
+      const signResponse = await fetch("/api/me/avatar-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentType: avatarFile.type, size: avatarFile.size }),
+      });
+      const signResult = await signResponse.json();
+      if (!signResponse.ok) {
+        setToast(signResult.error ?? "無法準備大頭貼上傳");
+        return;
+      }
+      const uploadResponse = await fetch(signResult.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": avatarFile.type },
+        body: avatarFile,
+      });
+      if (!uploadResponse.ok) {
+        setToast("大頭貼上傳失敗，請稍後再試");
+        return;
+      }
+      photoUrl = signResult.photoUrl;
+    }
     const res = await fetch("/api/me", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, title, email, phone, bio, tags }),
+      body: JSON.stringify({ name, title, email, phone, bio, tags, photoUrl }),
     });
     if (!res.ok) {
       setToast("更新失敗，請再試一次");
@@ -96,6 +128,7 @@ export default function ProfilePage() {
     }
     const updated = await res.json();
     setMe(updated);
+    setAvatarFile(null);
     setEditing(false);
     setToast("個人資料已更新");
     setTimeout(() => setToast(""), 2500);
@@ -210,7 +243,7 @@ export default function ProfilePage() {
                 )}
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-              <p className="text-xs text-lion-muted mt-2">更換大頭貼（僅預覽，尚未支援上傳儲存）</p>
+              <p className="text-xs text-lion-muted mt-2">JPG、PNG 或 WebP，檔案上限 5 MB</p>
             </div>
 
             <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] px-4 py-2.5 text-xs text-lion-muted">
@@ -318,6 +351,11 @@ export default function ProfilePage() {
             >
               幹部專用：產生入會邀請 QR
             </Link>
+            {me.adminRoles.some((adminRole) => ["CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"].includes(adminRole.role)) && (
+              <Link href="/admin/roles" className="mt-3 block w-full text-center text-xs text-lion-gold">
+                會長／區幹部：管理系統權限
+              </Link>
+            )}
             <button
               onClick={async () => {
                 await fetch("/api/auth/logout", { method: "POST" });

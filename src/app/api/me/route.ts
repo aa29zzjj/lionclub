@@ -33,6 +33,7 @@ const patchSchema = z.object({
   phone: z.string().optional(),
   bio: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  photoUrl: z.union([z.string().url(), z.literal("")]).optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -41,7 +42,7 @@ export async function PATCH(req: NextRequest) {
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "欄位格式錯誤" }, { status: 400 });
-  const { name, title, email, phone, bio, tags } = parsed.data;
+  const { name, title, email, phone, bio, tags, photoUrl } = parsed.data;
 
   const prisma = await getPrisma();
   const member = await prisma.member.update({
@@ -52,6 +53,7 @@ export async function PATCH(req: NextRequest) {
       email,
       phone,
       bio,
+      photoUrl: photoUrl === "" ? null : photoUrl,
       tags: tags
         ? { set: [], connectOrCreate: tags.map((tagName) => ({ where: { name: tagName }, create: { name: tagName } })) }
         : undefined,

@@ -210,7 +210,7 @@ export default function HomePage() {
         </div>
         <div className="flex gap-4 overflow-x-auto pb-1">
           {friends.map((f) => (
-            <Link key={f.id} href="/friends" className="flex flex-col items-center gap-1.5 w-16 shrink-0">
+            <Link key={f.id} href={`/members/${f.id}`} className="flex flex-col items-center gap-1.5 w-16 shrink-0">
               <Avatar name={f.name} color={colorFromId(f.id)} size={52} />
               <p className="text-[11px] text-lion-cream/70 truncate w-full text-center">{f.name}</p>
             </Link>

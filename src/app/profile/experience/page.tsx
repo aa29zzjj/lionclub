@@ -1,10 +1,9 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
-import { useAppData } from "@/lib/store";
 import { getClubDirectory, isClubInDistrictDirectory } from "@/lib/club-directory";
 import {
   calculateLionYears,
@@ -34,6 +33,13 @@ type ExperienceDraft = {
   isCurrent: boolean;
   visibility: ExperienceVisibility;
   note: string;
+};
+
+type MeResponse = {
+  name: string;
+  photoUrl?: string | null;
+  joinYear?: number | null;
+  organization: { name: string; districtCode?: string | null };
 };
 
 const currentYear = new Date().getFullYear();
@@ -85,13 +91,59 @@ function verificationClass(status: MemberExperience["verificationStatus"]) {
 
 export default function ExperiencePage() {
   const router = useRouter();
-  const { profile, experiences, addExperience, updateExperience, removeExperience } = useAppData();
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [experiences, setExperiences] = useState<MemberExperience[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<ExperienceDraft>(emptyDraft);
   const [useCustomOrganization, setUseCustomOrganization] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      fetch("/api/me", { cache: "no-store" }),
+      fetch("/api/me/experiences", { cache: "no-store" }),
+    ])
+      .then(async ([meResponse, experiencesResponse]) => {
+        if (meResponse.status === 401 || experiencesResponse.status === 401) {
+          router.replace("/login");
+          return;
+        }
+        const mePayload = await meResponse.json();
+        const experiencesPayload = await experiencesResponse.json();
+        if (!meResponse.ok) throw new Error(mePayload.error ?? "無法載入會員資料");
+        if (!experiencesResponse.ok) throw new Error(experiencesPayload.error ?? "無法載入資歷");
+        if (!active) return;
+        setMe(mePayload);
+        setExperiences(experiencesPayload.experiences ?? []);
+      })
+      .catch((requestError) => {
+        if (active) setError(requestError instanceof Error ? requestError.message : "載入失敗");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  const districtCode = me?.organization.districtCode ?? "300A-1";
+  const profile = {
+    name: me?.name ?? "會員",
+    chapter: me?.organization.name ?? "分會",
+    avatarColor: "#173d78",
+    avatarUrl: me?.photoUrl ?? undefined,
+    joinYear: me?.joinYear ? String(me.joinYear) : "—",
+    districtCode,
+    multipleDistrictCode: districtCode.split("-")[0] ?? "300A",
+    regionName: "",
+    zoneName: "",
+  };
 
   const sortedExperiences = useMemo(
     () => [...experiences].sort((a, b) => b.startYear - a.startYear || Number(b.isCurrent) - Number(a.isCurrent)),
@@ -250,7 +302,7 @@ export default function ExperiencePage() {
     });
   }
 
-  function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!draft.isCurrent && draft.endYear < draft.startYear) {
       setError("結束年度不能早於開始年度");
@@ -287,22 +339,44 @@ export default function ExperiencePage() {
       isDemo: false,
     };
 
-    if (editingId) {
-      updateExperience(editingId, payload);
-      setToast("資歷已更新並送交審核");
-    } else {
-      addExperience(payload);
-      setToast("資歷已新增並送交審核");
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch(editingId ? `/api/me/experiences/${editingId}` : "/api/me/experiences", {
+        method: editingId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "資歷儲存失敗");
+      setExperiences((current) =>
+        editingId
+          ? current.map((experience) => (experience.id === editingId ? result.experience : experience))
+          : [result.experience, ...current]
+      );
+      setToast(editingId ? "資歷已更新並送交審核" : "資歷已新增並送交審核");
+      closeForm();
+      window.setTimeout(() => setToast(""), 2500);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "資歷儲存失敗");
+    } finally {
+      setSaving(false);
     }
-    closeForm();
-    setTimeout(() => setToast(""), 2500);
   }
 
-  function handleRemove(experience: MemberExperience) {
+  async function handleRemove(experience: MemberExperience) {
     if (!window.confirm(`確定刪除「${experience.positionName}」這筆資歷嗎？`)) return;
-    removeExperience(experience.id);
-    setToast("資歷已刪除");
-    setTimeout(() => setToast(""), 2500);
+    setError("");
+    try {
+      const response = await fetch(`/api/me/experiences/${experience.id}`, { method: "DELETE" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "資歷刪除失敗");
+      setExperiences((current) => current.filter((item) => item.id !== experience.id));
+      setToast("資歷已刪除");
+      window.setTimeout(() => setToast(""), 2500);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "資歷刪除失敗");
+    }
   }
 
   return (
@@ -357,8 +431,10 @@ export default function ExperiencePage() {
         </div>
 
         <div className="rounded-xl border border-sky-400/20 bg-sky-400/10 px-3.5 py-3 text-xs text-sky-200/90 leading-relaxed mb-5">
-          目前為前端展示資料。本人新增的資歷預設為「待審核」；幹部職稱與系統管理權限分開，不會因填寫職稱而取得後台權限。
+          資歷會儲存至會員資料庫；本人新增或修改後預設為「待審核」。幹部職稱與系統管理權限分開，不會因填寫職稱而取得後台權限。
         </div>
+
+        {loading && <p className="mb-4 text-center text-xs text-lion-muted">正在載入資歷…</p>}
 
         {toast && (
           <div className="mb-4 rounded-xl bg-lion-gold/15 border border-lion-gold/40 text-lion-gold text-xs px-3 py-2">
@@ -605,7 +681,9 @@ export default function ExperiencePage() {
 
             <div className="flex gap-2">
               <button type="button" onClick={closeForm} className="flex-1 rounded-xl bg-white/10 py-2.5 text-sm text-lion-cream/70">取消</button>
-              <button type="submit" className="flex-1 rounded-xl bg-lion-gold py-2.5 text-sm font-semibold text-lion-navyDeep">儲存資歷</button>
+              <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-lion-gold py-2.5 text-sm font-semibold text-lion-navyDeep disabled:opacity-50">
+                {saving ? "儲存中…" : "儲存資歷"}
+              </button>
             </div>
           </form>
         )}

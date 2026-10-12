@@ -2,7 +2,7 @@
 
 更新日期：2026-10-09
 前端負責：角色 B
-狀態：前端展示版已完成；登入、會員、好友、活動與通知已接 API，資歷 CRUD 仍等待 Jerry 後端 API
+狀態：會員資歷 CRUD 與好友可見資歷已接 Prisma；待 Jerry 部署資料庫 migration 與 AWS 設定後共同驗收
 
 ## 本次更新內容
 
@@ -30,8 +30,9 @@ https://lionclubsmembership.com
 ## 目前資料狀態
 
 - 登入、會員、好友、活動與通知已使用 AWS RDS 真實資料。
-- 資歷新增、修改、刪除仍只存在 React 記憶體；重新整理頁面後會回復預設資料。
-- 分會資料目前以正式名稱比對，尚未有後端穩定 ID。
+- 資歷新增、修改、刪除已透過 `/api/me/experiences` 寫入 Prisma `MemberExperience`。
+- 好友個人頁 `/members/[id]` 只允許本人或已接受好友查看，並排除 `only_me` 資歷。
+- 資歷仍保留 `organizationName` 顯示值；`organizationId` 自動對應流程尚待補強。
 - 300A 四個區已具備分會名單，但專區／分區與分會的完整隸屬關係尚未建檔。
 - 300B、300C、300D、300E 的分會名單尚未匯入。
 
@@ -114,13 +115,13 @@ GET    /api/positions?level=club&kind=position
 
 - [x] Jerry 確認 API 路由與同網域 HttpOnly Cookie Session 方案。
 - [x] 建立會員、組織、職位、資歷及獨立管理權限資料表。
-- [ ] 用後端 `organizationId` 取代目前以名稱比對的方式。
+- [ ] 補強資歷 `organizationId` 對應，避免只靠顯示名稱。
 - [ ] 補齊 300A 專區／分區與分會隸屬關係。
 - [ ] 補齊 300B、300C、300D、300E 分會名單。
 - [ ] 建立幹部審核、退回、修改與稽核紀錄流程。
-- [ ] 串接照片／證明文件上傳（若產品決定需要）。
+- [x] 完成大頭貼前端流程與 S3 presigned upload API；待 Jerry 設定 S3／CloudFront／IAM／環境變數。
 - [x] 串接正式登入、會員資料及好友／活動／通知 API。
-- [ ] 補 API loading、空資料、401、403、404、409、422、500 等狀態處理。
+- [x] 資歷頁補 API loading、空資料與 401／404／409 錯誤處理。
 - [ ] 補單元測試、API 整合測試與行動裝置驗收。
 - [ ] 確認獅齡計算基準；目前前端以「當年－入會年」計算。
 - [ ] 建立官方名單定期更新與資料來源紀錄機制。
@@ -128,6 +129,8 @@ GET    /api/positions?level=club&kind=position
 ## 驗證紀錄
 
 - `next build` 已通過。
+- `tsc --noEmit` 已通過。
+- 資歷頁已移除 `useAppData` 假資料，改接正式 API。
 - 已測試 A1 下拉選單共 96 間分會。
 - 已測試切換 A1／A2／A3／A5 後名單會跟著更新。
 - 已測試從官方清單選擇分會並儲存，不會誤標為「組織待核」。

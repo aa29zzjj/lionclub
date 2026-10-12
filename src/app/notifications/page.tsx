@@ -20,8 +20,10 @@ export default function NotificationsPage() {
   const [composing, setComposing] = useState(false);
   const [eventId, setEventId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [recipientType, setRecipientType] = useState<"selected" | "organization">("selected");
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     Promise.all([
@@ -53,19 +55,26 @@ export default function NotificationsPage() {
   function resetForm() {
     setEventId(events[0]?.id ?? "");
     setSelected([]);
+    setRecipientType("selected");
     setMessage("");
+    setError("");
     setComposing(false);
   }
 
   async function handleSend() {
-    if (!eventId || selected.length === 0) return;
+    if (!eventId || (recipientType === "selected" && selected.length === 0)) return;
+    setError("");
     const res = await fetch("/api/notifications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId, memberIds: selected, message: message || undefined }),
+      body: JSON.stringify({ eventId, recipientType, memberIds: selected, message: message || undefined }),
     });
-    if (!res.ok) return;
-    setToast(`已發送給 ${selected.length} 位好友`);
+    const result = await res.json();
+    if (!res.ok) {
+      setError(result.error ?? "通知發送失敗");
+      return;
+    }
+    setToast(`已發送給 ${result.recipientCount} 位會員`);
     resetForm();
     const data = await fetch("/api/notifications").then((r) => r.json());
     setNotifications(data.notifications ?? []);
@@ -143,10 +152,14 @@ export default function NotificationsPage() {
             </div>
 
             <div>
-              <label className="text-xs text-lion-muted mb-2 block">
-                選擇好友（已選 {selected.length} 位）
-              </label>
-              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+              <label className="text-xs text-lion-muted mb-2 block">收件範圍</label>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <button type="button" onClick={() => setRecipientType("selected")} className={`rounded-xl border px-3 py-2 text-xs ${recipientType === "selected" ? "border-lion-gold bg-lion-gold/10 text-lion-gold" : "border-white/10"}`}>指定好友</button>
+                <button type="button" onClick={() => setRecipientType("organization")} className={`rounded-xl border px-3 py-2 text-xs ${recipientType === "organization" ? "border-lion-gold bg-lion-gold/10 text-lion-gold" : "border-white/10"}`}>整個分會</button>
+              </div>
+              {recipientType === "organization" ? (
+                <p className="rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 py-2.5 text-xs text-sky-200/90">將通知同分會所有啟用會員；限活動建立者或具管理權限的幹部。</p>
+              ) : <><p className="text-xs text-lion-muted mb-2">選擇好友（已選 {selected.length} 位）</p><div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
                 {friends.map((f) => {
                   const isSelected = selected.includes(f.id);
                   return (
@@ -170,7 +183,7 @@ export default function NotificationsPage() {
                     </button>
                   );
                 })}
-              </div>
+              </div></>}
             </div>
 
             <div>
@@ -184,6 +197,8 @@ export default function NotificationsPage() {
               />
             </div>
 
+            {error && <p className="text-xs text-red-300">{error}</p>}
+
             <div className="flex gap-2">
               <button
                 onClick={resetForm}
@@ -193,10 +208,10 @@ export default function NotificationsPage() {
               </button>
               <button
                 onClick={handleSend}
-                disabled={selected.length === 0 || events.length === 0}
+                disabled={(recipientType === "selected" && selected.length === 0) || events.length === 0}
                 className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-2.5 text-sm disabled:opacity-40"
               >
-                發送給 {selected.length} 位好友
+                {recipientType === "organization" ? "通知整個分會" : `發送給 ${selected.length} 位好友`}
               </button>
             </div>
           </div>
