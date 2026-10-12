@@ -1,17 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
-import { useAppData } from "@/lib/store";
+import { colorFromId } from "@/lib/avatar-color";
+
+type Friend = { id: string; name: string; chapter: string };
+type EventOption = { id: string; title: string; startAt: string };
+type SentNotification = { id: string; eventTitle: string; recipients: string[]; message: string; sentAt: string };
 
 export default function NotificationsPage() {
-  const { friends, events, notifications, sendNotification } = useAppData();
+  const router = useRouter();
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [events, setEvents] = useState<EventOption[]>([]);
+  const [notifications, setNotifications] = useState<SentNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [composing, setComposing] = useState(false);
-  const [eventId, setEventId] = useState(events[0]?.id ?? "");
+  const [eventId, setEventId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/friends").then(async (res) => {
+        if (res.status === 401) {
+          router.push("/login");
+          return null;
+        }
+        return res.json();
+      }),
+      fetch("/api/events").then((res) => res.json()),
+      fetch("/api/notifications").then((res) => res.json()),
+    ])
+      .then(([friendsData, eventsData, notificationsData]) => {
+        if (!friendsData) return;
+        setFriends(friendsData.friends ?? []);
+        setEvents(eventsData.events ?? []);
+        setEventId(eventsData.events?.[0]?.id ?? "");
+        setNotifications(notificationsData.notifications ?? []);
+      })
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function toggleFriend(id: string) {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -24,19 +57,29 @@ export default function NotificationsPage() {
     setComposing(false);
   }
 
-  function handleSend() {
-    const event = events.find((e) => e.id === eventId);
-    if (!event || selected.length === 0) return;
-    const names = friends.filter((f) => selected.includes(f.id)).map((f) => f.name);
-    sendNotification({
-      eventTitle: event.title,
-      recipients: names,
-      message: message || `邀請你一起參加「${event.title}」！`,
-      sentAt: "剛剛",
+  async function handleSend() {
+    if (!eventId || selected.length === 0) return;
+    const res = await fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId, memberIds: selected, message: message || undefined }),
     });
-    setToast(`已發送給 ${names.length} 位好友`);
+    if (!res.ok) return;
+    setToast(`已發送給 ${selected.length} 位好友`);
     resetForm();
+    const data = await fetch("/api/notifications").then((r) => r.json());
+    setNotifications(data.notifications ?? []);
     setTimeout(() => setToast(""), 2500);
+  }
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="px-5 pt-6 pb-4">
+          <p className="text-sm text-lion-muted text-center py-12">載入中...</p>
+        </div>
+      </AppShell>
+    );
   }
 
   return (
@@ -67,7 +110,9 @@ export default function NotificationsPage() {
               <div key={n.id} className="rounded-xl bg-lion-card border border-white/[0.06] p-3">
                 <div className="flex items-center justify-between mb-1">
                   <p className="font-medium text-sm">{n.eventTitle}</p>
-                  <span className="text-[11px] text-lion-muted">{n.sentAt}</span>
+                  <span className="text-[11px] text-lion-muted">
+                    {new Date(n.sentAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </span>
                 </div>
                 <p className="text-xs text-lion-cream/60 mb-2">{n.message}</p>
                 <p className="text-[11px] text-lion-muted">已通知：{n.recipients.join("、")}</p>
@@ -90,7 +135,7 @@ export default function NotificationsPage() {
                 >
                   {events.map((ev) => (
                     <option key={ev.id} value={ev.id} className="text-black">
-                      {ev.title}（{ev.date}）
+                      {ev.title}（{new Date(ev.startAt).toLocaleDateString("zh-TW")}）
                     </option>
                   ))}
                 </select>
@@ -113,7 +158,7 @@ export default function NotificationsPage() {
                         isSelected ? "border-lion-gold bg-lion-gold/10" : "border-white/10 bg-white/5"
                       }`}
                     >
-                      <Avatar name={f.name} color={f.avatarColor} size={36} />
+                      <Avatar name={f.name} color={colorFromId(f.id)} size={36} />
                       <span className="flex-1 text-sm">{f.name}</span>
                       <span
                         className={`w-5 h-5 rounded-full border flex items-center justify-center text-[11px] ${

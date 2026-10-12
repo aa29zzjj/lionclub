@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import QrModal from "@/components/QrModal";
 import { BellIcon, QrIcon, PinIcon } from "@/components/icons";
-import { useAppData } from "@/lib/store";
+import { colorFromId } from "@/lib/avatar-color";
 
 const eventGradients = [
   "from-lion-navyLight to-[#2E4A8A]",
@@ -14,9 +15,69 @@ const eventGradients = [
   "from-[#1E3A3A] to-[#2E6A5A]",
 ];
 
+type Me = {
+  id: string;
+  name: string;
+  title: string | null;
+  photoUrl: string | null;
+  memberNo: string | null;
+  joinYear: number | null;
+  organization: { name: string };
+};
+type Friend = { id: string; name: string; chapter: string };
+type EventCard = { id: string; title: string; location: string; hostChapter: string; startAt: string };
+
 export default function HomePage() {
-  const { profile, friends, incoming, events } = useAppData();
+  const router = useRouter();
+  const [me, setMe] = useState<Me | null>(null);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [incomingCount, setIncomingCount] = useState(0);
+  const [events, setEvents] = useState<EventCard[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showQr, setShowQr] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/me").then(async (res) => {
+        if (res.status === 401) {
+          router.push("/login");
+          return null;
+        }
+        return res.json();
+      }),
+      fetch("/api/friends").then((res) => res.json()),
+      fetch("/api/events").then((res) => res.json()),
+    ])
+      .then(([meData, friendsData, eventsData]) => {
+        if (!meData) return;
+        setMe(meData);
+        setFriends(friendsData.friends ?? []);
+        setIncomingCount((friendsData.incoming ?? []).length);
+        setEvents(eventsData.events ?? []);
+      })
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function formatDate(iso: string) {
+    return new Date(iso).toLocaleString("zh-TW", {
+      month: "2-digit",
+      day: "2-digit",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  if (loading || !me) {
+    return (
+      <AppShell>
+        <div className="px-5 pt-6 pb-6">
+          <p className="text-sm text-lion-muted text-center py-12">載入中...</p>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -37,10 +98,10 @@ export default function HomePage() {
         </div>
 
         <Link href="/profile" className="flex items-center gap-3 mb-4">
-          <Avatar name={profile.name} color={profile.avatarColor} imageUrl={profile.avatarUrl} size={36} />
+          <Avatar name={me.name} color={colorFromId(me.id)} imageUrl={me.photoUrl} size={36} />
           <div>
             <p className="text-sm text-lion-muted leading-tight">嗨，歡迎回來</p>
-            <p className="text-lg font-bold leading-tight">{profile.name}</p>
+            <p className="text-lg font-bold leading-tight">{me.name}</p>
           </div>
         </Link>
 
@@ -54,35 +115,22 @@ export default function HomePage() {
             <span className="text-xs tracking-widest text-lion-gold font-medium">LIONS CLUBS · 數位會員證</span>
           </div>
           <div className="flex items-center gap-3 mb-4">
-            <Avatar name={profile.name} color={profile.avatarColor} imageUrl={profile.avatarUrl} size={44} />
+            <Avatar name={me.name} color={colorFromId(me.id)} imageUrl={me.photoUrl} size={44} />
             <div>
-              <p className="font-semibold leading-tight">{profile.name}</p>
+              <p className="font-semibold leading-tight">{me.name}</p>
               <p className="text-xs text-lion-muted">
-                {profile.chapter} · {profile.title}
+                {me.organization.name} · {me.title ?? "會員"}
               </p>
-              {profile.districtCode && (
-                <p className="text-[10px] text-lion-gold/75 mt-0.5">
-                  MD{profile.multipleDistrictCode} · {profile.districtCode} 區
-                </p>
-              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-y-2 border-t border-white/10 pt-3 text-xs">
             <div>
               <p className="text-lion-muted mb-0.5">會員編號</p>
-              <p className="font-medium">{profile.memberNo}</p>
+              <p className="font-medium">{me.memberNo || "—"}</p>
             </div>
             <div>
               <p className="text-lion-muted mb-0.5">入會年度</p>
-              <p className="font-medium">{profile.joinYear}</p>
-            </div>
-            <div>
-              <p className="text-lion-muted mb-0.5">身分別</p>
-              <p className="font-medium">{profile.title}</p>
-            </div>
-            <div>
-              <p className="text-lion-muted mb-0.5">有效期限</p>
-              <p className="font-medium">{profile.validUntil}</p>
+              <p className="font-medium">{me.joinYear ?? "—"}</p>
             </div>
           </div>
           <button
@@ -101,8 +149,8 @@ export default function HomePage() {
         {showQr && (
           <QrModal
             title="我的會員證 QR Code"
-            subtitle={`${profile.name} · ${profile.chapter}`}
-            seed={profile.id}
+            subtitle={`${me.name} · ${me.organization.name}`}
+            seed={me.id}
             onClose={() => setShowQr(false)}
           />
         )}
@@ -113,7 +161,7 @@ export default function HomePage() {
             <p className="text-[11px] text-lion-muted mt-0.5">好友</p>
           </Link>
           <Link href="/friends" className="rounded-xl bg-white/[0.04] border border-white/[0.06] py-3 text-center">
-            <p className="text-lion-gold font-bold text-lg leading-tight">{incoming.length}</p>
+            <p className="text-lion-gold font-bold text-lg leading-tight">{incomingCount}</p>
             <p className="text-[11px] text-lion-muted mt-0.5">待確認邀請</p>
           </Link>
           <Link href="/events" className="rounded-xl bg-white/[0.04] border border-white/[0.06] py-3 text-center">
@@ -136,10 +184,10 @@ export default function HomePage() {
               className="block rounded-2xl bg-lion-card border border-white/[0.06] overflow-hidden"
             >
               <div className="p-3.5 pb-0 flex items-center gap-2.5">
-                <Avatar name={ev.hostChapter ?? profile.chapter} color="#3D5A99" size={30} />
+                <Avatar name={ev.hostChapter} color="#3D5A99" size={30} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{ev.title}</p>
-                  <p className="text-[11px] text-lion-muted">{ev.date}</p>
+                  <p className="text-[11px] text-lion-muted">{formatDate(ev.startAt)}</p>
                 </div>
               </div>
               <div className={`mx-3.5 mt-3 h-24 rounded-xl bg-gradient-to-br ${eventGradients[i % eventGradients.length]}`} />
@@ -162,7 +210,7 @@ export default function HomePage() {
         <div className="flex gap-4 overflow-x-auto pb-1">
           {friends.map((f) => (
             <Link key={f.id} href="/friends" className="flex flex-col items-center gap-1.5 w-16 shrink-0">
-              <Avatar name={f.name} color={f.avatarColor} size={52} />
+              <Avatar name={f.name} color={colorFromId(f.id)} size={52} />
               <p className="text-[11px] text-lion-cream/70 truncate w-full text-center">{f.name}</p>
             </Link>
           ))}

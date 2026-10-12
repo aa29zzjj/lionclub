@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { PinIcon, PlusIcon } from "@/components/icons";
-import { useAppData } from "@/lib/store";
 
 const eventGradients = [
   "from-lion-navyLight to-[#2E4A8A]",
@@ -13,8 +13,20 @@ const eventGradients = [
   "from-[#1E3A3A] to-[#2E6A5A]",
 ];
 
+type EventCard = {
+  id: string;
+  title: string;
+  location: string;
+  description?: string;
+  capacity?: number;
+  hostChapter: string;
+  startAt: string;
+};
+
 export default function EventsPage() {
-  const { profile, events, addEvent } = useAppData();
+  const router = useRouter();
+  const [events, setEvents] = useState<EventCard[]>([]);
+  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState("");
 
@@ -25,6 +37,25 @@ export default function EventsPage() {
   const [capacity, setCapacity] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
+
+  function loadEvents() {
+    return fetch("/api/events")
+      .then(async (res) => {
+        if (res.status === 401) {
+          router.push("/login");
+          return null;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data) setEvents(data.events ?? []);
+      });
+  }
+
+  useEffect(() => {
+    loadEvents().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function resetForm() {
     setTitle("");
@@ -37,24 +68,53 @@ export default function EventsPage() {
     setCreating(false);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title || !date || !location) {
       setError("請填寫活動名稱、日期與地點");
       return;
     }
-    const dateLabel = time ? `${date.replace(/-/g, "/")} ${time}` : date.replace(/-/g, "/");
-    addEvent({
-      title,
-      date: dateLabel,
-      location,
-      description: description || undefined,
-      capacity: capacity ? Number(capacity) : undefined,
-      hostChapter: profile.chapter,
+    const startAt = new Date(`${date}T${time || "00:00"}`).toISOString();
+    const res = await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        startAt,
+        location,
+        description: description || undefined,
+        capacity: capacity ? Number(capacity) : undefined,
+      }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "發布失敗，請再試一次");
+      return;
+    }
     setToast("活動已發布");
     resetForm();
+    await loadEvents();
     setTimeout(() => setToast(""), 2500);
+  }
+
+  function formatDate(iso: string) {
+    return new Date(iso).toLocaleString("zh-TW", {
+      month: "2-digit",
+      day: "2-digit",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="px-5 pt-6 pb-4">
+          <p className="text-sm text-lion-muted text-center py-12">載入中...</p>
+        </div>
+      </AppShell>
+    );
   }
 
   return (
@@ -86,10 +146,10 @@ export default function EventsPage() {
                 className="block rounded-2xl bg-lion-card border border-white/[0.06] overflow-hidden"
               >
                 <div className="p-3.5 pb-0 flex items-center gap-2.5">
-                  <Avatar name={ev.hostChapter ?? profile.chapter} color="#3D5A99" size={30} />
+                  <Avatar name={ev.hostChapter} color="#3D5A99" size={30} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{ev.title}</p>
-                    <p className="text-[11px] text-lion-muted">{ev.date}</p>
+                    <p className="text-[11px] text-lion-muted">{formatDate(ev.startAt)}</p>
                   </div>
                 </div>
                 <div className={`mx-3.5 mt-3 h-24 rounded-xl bg-gradient-to-br ${eventGradients[i % eventGradients.length]}`} />

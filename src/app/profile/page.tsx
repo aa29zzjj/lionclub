@@ -1,58 +1,114 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { memberTitleOptions, tagOptions } from "@/lib/mock-data";
-import { useAppData } from "@/lib/store";
+import { colorFromId } from "@/lib/avatar-color";
 import { calculateLionYears } from "@/lib/experience-data";
+
+type Me = {
+  id: string;
+  name: string;
+  email: string;
+  title: string | null;
+  bio: string | null;
+  phone: string | null;
+  photoUrl: string | null;
+  memberNo: string | null;
+  joinYear: number | null;
+  organization: { name: string };
+  tags: { name: string }[];
+};
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { profile, updateProfile, experiences } = useAppData();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [me, setMe] = useState<Me | null>(null);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl);
-  const [name, setName] = useState(profile.name);
-  const [title, setTitle] = useState(profile.title);
-  const [email, setEmail] = useState(profile.email);
-  const [phone, setPhone] = useState(profile.phone);
-  const [bio, setBio] = useState(profile.bio);
-  const [tags, setTags] = useState<string[]>(profile.tags);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [title, setTitle] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [bio, setBio] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
   const [toast, setToast] = useState("");
-  const lionYears = calculateLionYears(profile.joinYear);
-  const currentPositions = experiences.filter((experience) => experience.isCurrent && experience.kind !== "membership");
+
+  function loadMe() {
+    return fetch("/api/me")
+      .then(async (res) => {
+        if (res.status === 401) {
+          router.push("/login");
+          return null;
+        }
+        return res.json();
+      })
+      .then((data: Me | null) => {
+        if (data) setMe(data);
+      });
+  }
+
+  useEffect(() => {
+    loadMe().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const lionYears = me?.joinYear ? calculateLionYears(String(me.joinYear)) : null;
 
   function startEditing() {
-    setAvatarUrl(profile.avatarUrl);
-    setName(profile.name);
-    setTitle(profile.title);
-    setEmail(profile.email);
-    setPhone(profile.phone);
-    setBio(profile.bio);
-    setTags(profile.tags);
+    if (!me) return;
+    setAvatarPreview(me.photoUrl);
+    setName(me.name);
+    setTitle(me.title ?? "");
+    setEmail(me.email);
+    setPhone(me.phone ?? "");
+    setBio(me.bio ?? "");
+    setTags(me.tags.map((t) => t.name));
     setEditing(true);
   }
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setAvatarUrl(URL.createObjectURL(file));
+    setAvatarPreview(URL.createObjectURL(file));
   }
 
   function toggleTag(tag: string) {
     setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   }
 
-  function handleSave(e: React.FormEvent) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    updateProfile({ avatarUrl, name, title, email, phone, bio, tags });
+    const res = await fetch("/api/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, title, email, phone, bio, tags }),
+    });
+    if (!res.ok) {
+      setToast("更新失敗，請再試一次");
+      setTimeout(() => setToast(""), 2500);
+      return;
+    }
+    const updated = await res.json();
+    setMe(updated);
     setEditing(false);
     setToast("個人資料已更新");
     setTimeout(() => setToast(""), 2500);
+  }
+
+  if (loading || !me) {
+    return (
+      <AppShell>
+        <div className="px-5 pt-6 pb-6">
+          <p className="text-sm text-lion-muted text-center py-12">載入中...</p>
+        </div>
+      </AppShell>
+    );
   }
 
   return (
@@ -79,38 +135,31 @@ export default function ProfilePage() {
         {!editing && (
           <div className="flex flex-col gap-5">
             <div className="flex items-center gap-4">
-              <Avatar name={profile.name} color={profile.avatarColor} imageUrl={profile.avatarUrl} size={64} />
+              <Avatar name={me.name} color={colorFromId(me.id)} imageUrl={me.photoUrl} size={64} />
               <div>
-                <p className="text-lg font-bold">{profile.name}</p>
+                <p className="text-lg font-bold">{me.name}</p>
                 <p className="text-sm text-lion-muted">
-                  {profile.chapter} · {profile.title}
+                  {me.organization.name} · {me.title ?? "會員"}
                 </p>
-                {profile.districtCode && (
-                  <p className="text-[11px] text-lion-gold/80 mt-1">
-                    MD{profile.multipleDistrictCode} · {profile.districtCode} 區
-                    {profile.regionName ? ` · ${profile.regionName}` : ""}
-                    {profile.zoneName ? ` · ${profile.zoneName}` : ""}
-                  </p>
-                )}
               </div>
             </div>
 
             <div className="rounded-2xl bg-lion-card border border-white/[0.06] p-4 flex flex-col gap-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-lion-muted">Email</span>
-                <span>{profile.email}</span>
+                <span>{me.email}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-lion-muted">手機</span>
-                <span>{profile.phone || "—"}</span>
+                <span>{me.phone || "—"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-lion-muted">會員編號</span>
-                <span>{profile.memberNo}</span>
+                <span>{me.memberNo || "—"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-lion-muted">入會年／獅齡</span>
-                <span>{profile.joinYear}／{lionYears ?? "—"} 年</span>
+                <span>{me.joinYear ?? "—"}／{lionYears ?? "—"} 年</span>
               </div>
             </div>
 
@@ -121,27 +170,25 @@ export default function ProfilePage() {
               <div>
                 <p className="text-[11px] tracking-[0.18em] text-lion-gold mb-1">LIONS EXPERIENCE</p>
                 <p className="font-semibold">獅子會資歷</p>
-                <p className="text-xs text-lion-muted mt-1">
-                  {currentPositions.length > 0 ? `現任 ${currentPositions[0].positionName}` : `${experiences.length} 筆會籍與任職紀錄`}
-                </p>
+                <p className="text-xs text-lion-muted mt-1">查看任職紀錄與會籍資歷</p>
               </div>
               <span className="w-9 h-9 rounded-full bg-lion-gold text-lion-navyDeep flex items-center justify-center text-lg">→</span>
             </Link>
 
-            {profile.tags.length > 0 && (
+            {me.tags.length > 0 && (
               <div className="flex flex-wrap gap-2">
-                {profile.tags.map((tag) => (
-                  <span key={tag} className="text-xs px-3 py-1.5 rounded-full border border-lion-gold/40 text-lion-gold">
-                    #{tag}
+                {me.tags.map((tag) => (
+                  <span key={tag.name} className="text-xs px-3 py-1.5 rounded-full border border-lion-gold/40 text-lion-gold">
+                    #{tag.name}
                   </span>
                 ))}
               </div>
             )}
 
-            {profile.bio && (
+            {me.bio && (
               <div>
                 <h2 className="font-semibold mb-2">關於我</h2>
-                <p className="text-sm text-lion-cream/70 leading-relaxed">{profile.bio}</p>
+                <p className="text-sm text-lion-cream/70 leading-relaxed">{me.bio}</p>
               </div>
             )}
           </div>
@@ -155,19 +202,19 @@ export default function ProfilePage() {
                 onClick={() => fileInputRef.current?.click()}
                 className="relative w-24 h-24 rounded-full bg-white/10 border-2 border-dashed border-lion-gold/50 flex items-center justify-center overflow-hidden"
               >
-                {avatarUrl ? (
+                {avatarPreview ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={avatarUrl} alt="大頭貼預覽" className="w-full h-full object-cover" />
+                  <img src={avatarPreview} alt="大頭貼預覽" className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-2xl">📷</span>
                 )}
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-              <p className="text-xs text-lion-muted mt-2">更換大頭貼</p>
+              <p className="text-xs text-lion-muted mt-2">更換大頭貼（僅預覽，尚未支援上傳儲存）</p>
             </div>
 
             <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] px-4 py-2.5 text-xs text-lion-muted">
-              所屬分會：{profile.chapter}（如需變更請聯繫分會幹部）
+              所屬分會：{me.organization.name}（如需變更請聯繫分會幹部）
             </div>
 
             <div className="grid grid-cols-2 gap-4">

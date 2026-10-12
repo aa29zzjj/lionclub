@@ -1,33 +1,135 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import QrModal from "@/components/QrModal";
 import { ScanIcon } from "@/components/icons";
-import { useAppData } from "@/lib/store";
+import { colorFromId } from "@/lib/avatar-color";
 
 type Tab = "friends" | "requests" | "add";
 
+type Card = { id: string; name: string; chapter: string; title?: string };
+type FriendCard = Card & { status: "friend" };
+type IncomingCard = Card & { status: "pending-in"; friendshipId: string };
+type SuggestionCard = Card & { status: "pending-out" | "none" };
+
 export default function FriendsPage() {
-  const { profile, friends, incoming, suggestions, acceptRequest, declineRequest, sendRequest, addFriendByQr } =
-    useAppData();
+  const router = useRouter();
+  const [meId, setMeId] = useState("");
+  const [meName, setMeName] = useState("");
+  const [meChapter, setMeChapter] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [friends, setFriends] = useState<FriendCard[]>([]);
+  const [incoming, setIncoming] = useState<IncomingCard[]>([]);
+  const [suggestions, setSuggestions] = useState<SuggestionCard[]>([]);
+
   const [tab, setTab] = useState<Tab>("friends");
   const [query, setQuery] = useState("");
   const [showMyQr, setShowMyQr] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [toast, setToast] = useState("");
 
+  function flash(message: string) {
+    setToast(message);
+    setTimeout(() => setToast(""), 2500);
+  }
+
+  async function loadFriends() {
+    const res = await fetch("/api/friends");
+    if (res.status === 401) {
+      router.push("/login");
+      return;
+    }
+    const data = await res.json();
+    setFriends(data.friends ?? []);
+    setIncoming(data.incoming ?? []);
+    setSuggestions(data.suggestions ?? []);
+  }
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/me").then(async (res) => {
+        if (res.status === 401) {
+          router.push("/login");
+          return null;
+        }
+        return res.json();
+      }),
+      loadFriends(),
+    ])
+      .then(([me]) => {
+        if (!me) return;
+        setMeId(me.id);
+        setMeName(me.name);
+        setMeChapter(me.organization?.name ?? "");
+      })
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const filteredFriends = useMemo(
     () => friends.filter((f) => f.name.includes(query) || f.chapter.includes(query)),
     [friends, query]
   );
 
-  function handleScanSuccess() {
-    const added = addFriendByQr();
+  async function acceptRequest(friendshipId: string) {
+    await fetch(`/api/friends/${friendshipId}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "accept" }),
+    });
+    loadFriends();
+  }
+
+  async function declineRequest(friendshipId: string) {
+    await fetch(`/api/friends/${friendshipId}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "decline" }),
+    });
+    loadFriends();
+  }
+
+  async function sendRequest(memberId: string) {
+    const res = await fetch("/api/friends/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId }),
+    });
+    if (res.ok) loadFriends();
+  }
+
+  async function handleScanSuccess() {
+    const candidate = suggestions[0];
+    if (!candidate) {
+      setScanning(false);
+      flash("目前沒有可加入的對象");
+      return;
+    }
+    const res = await fetch("/api/friends/qr-add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId: candidate.id }),
+    });
     setScanning(false);
-    setToast(`已將 ${added.name} 加為好友`);
-    setTimeout(() => setToast(""), 2500);
+    if (res.ok) {
+      flash(`已將 ${candidate.name} 加為好友`);
+      loadFriends();
+    } else {
+      flash("加入失敗，請再試一次");
+    }
+  }
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="px-5 pt-6 pb-4">
+          <p className="text-sm text-lion-muted text-center py-12">載入中...</p>
+        </div>
+      </AppShell>
+    );
   }
 
   return (
@@ -73,7 +175,7 @@ export default function FriendsPage() {
               )}
               {filteredFriends.map((f) => (
                 <div key={f.id} className="flex items-center gap-3 rounded-xl bg-lion-card border border-white/[0.06] p-3">
-                  <Avatar name={f.name} color={f.avatarColor} />
+                  <Avatar name={f.name} color={colorFromId(f.id)} />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{f.name}</p>
                     <p className="text-xs text-lion-muted truncate">
@@ -92,20 +194,20 @@ export default function FriendsPage() {
             {incoming.length === 0 && <p className="text-sm text-lion-muted text-center py-8">目前沒有好友邀請</p>}
             {incoming.map((f) => (
               <div key={f.id} className="flex items-center gap-3 rounded-xl bg-lion-card border border-white/[0.06] p-3">
-                <Avatar name={f.name} color={f.avatarColor} />
+                <Avatar name={f.name} color={colorFromId(f.id)} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm truncate">{f.name}</p>
                   <p className="text-xs text-lion-muted truncate">{f.chapter}</p>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <button
-                    onClick={() => acceptRequest(f.id)}
+                    onClick={() => acceptRequest(f.friendshipId)}
                     className="text-xs bg-lion-gold text-lion-navyDeep font-medium px-3 py-1.5 rounded-full"
                   >
                     接受
                   </button>
                   <button
-                    onClick={() => declineRequest(f.id)}
+                    onClick={() => declineRequest(f.friendshipId)}
                     className="text-xs bg-white/10 text-lion-cream/70 font-medium px-3 py-1.5 rounded-full"
                   >
                     忽略
@@ -144,7 +246,7 @@ export default function FriendsPage() {
               <div className="flex flex-col gap-2">
                 {suggestions.map((f) => (
                   <div key={f.id} className="flex items-center gap-3 rounded-xl bg-lion-card border border-white/[0.06] p-3">
-                    <Avatar name={f.name} color={f.avatarColor} />
+                    <Avatar name={f.name} color={colorFromId(f.id)} />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{f.name}</p>
                       <p className="text-xs text-lion-muted truncate">
@@ -170,8 +272,8 @@ export default function FriendsPage() {
       {showMyQr && (
         <QrModal
           title="我的好友 QR Code"
-          subtitle={`${profile.name} · ${profile.chapter}`}
-          seed={profile.id}
+          subtitle={`${meName} · ${meChapter}`}
+          seed={meId}
           onClose={() => setShowMyQr(false)}
         />
       )}
