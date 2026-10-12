@@ -13,7 +13,7 @@ import { createFriendQrPayload, parseFriendQrPayload } from "@/lib/friend-qr";
 
 type Tab = "friends" | "requests" | "add";
 
-type Card = { id: string; name: string; chapter: string; title?: string };
+type Card = { id: string; name: string; chapter: string; title?: string; photoUrl?: string };
 type FriendCard = Card & { status: "friend" };
 type IncomingCard = Card & { status: "pending-in"; friendshipId: string };
 type SuggestionCard = Card & { status: "pending-out" | "none" };
@@ -184,7 +184,7 @@ export default function FriendsPage() {
                   href={`/members/${f.id}`}
                   className="flex items-center gap-3 rounded-xl bg-lion-card border border-white/[0.06] p-3"
                 >
-                  <Avatar name={f.name} color={colorFromId(f.id)} />
+                  <Avatar name={f.name} color={colorFromId(f.id)} imageUrl={f.photoUrl} />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{f.name}</p>
                     <p className="text-xs text-lion-muted truncate">
@@ -204,7 +204,7 @@ export default function FriendsPage() {
             {incoming.length === 0 && <p className="text-sm text-lion-muted text-center py-8">目前沒有好友邀請</p>}
             {incoming.map((f) => (
               <div key={f.id} className="flex items-center gap-3 rounded-xl bg-lion-card border border-white/[0.06] p-3">
-                <Avatar name={f.name} color={colorFromId(f.id)} />
+                <Avatar name={f.name} color={colorFromId(f.id)} imageUrl={f.photoUrl} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm truncate">{f.name}</p>
                   <p className="text-xs text-lion-muted truncate">{f.chapter}</p>
@@ -256,7 +256,7 @@ export default function FriendsPage() {
               <div className="flex flex-col gap-2">
                 {suggestions.map((f) => (
                   <div key={f.id} className="flex items-center gap-3 rounded-xl bg-lion-card border border-white/[0.06] p-3">
-                    <Avatar name={f.name} color={colorFromId(f.id)} />
+                    <Avatar name={f.name} color={colorFromId(f.id)} imageUrl={f.photoUrl} />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{f.name}</p>
                       <p className="text-xs text-lion-muted truncate">

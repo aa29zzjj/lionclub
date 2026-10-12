@@ -27,7 +27,7 @@ type Me = {
   joinMonth: number | null;
   organization: { name: string };
 };
-type Friend = { id: string; name: string; chapter: string };
+type Friend = { id: string; name: string; chapter: string; photoUrl?: string };
 type EventCard = { id: string; title: string; location: string; coverPhotoUrl?: string; hostChapter: string; startAt: string };
 
 export default function HomePage() {
@@ -220,7 +220,7 @@ export default function HomePage() {
         <div className="flex gap-4 overflow-x-auto pb-1">
           {friends.map((f) => (
             <Link key={f.id} href={`/members/${f.id}`} className="flex flex-col items-center gap-1.5 w-16 shrink-0">
-              <Avatar name={f.name} color={colorFromId(f.id)} size={52} />
+              <Avatar name={f.name} color={colorFromId(f.id)} imageUrl={f.photoUrl} size={52} />
               <p className="text-[11px] text-lion-cream/70 truncate w-full text-center">{f.name}</p>
             </Link>
           ))}

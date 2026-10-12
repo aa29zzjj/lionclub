@@ -2,8 +2,14 @@ import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 
-function toCard(member: { id: string; name: string; title: string | null; organization: { name: string } }) {
-  return { id: member.id, name: member.name, chapter: member.organization.name, title: member.title ?? undefined };
+function toCard(member: { id: string; name: string; title: string | null; photoUrl: string | null; organization: { name: string } }) {
+  return {
+    id: member.id,
+    name: member.name,
+    chapter: member.organization.name,
+    title: member.title ?? undefined,
+    photoUrl: member.photoUrl ?? undefined,
+  };
 }
 
 export async function GET() {
