@@ -1,7 +1,20 @@
-# Hao → Jerry 交接（2026-10-12）
+# Hao → Tom／Jerry 進版交接（2026-10-12）
 
-分支：`codex/friend-profile-and-handoff`
-狀態：僅本機完成，尚未推送 `main`；待 Hao 檢閱後再推。
+整合來源：`codex/friend-profile-and-handoff`
+進版分支：`main`
+狀態：Hao 已完成檢閱並同意進版；本文件與本次功能一併推送 GitHub。
+
+## 測試帳號
+
+以下三組帳號提供 Tom 與 Jerry 進行好友、個人頁、活動及通知流程測試：
+
+| 測試身分 | 帳號 | 密碼 |
+| --- | --- | --- |
+| Tom | `Tom@Lion.com` | `0204` |
+| Hao | `Hao@Lion.com` | `0204` |
+| Jerry | `Jerry@Lion.com` | `0204` |
+
+三組帳號皆為測試用途；正式驗收結束後應更換密碼或停用，請勿使用於正式會員帳號。
 
 ## 已完成程式
 
@@ -44,4 +57,4 @@
 - Prisma Client 6.19.3 已重新產生。
 - `tsc --noEmit` 通過。
 - `next build` 通過，共 34 個頁面／API 路由完成編譯。
-- 未對正式 RDS 執行 migration，亦未呼叫正式 S3／SES；避免未經確認變更正式環境。
+- 未對正式 RDS 執行 migration，亦未呼叫正式 S3／SES；部署後仍須由 Jerry 依前述清單完成環境設定與共同驗收。
