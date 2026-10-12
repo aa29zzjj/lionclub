@@ -149,7 +149,10 @@ function RegisterForm() {
     <div className="min-h-screen w-full bg-[#eef0f4] flex justify-center">
       <div className="w-full max-w-[480px] min-h-screen bg-lion-navyDeep text-lion-cream flex flex-col px-6 py-10">
         <div className="flex items-center gap-3 mb-8">
-          <span className="text-2xl">🦁</span>
+          <span className="w-9 h-9 rounded-full bg-white flex items-center justify-center p-1 shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/lions-logo.svg" alt="Lions Clubs International" className="w-full h-full object-contain" />
+          </span>
           <div>
             <h1 className="text-lg font-bold">獅子會新會員註冊</h1>
             <p className="text-xs text-lion-cream/50">

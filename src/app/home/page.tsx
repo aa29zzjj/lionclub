@@ -87,8 +87,9 @@ export default function HomePage() {
       <div className="px-5 pt-6 pb-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-lion-gold/15 border border-lion-gold flex items-center justify-center text-sm">
-              🦁
+            <div className="w-8 h-8 rounded-full bg-white border border-lion-gold flex items-center justify-center p-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/lions-logo.svg" alt="Lions Clubs International" className="w-full h-full object-contain" />
             </div>
             <span className="font-bold tracking-wide">獅子會</span>
           </div>
@@ -112,8 +113,9 @@ export default function HomePage() {
         <div className="relative rounded-2xl bg-gradient-to-br from-lion-navy via-lion-navyLight to-[#2a3660] border border-white/[0.06] p-4 mb-6 overflow-hidden">
           <div className="absolute -right-6 -top-10 w-32 h-32 rounded-full bg-white/[0.04]" />
           <div className="flex items-center gap-2 mb-4">
-            <span className="w-6 h-6 rounded-full bg-lion-gold/20 border border-lion-gold flex items-center justify-center text-[11px]">
-              🦁
+            <span className="w-6 h-6 rounded-full bg-white border border-lion-gold flex items-center justify-center p-0.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/lions-logo.svg" alt="Lions Clubs International" className="w-full h-full object-contain" />
             </span>
             <span className="text-xs tracking-widest text-lion-gold font-medium">LIONS CLUBS · 數位會員證</span>
           </div>

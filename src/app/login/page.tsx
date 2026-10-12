@@ -43,8 +43,9 @@ export default function LoginPage() {
     <div className="min-h-screen w-full bg-[#e9ebf1] flex justify-center">
       <div className="w-full max-w-[480px] min-h-screen bg-lion-navyDeep text-lion-cream flex flex-col justify-center px-8 py-12">
         <div className="flex flex-col items-center mb-10">
-          <div className="w-20 h-20 rounded-full bg-lion-gold/15 border-2 border-lion-gold flex items-center justify-center text-3xl mb-4">
-            🦁
+          <div className="w-20 h-20 rounded-full bg-white border-2 border-lion-gold flex items-center justify-center p-2 mb-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/lions-logo.svg" alt="Lions Clubs International" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-lion-cream tracking-wide">獅子會 App</h1>
           <p className="text-lion-cream/50 text-sm mt-1">LIONS CLUB MEMBER PORTAL</p>
