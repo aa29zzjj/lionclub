@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
+import { getSession } from "@/lib/session";
 
 export async function GET() {
   const member = await getCurrentMember();
@@ -45,21 +46,41 @@ export async function PATCH(req: NextRequest) {
   const { name, title, email, phone, bio, tags, photoUrl } = parsed.data;
 
   const prisma = await getPrisma();
-  const member = await prisma.member.update({
-    where: { id: me.id },
-    data: {
-      name,
-      title,
-      email,
-      phone,
-      bio,
-      photoUrl: photoUrl === "" ? null : photoUrl,
-      tags: tags
-        ? { set: [], connectOrCreate: tags.map((tagName) => ({ where: { name: tagName }, create: { name: tagName } })) }
-        : undefined,
-    },
-    include: { organization: true, tags: true, adminRoles: { where: { validUntil: null } } },
-  });
+
+  let member;
+  try {
+    member = await prisma.$transaction(async (tx) => {
+      const updated = await tx.member.update({
+        where: { id: me.id },
+        data: {
+          name,
+          title,
+          email,
+          phone,
+          bio,
+          photoUrl: photoUrl === "" ? null : photoUrl,
+          tags: tags
+            ? { set: [], connectOrCreate: tags.map((tagName) => ({ where: { name: tagName }, create: { name: tagName } })) }
+            : undefined,
+        },
+        include: { organization: true, tags: true, adminRoles: { where: { validUntil: null } } },
+      });
+
+      if (email) {
+        const session = await getSession();
+        if (session) {
+          await tx.user.update({ where: { id: session.userId }, data: { email } });
+        }
+      }
+
+      return updated;
+    });
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
+      return NextResponse.json({ error: "此 Email 已被使用" }, { status: 409 });
+    }
+    throw err;
+  }
 
   return NextResponse.json({
     id: member.id,
