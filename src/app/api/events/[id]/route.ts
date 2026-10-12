@@ -18,6 +18,7 @@ const updateSchema = z.object({
   location: z.string().trim().min(1).max(240),
   capacity: z.number().int().positive().nullable().optional(),
   description: z.string().trim().max(3000).nullable().optional(),
+  coverPhotoUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
 });
 
 async function canManage(memberId: string, event: { createdById: string; hostOrganizationId: string }) {
@@ -51,6 +52,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       description: event.description ?? undefined,
       location: event.location ?? "",
       capacity: event.capacity ?? undefined,
+      coverPhotoUrl: event.coverPhotoUrl ?? undefined,
       hostChapter: event.hostOrganization.name,
       startAt: event.startAt,
       isRegistered: event.registrations.length > 0,
@@ -85,6 +87,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       location: parsed.data.location,
       capacity: parsed.data.capacity ?? null,
       description: parsed.data.description || null,
+      ...(parsed.data.coverPhotoUrl !== undefined ? { coverPhotoUrl: parsed.data.coverPhotoUrl || null } : {}),
     },
   });
   return NextResponse.json({ ok: true });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
@@ -13,6 +13,7 @@ type EventDetail = {
   description?: string;
   location: string;
   capacity?: number;
+  coverPhotoUrl?: string;
   hostChapter: string;
   startAt: string;
   isRegistered: boolean;
@@ -24,6 +25,7 @@ type EventDetail = {
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -35,6 +37,8 @@ export default function EventDetailPage() {
   const [location, setLocation] = useState("");
   const [capacity, setCapacity] = useState("");
   const [description, setDescription] = useState("");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   function loadForm(nextEvent: EventDetail) {
@@ -45,6 +49,20 @@ export default function EventDetailPage() {
     setLocation(nextEvent.location);
     setCapacity(nextEvent.capacity ? String(nextEvent.capacity) : "");
     setDescription(nextEvent.description ?? "");
+    setCoverFile(null);
+    setCoverPreview(nextEvent.coverPhotoUrl ?? null);
+  }
+
+  function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setError("請選擇 5 MB 內的 JPG、PNG 或 WebP 圖片");
+      return;
+    }
+    if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
   }
 
   useEffect(() => {
@@ -92,6 +110,33 @@ export default function EventDetailPage() {
     if (!event) return;
     setSaving(true);
     setError("");
+
+    let coverPhotoUrl = event.coverPhotoUrl ?? null;
+    if (coverFile) {
+      const signResponse = await fetch("/api/events/cover-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentType: coverFile.type, size: coverFile.size }),
+      });
+      const signResult = await signResponse.json();
+      if (!signResponse.ok) {
+        setError(signResult.error ?? "無法準備封面照片上傳");
+        setSaving(false);
+        return;
+      }
+      const uploadResponse = await fetch(signResult.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": coverFile.type },
+        body: coverFile,
+      });
+      if (!uploadResponse.ok) {
+        setError("封面照片上傳失敗，請稍後再試");
+        setSaving(false);
+        return;
+      }
+      coverPhotoUrl = signResult.coverPhotoUrl;
+    }
+
     const response = await fetch(`/api/events/${event.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -101,6 +146,7 @@ export default function EventDetailPage() {
         location,
         capacity: capacity ? Number(capacity) : null,
         description: description || null,
+        coverPhotoUrl,
       }),
     });
     const result = await response.json();
@@ -116,6 +162,7 @@ export default function EventDetailPage() {
       location,
       capacity: capacity ? Number(capacity) : undefined,
       description: description || undefined,
+      coverPhotoUrl: coverPhotoUrl ?? undefined,
       isFull: Boolean(capacity && current.registeredCount >= Number(capacity)),
     } : current);
     setEditing(false);
@@ -173,7 +220,12 @@ export default function EventDetailPage() {
           ← 返回
         </button>
 
-        <div className="h-36 rounded-2xl bg-gradient-to-br from-lion-navyLight to-[#2E4A8A] mb-4" />
+        {event.coverPhotoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={event.coverPhotoUrl} alt="" className="h-36 w-full rounded-2xl object-cover mb-4" />
+        ) : (
+          <div className="h-36 rounded-2xl bg-gradient-to-br from-lion-navyLight to-[#2E4A8A] mb-4" />
+        )}
 
         <div className="flex items-start justify-between gap-3 mb-2">
           <h1 className="text-xl font-bold">{event.title}</h1>
@@ -188,6 +240,25 @@ export default function EventDetailPage() {
 
         {editing ? (
           <form onSubmit={saveEvent} className="rounded-2xl bg-lion-card border border-lion-gold/20 p-4 flex flex-col gap-3 mb-4">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full h-28 rounded-xl bg-white/[0.04] border-2 border-dashed border-lion-gold/40 flex items-center justify-center overflow-hidden"
+            >
+              {coverPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={coverPreview} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xs text-lion-muted">點擊選擇封面照片</span>
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleCoverChange}
+            />
             <input value={title} onChange={(e) => setTitle(e.target.value)} required className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2.5 text-sm" placeholder="活動名稱" />
             <input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} required className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2.5 text-sm" />
             <input value={location} onChange={(e) => setLocation(e.target.value)} required className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2.5 text-sm" placeholder="地點" />

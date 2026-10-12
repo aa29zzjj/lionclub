@@ -24,6 +24,7 @@ export async function GET() {
       description: ev.description ?? undefined,
       location: ev.location ?? "",
       capacity: ev.capacity ?? undefined,
+      coverPhotoUrl: ev.coverPhotoUrl ?? undefined,
       hostChapter: ev.hostOrganization.name,
       startAt: ev.startAt,
       registeredCount: ev._count.registrations,
@@ -39,6 +40,7 @@ const bodySchema = z.object({
   location: z.string().min(1),
   capacity: z.number().int().positive().optional(),
   description: z.string().optional(),
+  coverPhotoUrl: z.union([z.string().url(), z.literal("")]).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -49,7 +51,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "欄位格式錯誤" }, { status: 400 });
   }
-  const { title, startAt, location, capacity, description } = parsed.data;
+  const { title, startAt, location, capacity, description, coverPhotoUrl } = parsed.data;
 
   const prisma = await getPrisma();
   const event = await prisma.event.create({
@@ -59,6 +61,7 @@ export async function POST(req: NextRequest) {
       location,
       capacity,
       description,
+      coverPhotoUrl: coverPhotoUrl || null,
       hostOrganizationId: me.organizationId,
       createdById: me.id,
     },

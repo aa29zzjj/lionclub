@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
@@ -19,6 +19,7 @@ type EventCard = {
   location: string;
   description?: string;
   capacity?: number;
+  coverPhotoUrl?: string;
   registeredCount: number;
   isFull: boolean;
   hostChapter: string;
@@ -27,6 +28,7 @@ type EventCard = {
 
 export default function EventsPage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [events, setEvents] = useState<EventCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -38,7 +40,21 @@ export default function EventsPage() {
   const [location, setLocation] = useState("");
   const [capacity, setCapacity] = useState("");
   const [description, setDescription] = useState("");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setError("請選擇 5 MB 內的 JPG、PNG 或 WebP 圖片");
+      return;
+    }
+    if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+  }
 
   function loadEvents() {
     return fetch("/api/events")
@@ -66,6 +82,9 @@ export default function EventsPage() {
     setLocation("");
     setCapacity("");
     setDescription("");
+    if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
+    setCoverFile(null);
+    setCoverPreview(null);
     setError("");
     setCreating(false);
   }
@@ -76,6 +95,31 @@ export default function EventsPage() {
       setError("請填寫活動名稱、日期與地點");
       return;
     }
+
+    let coverPhotoUrl: string | undefined;
+    if (coverFile) {
+      const signResponse = await fetch("/api/events/cover-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentType: coverFile.type, size: coverFile.size }),
+      });
+      const signResult = await signResponse.json();
+      if (!signResponse.ok) {
+        setError(signResult.error ?? "無法準備封面照片上傳");
+        return;
+      }
+      const uploadResponse = await fetch(signResult.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": coverFile.type },
+        body: coverFile,
+      });
+      if (!uploadResponse.ok) {
+        setError("封面照片上傳失敗，請稍後再試");
+        return;
+      }
+      coverPhotoUrl = signResult.coverPhotoUrl;
+    }
+
     const startAt = new Date(`${date}T${time || "00:00"}`).toISOString();
     const res = await fetch("/api/events", {
       method: "POST",
@@ -86,6 +130,7 @@ export default function EventsPage() {
         location,
         description: description || undefined,
         capacity: capacity ? Number(capacity) : undefined,
+        coverPhotoUrl,
       }),
     });
     if (!res.ok) {
@@ -154,7 +199,12 @@ export default function EventsPage() {
                     <p className="text-[11px] text-lion-muted">{formatDate(ev.startAt)}</p>
                   </div>
                 </div>
-                <div className={`mx-3.5 mt-3 h-24 rounded-xl bg-gradient-to-br ${eventGradients[i % eventGradients.length]}`} />
+                {ev.coverPhotoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={ev.coverPhotoUrl} alt="" className="mx-3.5 mt-3 h-24 w-[calc(100%-1.75rem)] rounded-xl object-cover" />
+                ) : (
+                  <div className={`mx-3.5 mt-3 h-24 rounded-xl bg-gradient-to-br ${eventGradients[i % eventGradients.length]}`} />
+                )}
                 <div className="flex items-center justify-between px-3.5 py-3">
                   <p className="text-[11px] text-lion-muted flex items-center gap-1">
                     <PinIcon className="w-3.5 h-3.5" /> {ev.location}
@@ -173,6 +223,28 @@ export default function EventsPage() {
 
         {creating && (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div>
+              <label className="text-xs text-lion-muted mb-1 block">封面照片（選填）</label>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full h-28 rounded-xl bg-white/[0.04] border-2 border-dashed border-lion-gold/40 flex items-center justify-center overflow-hidden"
+              >
+                {coverPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={coverPreview} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xs text-lion-muted">點擊選擇封面照片</span>
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleCoverChange}
+              />
+            </div>
             <div>
               <label className="text-xs text-lion-muted mb-1 block">活動名稱</label>
               <input

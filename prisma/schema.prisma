@@ -255,6 +255,7 @@ model Event {
   startAt     DateTime
   capacity    Int?
   scope       String   @default("CLUB")
+  coverPhotoUrl String?
 
   hostOrganizationId String
   hostOrganization   Organization @relation(fields: [hostOrganizationId], references: [id], onDelete: Cascade)

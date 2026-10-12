@@ -28,7 +28,7 @@ type Me = {
   organization: { name: string };
 };
 type Friend = { id: string; name: string; chapter: string };
-type EventCard = { id: string; title: string; location: string; hostChapter: string; startAt: string };
+type EventCard = { id: string; title: string; location: string; coverPhotoUrl?: string; hostChapter: string; startAt: string };
 
 export default function HomePage() {
   const router = useRouter();
@@ -193,7 +193,12 @@ export default function HomePage() {
                   <p className="text-[11px] text-lion-muted">{formatDate(ev.startAt)}</p>
                 </div>
               </div>
-              <div className={`mx-3.5 mt-3 h-24 rounded-xl bg-gradient-to-br ${eventGradients[i % eventGradients.length]}`} />
+              {ev.coverPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={ev.coverPhotoUrl} alt="" className="mx-3.5 mt-3 h-24 w-[calc(100%-1.75rem)] rounded-xl object-cover" />
+              ) : (
+                <div className={`mx-3.5 mt-3 h-24 rounded-xl bg-gradient-to-br ${eventGradients[i % eventGradients.length]}`} />
+              )}
               <div className="flex items-center justify-between px-3.5 py-3">
                 <p className="text-[11px] text-lion-muted flex items-center gap-1">
                   <PinIcon className="w-3.5 h-3.5" /> {ev.location}
