@@ -10,6 +10,7 @@ type Member = { id: string; name: string; email: string | null; title: string | 
 const roleLabels: Record<string, string> = {
   CLUB_OFFICER: "分會幹部",
   CLUB_FINANCE: "分會財務",
+  CLUB_VICE_PRESIDENT: "分會副會長",
   CLUB_PRESIDENT: "分會會長",
 };
 
@@ -18,7 +19,7 @@ export default function AdminRolesPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [organizationName, setOrganizationName] = useState("");
   const [memberId, setMemberId] = useState("");
-  const [role, setRole] = useState<"CLUB_OFFICER" | "CLUB_FINANCE">("CLUB_OFFICER");
+  const [role, setRole] = useState<"CLUB_OFFICER" | "CLUB_FINANCE" | "CLUB_VICE_PRESIDENT" | "CLUB_PRESIDENT">("CLUB_OFFICER");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -83,6 +84,8 @@ export default function AdminRolesPage() {
             <select value={role} onChange={(event) => setRole(event.target.value as typeof role)} className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm">
               <option value="CLUB_OFFICER" className="text-black">分會幹部</option>
               <option value="CLUB_FINANCE" className="text-black">分會財務</option>
+              <option value="CLUB_VICE_PRESIDENT" className="text-black">分會副會長</option>
+              <option value="CLUB_PRESIDENT" className="text-black">分會會長</option>
             </select>
             <button type="submit" disabled={!memberId} className="rounded-xl bg-lion-gold py-2.5 text-sm font-semibold text-lion-navyDeep disabled:opacity-40">授予權限</button>
           </form>
@@ -91,7 +94,7 @@ export default function AdminRolesPage() {
             {members.map((member) => member.adminRoles.map((adminRole) => (
               <div key={adminRole.id} className="rounded-xl border border-white/[0.06] bg-lion-card p-3 flex items-center justify-between gap-3">
                 <div><p className="text-sm font-medium">{member.name}</p><p className="text-xs text-lion-muted">{roleLabels[adminRole.role] ?? adminRole.role}</p></div>
-                {adminRole.role !== "CLUB_PRESIDENT" && <button onClick={() => revoke(adminRole.id)} className="text-xs text-red-300">撤銷</button>}
+                <button onClick={() => revoke(adminRole.id)} className="text-xs text-red-300">撤銷</button>
               </div>
             )))}
           </div>

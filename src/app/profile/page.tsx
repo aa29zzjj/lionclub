@@ -351,7 +351,7 @@ export default function ProfilePage() {
             >
               幹部專用：產生入會邀請 QR
             </Link>
-            {me.adminRoles.some((adminRole) => ["CLUB_OFFICER", "CLUB_PRESIDENT", "CLUB_FINANCE", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"].includes(adminRole.role)) && (
+            {me.adminRoles.some((adminRole) => ["CLUB_OFFICER", "CLUB_VICE_PRESIDENT", "CLUB_PRESIDENT", "CLUB_FINANCE", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"].includes(adminRole.role)) && (
               <Link href="/admin/pending-members" className="mt-3 block w-full text-center text-xs text-lion-gold">
                 幹部專用：審核新會員
               </Link>

@@ -4,7 +4,7 @@ import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-mem
 import { getPrisma } from "@/lib/prisma";
 
 const managerRoles = ["CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
-const assignableRoles = ["CLUB_OFFICER", "CLUB_FINANCE"] as const;
+const assignableRoles = ["CLUB_OFFICER", "CLUB_FINANCE", "CLUB_VICE_PRESIDENT", "CLUB_PRESIDENT"] as const;
 
 async function canManage(memberId: string, organizationId: string) {
   return hasAdminRoleForOrganization(memberId, organizationId, managerRoles);

@@ -6,6 +6,7 @@ import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-mem
 
 const ALLOWED_ISSUER_ROLES = [
   "CLUB_OFFICER",
+  "CLUB_VICE_PRESIDENT",
   "CLUB_PRESIDENT",
   "CLUB_FINANCE",
   "ZONE_ADMIN",

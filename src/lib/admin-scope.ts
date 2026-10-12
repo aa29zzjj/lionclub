@@ -2,6 +2,7 @@ import { getPrisma } from "./prisma";
 
 export const APPROVER_ROLES = [
   "CLUB_OFFICER",
+  "CLUB_VICE_PRESIDENT",
   "CLUB_PRESIDENT",
   "CLUB_FINANCE",
   "ZONE_ADMIN",
