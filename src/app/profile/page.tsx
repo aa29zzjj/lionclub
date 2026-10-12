@@ -7,7 +7,7 @@ import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { memberTitleOptions, tagOptions } from "@/lib/mock-data";
 import { colorFromId } from "@/lib/avatar-color";
-import { calculateLionYears } from "@/lib/experience-data";
+import { calculateLionYears, formatJoinDate } from "@/lib/experience-data";
 
 type Me = {
   id: string;
@@ -19,6 +19,7 @@ type Me = {
   photoUrl: string | null;
   memberNo: string | null;
   joinYear: number | null;
+  joinMonth: number | null;
   birthday: string | null;
   organization: { name: string };
   tags: { name: string }[];
@@ -199,7 +200,7 @@ export default function ProfilePage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-lion-muted">入會年／獅齡</span>
-                <span>{me.joinYear ?? "—"}／{lionYears ?? "—"} 年</span>
+                <span>{formatJoinDate(me.joinYear, me.joinMonth) ?? "—"}／{lionYears ?? "—"} 年</span>
               </div>
             </div>
 

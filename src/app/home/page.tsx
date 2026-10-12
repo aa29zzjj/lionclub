@@ -9,6 +9,7 @@ import QrModal from "@/components/QrModal";
 import { BellIcon, QrIcon, PinIcon } from "@/components/icons";
 import { colorFromId } from "@/lib/avatar-color";
 import { createFriendQrPayload } from "@/lib/friend-qr";
+import { formatJoinDate } from "@/lib/experience-data";
 
 const eventGradients = [
   "from-lion-navyLight to-[#2E4A8A]",
@@ -23,6 +24,7 @@ type Me = {
   photoUrl: string | null;
   memberNo: string | null;
   joinYear: number | null;
+  joinMonth: number | null;
   organization: { name: string };
 };
 type Friend = { id: string; name: string; chapter: string };
@@ -131,7 +133,7 @@ export default function HomePage() {
             </div>
             <div>
               <p className="text-lion-muted mb-0.5">入會年度</p>
-              <p className="font-medium">{me.joinYear ?? "—"}</p>
+              <p className="font-medium">{formatJoinDate(me.joinYear, me.joinMonth) ?? "—"}</p>
             </div>
           </div>
           <button

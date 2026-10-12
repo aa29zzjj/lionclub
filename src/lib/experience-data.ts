@@ -170,3 +170,8 @@ export function calculateLionYears(joinYear: string) {
   if (!Number.isFinite(parsed)) return null;
   return Math.max(0, new Date().getFullYear() - parsed);
 }
+
+export function formatJoinDate(joinYear?: number | null, joinMonth?: number | null) {
+  if (!joinYear) return null;
+  return joinMonth ? `${joinYear} 年 ${joinMonth} 月` : `${joinYear} 年`;
+}

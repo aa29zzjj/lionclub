@@ -7,6 +7,7 @@ import Avatar from "@/components/Avatar";
 import { colorFromId } from "@/lib/avatar-color";
 import {
   calculateLionYears,
+  formatJoinDate,
   formatLionsYear,
   MemberExperience,
   positionOptions,
@@ -21,6 +22,7 @@ type MemberProfile = {
   photoUrl: string | null;
   memberNo: string | null;
   joinYear: number | null;
+  joinMonth: number | null;
   organization: { id: string; name: string; districtCode: string | null };
   tags: Array<{ id: string; name: string; category: string }>;
   experiences: MemberExperience[];
@@ -99,7 +101,7 @@ export default function MemberProfilePage() {
           <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-xl bg-black/20 px-3 py-2.5">
               <p className="text-lion-muted">入會年度</p>
-              <p className="mt-1 font-semibold">{member.joinYear ?? "—"}</p>
+              <p className="mt-1 font-semibold">{formatJoinDate(member.joinYear, member.joinMonth) ?? "—"}</p>
             </div>
             <div className="rounded-xl bg-black/20 px-3 py-2.5">
               <p className="text-lion-muted">獅齡</p>

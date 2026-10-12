@@ -47,6 +47,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ memberI
       photoUrl: member.photoUrl,
       memberNo: member.memberNo,
       joinYear: member.joinYear,
+      joinMonth: member.joinMonth,
       organization: member.organization,
       tags: member.tags,
       experiences: member.experiences.map(serializeExperience),

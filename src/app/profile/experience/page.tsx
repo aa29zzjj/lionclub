@@ -11,6 +11,7 @@ import {
   experienceKindOptions,
   ExperienceKind,
   ExperienceVisibility,
+  formatJoinDate,
   formatLionsYear,
   MemberExperience,
   multipleDistrictOptions,
@@ -39,6 +40,7 @@ type MeResponse = {
   name: string;
   photoUrl?: string | null;
   joinYear?: number | null;
+  joinMonth?: number | null;
   organization: { name: string; districtCode?: string | null };
 };
 
@@ -139,6 +141,7 @@ export default function ExperiencePage() {
     avatarColor: "#173d78",
     avatarUrl: me?.photoUrl ?? undefined,
     joinYear: me?.joinYear ? String(me.joinYear) : "—",
+    joinMonth: me?.joinMonth ?? null,
     districtCode,
     multipleDistrictCode: districtCode.split("-")[0] ?? "300A",
     regionName: "",
@@ -409,7 +412,7 @@ export default function ExperiencePage() {
                   {profile.zoneName ? ` · ${profile.zoneName}` : ""}
                 </p>
               )}
-              <p className="text-xs text-lion-cream/70 mt-1">入會 {profile.joinYear} 年 · 獅齡 {lionYears ?? "—"} 年</p>
+              <p className="text-xs text-lion-cream/70 mt-1">入會 {formatJoinDate(me?.joinYear, profile.joinMonth) ?? "—"} · 獅齡 {lionYears ?? "—"} 年</p>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-2 mt-5">

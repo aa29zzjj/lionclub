@@ -5,7 +5,11 @@ import { getCurrentMember } from "@/lib/current-member";
 import { sendSesEmail } from "@/lib/aws-http";
 import { APPROVER_ROLES, getAdministeredOrganizationIds } from "@/lib/admin-scope";
 
-const bodySchema = z.object({ action: z.enum(["approve", "reject"]) });
+const bodySchema = z.object({
+  action: z.enum(["approve", "reject"]),
+  joinYear: z.number().int().min(1900).max(2100).optional(),
+  joinMonth: z.number().int().min(1).max(12).optional(),
+});
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ memberId: string }> }) {
   const me = await getCurrentMember();
@@ -35,7 +39,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ mem
   const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-northeast-1";
 
   if (parsed.data.action === "approve") {
-    await prisma.member.update({ where: { id: memberId }, data: { status: "ACTIVE" } });
+    const now = new Date();
+    await prisma.member.update({
+      where: { id: memberId },
+      data: {
+        status: "ACTIVE",
+        joinYear: parsed.data.joinYear ?? now.getFullYear(),
+        joinMonth: parsed.data.joinMonth ?? now.getMonth() + 1,
+      },
+    });
     if (from && target.email) {
       void sendSesEmail({
         region,

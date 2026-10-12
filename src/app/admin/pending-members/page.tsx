@@ -20,6 +20,16 @@ export default function PendingMembersPage() {
   const [members, setMembers] = useState<PendingMember[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toast, setToast] = useState("");
+  const now = new Date();
+  const [joinDates, setJoinDates] = useState<Record<string, { year: string; month: string }>>({});
+
+  function joinDateFor(memberId: string) {
+    return joinDates[memberId] ?? { year: String(now.getFullYear()), month: String(now.getMonth() + 1) };
+  }
+
+  function setJoinDateField(memberId: string, field: "year" | "month", value: string) {
+    setJoinDates((prev) => ({ ...prev, [memberId]: { ...joinDateFor(memberId), [field]: value } }));
+  }
 
   function load() {
     return fetch("/api/admin/pending-members")
@@ -46,10 +56,16 @@ export default function PendingMembersPage() {
 
   async function respond(memberId: string, action: "approve" | "reject") {
     setBusyId(memberId);
+    const body: { action: "approve" | "reject"; joinYear?: number; joinMonth?: number } = { action };
+    if (action === "approve") {
+      const { year, month } = joinDateFor(memberId);
+      if (year) body.joinYear = Number(year);
+      if (month) body.joinMonth = Number(month);
+    }
     const res = await fetch(`/api/admin/pending-members/${memberId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify(body),
     });
     if (res.ok) {
       setMembers((prev) => prev.filter((m) => m.id !== memberId));
@@ -108,6 +124,25 @@ export default function PendingMembersPage() {
                 <p className="text-lion-muted">
                   申請時間：{new Date(m.createdAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
                 </p>
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-xs text-lion-muted shrink-0">入會年月</span>
+                <input
+                  type="number"
+                  value={joinDateFor(m.id).year}
+                  onChange={(e) => setJoinDateField(m.id, "year", e.target.value)}
+                  className="w-20 rounded-lg bg-white/[0.04] border border-white/[0.08] px-2 py-1.5 text-xs outline-none focus:border-lion-gold"
+                />
+                <span className="text-xs text-lion-muted">年</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={joinDateFor(m.id).month}
+                  onChange={(e) => setJoinDateField(m.id, "month", e.target.value)}
+                  className="w-14 rounded-lg bg-white/[0.04] border border-white/[0.08] px-2 py-1.5 text-xs outline-none focus:border-lion-gold"
+                />
+                <span className="text-xs text-lion-muted">月</span>
               </div>
               <div className="flex gap-2 mt-3">
                 <button
