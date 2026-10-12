@@ -20,6 +20,7 @@ export async function GET() {
     photoUrl: member.photoUrl,
     memberNo: member.memberNo,
     joinYear: member.joinYear,
+    birthday: member.birthday,
     status: member.status,
     organization: member.organization,
     tags: member.tags,
@@ -35,6 +36,7 @@ const patchSchema = z.object({
   bio: z.string().optional(),
   tags: z.array(z.string()).optional(),
   photoUrl: z.union([z.string().url(), z.literal("")]).optional(),
+  birthday: z.union([z.string().date(), z.literal("")]).optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -43,7 +45,7 @@ export async function PATCH(req: NextRequest) {
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "欄位格式錯誤" }, { status: 400 });
-  const { name, title, email, phone, bio, tags, photoUrl } = parsed.data;
+  const { name, title, email, phone, bio, tags, photoUrl, birthday } = parsed.data;
 
   const prisma = await getPrisma();
 
@@ -59,6 +61,7 @@ export async function PATCH(req: NextRequest) {
           phone,
           bio,
           photoUrl: photoUrl === "" ? null : photoUrl,
+          birthday: birthday === "" ? null : birthday ? new Date(birthday) : undefined,
           tags: tags
             ? { set: [], connectOrCreate: tags.map((tagName) => ({ where: { name: tagName }, create: { name: tagName } })) }
             : undefined,
@@ -92,6 +95,7 @@ export async function PATCH(req: NextRequest) {
     photoUrl: member.photoUrl,
     memberNo: member.memberNo,
     joinYear: member.joinYear,
+    birthday: member.birthday,
     status: member.status,
     organization: member.organization,
     tags: member.tags,

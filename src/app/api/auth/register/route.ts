@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { sendSesEmail } from "@/lib/aws-http";
+import { generateMemberNo } from "@/lib/member-no";
 
 const APPROVER_ROLES = [
   "CLUB_OFFICER",
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
+  const memberNo = await generateMemberNo(prisma, invite.organizationId);
 
   const member = await prisma.$transaction(async (tx) => {
     const created = await tx.member.create({
@@ -71,6 +73,7 @@ export async function POST(req: NextRequest) {
         title,
         bio,
         status: "PENDING",
+        memberNo,
         organizationId: invite.organizationId,
         tags: tags?.length
           ? {

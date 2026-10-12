@@ -19,6 +19,7 @@ type Me = {
   photoUrl: string | null;
   memberNo: string | null;
   joinYear: number | null;
+  birthday: string | null;
   organization: { name: string };
   tags: { name: string }[];
   adminRoles: { role: string }[];
@@ -37,6 +38,7 @@ export default function ProfilePage() {
   const [title, setTitle] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [birthday, setBirthday] = useState("");
   const [bio, setBio] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [toast, setToast] = useState("");
@@ -70,6 +72,7 @@ export default function ProfilePage() {
     setTitle(me.title ?? "");
     setEmail(me.email);
     setPhone(me.phone ?? "");
+    setBirthday(me.birthday ? me.birthday.slice(0, 10) : "");
     setBio(me.bio ?? "");
     setTags(me.tags.map((t) => t.name));
     setEditing(true);
@@ -119,7 +122,7 @@ export default function ProfilePage() {
     const res = await fetch("/api/me", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, title, email, phone, bio, tags, photoUrl }),
+      body: JSON.stringify({ name, title, email, phone, bio, tags, photoUrl, birthday }),
     });
     if (!res.ok) {
       setToast("更新失敗，請再試一次");
@@ -185,6 +188,10 @@ export default function ProfilePage() {
               <div className="flex justify-between">
                 <span className="text-lion-muted">手機</span>
                 <span>{me.phone || "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-lion-muted">生日</span>
+                <span>{me.birthday ? new Date(me.birthday).toLocaleDateString("zh-TW") : "—"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-lion-muted">會員編號</span>
@@ -287,6 +294,15 @@ export default function ProfilePage() {
                 <input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-lion-muted mb-1 block">生日</label>
+                <input
+                  type="date"
+                  value={birthday}
+                  onChange={(e) => setBirthday(e.target.value)}
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
                 />
               </div>
