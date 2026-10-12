@@ -63,7 +63,10 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const registerUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/register?org=${invite.organizationId}&token=${invite.token}`;
+  const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/$/, "");
+  const registerUrl = new URL("/register", `${appOrigin}/`);
+  registerUrl.searchParams.set("org", invite.organizationId);
+  registerUrl.searchParams.set("token", invite.token);
 
-  return NextResponse.json({ invite, registerUrl });
+  return NextResponse.json({ invite, registerUrl: registerUrl.toString() });
 }

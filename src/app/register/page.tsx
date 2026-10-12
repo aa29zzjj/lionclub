@@ -8,6 +8,7 @@ import { memberTitleOptions, tagOptions } from "@/lib/mock-data";
 
 type Step = "invite" | "profile" | "done";
 type OrgOption = { id: string; name: string; districtCode: string | null };
+const registerPageUrl = `${(process.env.NEXT_PUBLIC_APP_URL ?? "https://lionclubsmembership.com").replace(/\/$/, "")}/register`;
 
 export default function RegisterPage() {
   return (
@@ -165,7 +166,7 @@ function RegisterForm() {
           <form onSubmit={handleInviteSubmit} className="flex flex-col gap-5">
             <div className="rounded-2xl bg-lion-card border border-white/[0.06] p-5 flex flex-col items-center">
               <div className="w-36 h-36 rounded-xl overflow-hidden mb-3">
-                <QrCode seed="lionclub-invite" />
+                <QrCode value={registerPageUrl} />
               </div>
               <p className="text-xs text-lion-cream/50 text-center">
                 請用手機掃描分會幹部提供的邀請 QR Code

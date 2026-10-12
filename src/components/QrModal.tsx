@@ -5,12 +5,12 @@ import QrCode from "./QrCode";
 export default function QrModal({
   title,
   subtitle,
-  seed,
+  value,
   onClose,
 }: {
   title: string;
   subtitle?: string;
-  seed: string;
+  value: string;
   onClose: () => void;
 }) {
   return (
@@ -25,7 +25,7 @@ export default function QrModal({
         <p className="font-semibold mb-1">{title}</p>
         {subtitle && <p className="text-xs text-lion-muted mb-4 text-center">{subtitle}</p>}
         <div className="w-48 h-48 rounded-xl overflow-hidden mb-4">
-          <QrCode seed={seed} />
+          <QrCode value={value} />
         </div>
         <button
           onClick={onClose}

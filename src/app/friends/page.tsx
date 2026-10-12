@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
+import FriendQrScanner from "@/components/FriendQrScanner";
 import QrModal from "@/components/QrModal";
 import { ScanIcon } from "@/components/icons";
 import { colorFromId } from "@/lib/avatar-color";
+import { createFriendQrPayload, parseFriendQrPayload } from "@/lib/friend-qr";
 
 type Tab = "friends" | "requests" | "add";
 
@@ -101,24 +103,26 @@ export default function FriendsPage() {
     if (res.ok) loadFriends();
   }
 
-  async function handleScanSuccess() {
-    const candidate = suggestions[0];
-    if (!candidate) {
+  async function handleScanSuccess(decodedText: string) {
+    const memberId = parseFriendQrPayload(decodedText);
+    if (!memberId) {
       setScanning(false);
-      flash("目前沒有可加入的對象");
+      flash("這不是有效的獅子會會員 QR Code");
       return;
     }
+
     const res = await fetch("/api/friends/qr-add", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ memberId: candidate.id }),
+      body: JSON.stringify({ memberId }),
     });
+    const data = await res.json().catch(() => ({}));
     setScanning(false);
     if (res.ok) {
-      flash(`已將 ${candidate.name} 加為好友`);
-      loadFriends();
+      flash(`已將 ${data.friend?.name ?? "對方"} 加為好友`);
+      void loadFriends();
     } else {
-      flash("加入失敗，請再試一次");
+      flash(data.error ?? "加入失敗，請再試一次");
     }
   }
 
@@ -273,36 +277,13 @@ export default function FriendsPage() {
         <QrModal
           title="我的好友 QR Code"
           subtitle={`${meName} · ${meChapter}`}
-          seed={meId}
+          value={createFriendQrPayload(meId)}
           onClose={() => setShowMyQr(false)}
         />
       )}
 
       {scanning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-8" onClick={() => setScanning(false)}>
-          <div
-            className="w-full max-w-[320px] rounded-2xl bg-lion-card border border-white/10 p-6 flex flex-col items-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="font-semibold mb-1">掃描好友 QR Code</p>
-            <p className="text-xs text-lion-muted mb-4 text-center">將對方的會員證 QR Code 對準掃描框</p>
-            <div className="w-48 h-48 rounded-xl border-2 border-dashed border-lion-gold/50 flex items-center justify-center mb-4 text-lion-muted text-xs">
-              相機掃描框（示意）
-            </div>
-            <button
-              onClick={handleScanSuccess}
-              className="w-full rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-2.5 text-sm mb-2"
-            >
-              模擬掃描成功
-            </button>
-            <button
-              onClick={() => setScanning(false)}
-              className="w-full rounded-xl bg-white/10 text-lion-cream/70 font-medium py-2.5 text-sm"
-            >
-              取消
-            </button>
-          </div>
-        </div>
+        <FriendQrScanner onScan={(decodedText) => void handleScanSuccess(decodedText)} onClose={() => setScanning(false)} />
       )}
     </AppShell>
   );

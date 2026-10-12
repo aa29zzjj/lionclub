@@ -2,7 +2,7 @@
 
 更新日期：2026-10-09
 前端負責：角色 B
-狀態：前端展示版已完成，等待 Jerry 後端 API
+狀態：前端展示版已完成；登入、會員、好友、活動與通知已接 API，資歷 CRUD 仍等待 Jerry 後端 API
 
 ## 本次更新內容
 
@@ -24,13 +24,13 @@
   - 300A-3：62 間，來源：https://lions300a3.org.tw/sites/765f2581-ae3f-4ab4-b35b-d6104109a171/organization-presidents
   - 300A-5：81 間，來源：https://300a-5.org.tw/index.php/2627chapter-president-side
 
-公開測試站：
-https://lionclub-member-demo-20261009.cerbeurs.chatgpt.site
+正式站：
+https://lionclubsmembership.com
 
 ## 目前資料狀態
 
-- 所有會員、好友、活動與資歷仍是前端 mock data。
-- 新增、修改、刪除只存在 React 記憶體；重新整理頁面後會回復預設資料。
+- 登入、會員、好友、活動與通知已使用 AWS RDS 真實資料。
+- 資歷新增、修改、刪除仍只存在 React 記憶體；重新整理頁面後會回復預設資料。
 - 分會資料目前以正式名稱比對，尚未有後端穩定 ID。
 - 300A 四個區已具備分會名單，但專區／分區與分會的完整隸屬關係尚未建檔。
 - 300B、300C、300D、300E 的分會名單尚未匯入。
@@ -112,14 +112,14 @@ GET    /api/positions?level=club&kind=position
 
 ## 待補事項
 
-- [ ] Jerry 確認 API 網址、路由與 Cookie Session／JWT 方案。
-- [ ] 建立會員、組織、職位、資歷、審核及權限資料表。
+- [x] Jerry 確認 API 路由與同網域 HttpOnly Cookie Session 方案。
+- [x] 建立會員、組織、職位、資歷及獨立管理權限資料表。
 - [ ] 用後端 `organizationId` 取代目前以名稱比對的方式。
 - [ ] 補齊 300A 專區／分區與分會隸屬關係。
 - [ ] 補齊 300B、300C、300D、300E 分會名單。
 - [ ] 建立幹部審核、退回、修改與稽核紀錄流程。
 - [ ] 串接照片／證明文件上傳（若產品決定需要）。
-- [ ] 串接正式登入、會員資料及好友／活動／通知 API。
+- [x] 串接正式登入、會員資料及好友／活動／通知 API。
 - [ ] 補 API loading、空資料、401、403、404、409、422、500 等狀態處理。
 - [ ] 補單元測試、API 整合測試與行動裝置驗收。
 - [ ] 確認獅齡計算基準；目前前端以「當年－入會年」計算。

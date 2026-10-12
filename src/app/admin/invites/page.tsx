@@ -128,7 +128,7 @@ export default function AdminInvitesPage() {
           <div className="rounded-2xl bg-lion-card border border-lion-gold/30 p-5 flex flex-col items-center mb-6">
             <p className="text-xs text-lion-gold mb-3">最新產生的邀請，給新會員掃描</p>
             <div className="w-40 h-40 rounded-xl overflow-hidden mb-3">
-              <QrCode seed={invites[0].token} />
+              <QrCode value={newRegisterUrl} />
             </div>
             <p className="text-sm font-semibold tracking-widest mb-1">PIN：{invites[0].pin}</p>
             <p className="text-[11px] text-lion-muted break-all text-center">{newRegisterUrl}</p>

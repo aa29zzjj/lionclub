@@ -8,6 +8,7 @@ import Avatar from "@/components/Avatar";
 import QrModal from "@/components/QrModal";
 import { BellIcon, QrIcon, PinIcon } from "@/components/icons";
 import { colorFromId } from "@/lib/avatar-color";
+import { createFriendQrPayload } from "@/lib/friend-qr";
 
 const eventGradients = [
   "from-lion-navyLight to-[#2E4A8A]",
@@ -150,7 +151,7 @@ export default function HomePage() {
           <QrModal
             title="我的會員證 QR Code"
             subtitle={`${me.name} · ${me.organization.name}`}
-            seed={me.id}
+            value={createFriendQrPayload(me.id)}
             onClose={() => setShowQr(false)}
           />
         )}
