@@ -131,7 +131,6 @@ export default function AdminInvitesPage() {
               <QrCode value={newRegisterUrl} />
             </div>
             <p className="text-sm font-semibold tracking-widest mb-1">PIN：{invites[0].pin}</p>
-            <p className="text-[11px] text-lion-muted break-all text-center">{newRegisterUrl}</p>
           </div>
         )}
 
