@@ -56,6 +56,8 @@ function RegisterForm() {
   const [title, setTitle] = useState(memberTitleOptions[0] ?? "");
   const [bio, setBio] = useState("");
   const [declaredOrganizationName, setDeclaredOrganizationName] = useState("");
+  const [orgSuggestions, setOrgSuggestions] = useState<{ id: string; name: string; districtCode: string | null }[]>([]);
+  const [orgSuggestionsOpen, setOrgSuggestionsOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [profileError, setProfileError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -142,6 +144,33 @@ function RegisterForm() {
   function toggleTag(tag: string) {
     setSelectedTags((previous) => previous.includes(tag) ? previous.filter((item) => item !== tag) : [...previous, tag]);
   }
+
+  useEffect(() => {
+    const query = declaredOrganizationName.trim();
+    if (!query) {
+      setOrgSuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/organizations?level=club&q=${encodeURIComponent(query)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const data = await response.json().catch(() => null);
+        if (controller.signal.aborted) return;
+        setOrgSuggestions(Array.isArray(data?.organizations) ? data.organizations.slice(0, 20) : []);
+      } catch {
+        // 搜尋分會清單失敗不影響手動輸入，保留原本文字即可。
+      }
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [declaredOrganizationName]);
 
   async function handleProfileSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -261,10 +290,38 @@ function RegisterForm() {
               <label htmlFor="register-phone" className="mb-1 block text-sm font-medium">手機（選填）</label>
               <input id="register-phone" name="phone" type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="09xx-xxx-xxx" className={inputClass} />
             </div>
-            <div className="min-[360px]:col-span-2">
+            <div className="relative min-[360px]:col-span-2">
               <label htmlFor="register-declared-organization" className="mb-1 block text-sm font-medium">原所屬分會（選填）</label>
-              <input id="register-declared-organization" name="declaredOrganizationName" autoComplete="organization" value={declaredOrganizationName} onChange={(event) => setDeclaredOrganizationName(event.target.value)} placeholder="提供正式名單核對的參考" aria-describedby="register-declared-organization-help" className={inputClass} />
-              <p id="register-declared-organization-help" className="mt-2 text-xs leading-relaxed text-lion-muted">這是待核對的參考資料，不會直接更改加入分會或管理權限。</p>
+              <input
+                id="register-declared-organization"
+                name="declaredOrganizationName"
+                value={declaredOrganizationName}
+                onChange={(event) => { setDeclaredOrganizationName(event.target.value); setOrgSuggestionsOpen(true); }}
+                onFocus={() => setOrgSuggestionsOpen(true)}
+                onBlur={() => setTimeout(() => setOrgSuggestionsOpen(false), 150)}
+                placeholder="輸入分會名稱搜尋，或直接手動輸入"
+                autoComplete="off"
+                aria-describedby="register-declared-organization-help"
+                className={inputClass}
+              />
+              {orgSuggestionsOpen && orgSuggestions.length > 0 && (
+                <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-lion-border bg-lion-page shadow-lg">
+                  {orgSuggestions.map((org) => (
+                    <li key={org.id}>
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => { setDeclaredOrganizationName(org.name); setOrgSuggestionsOpen(false); }}
+                        className="flex w-full flex-col items-start px-4 py-2.5 text-left text-sm hover:bg-lion-soft"
+                      >
+                        <span>{org.name}</span>
+                        {org.districtCode && <span className="text-xs text-lion-muted">{org.districtCode}</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p id="register-declared-organization-help" className="mt-2 text-xs leading-relaxed text-lion-muted">這是待核對的參考資料，不會直接更改加入分會或管理權限。可從清單選擇，或直接手動輸入分會名稱。</p>
             </div>
             <div className="min-[360px]:col-span-2">
               <label htmlFor="register-password" className="mb-1 block text-sm font-medium">設定密碼</label>
