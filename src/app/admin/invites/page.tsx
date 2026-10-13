@@ -159,9 +159,8 @@ export default function AdminInvitesPage() {
             <p className="mb-3 text-xs text-lion-muted">註冊效期至 {new Date(generatedInvite.validUntil).toLocaleString("zh-TW")}</p>
             <button type="button" className="min-h-12 rounded-xl border border-lion-border px-5 text-sm" onClick={async () => {
               try { await navigator.clipboard.writeText(newRegisterUrl); setCopyNotice("QR 連結已複製，可傳給現場夥伴"); }
-              catch { setCopyNotice("無法自動複製，請複製下方連結"); }
+              catch { setCopyNotice("無法自動複製，請改用 QR Code 給對方掃描"); }
             }}>複製 QR 連結</button>
-            <p className="mt-3 w-full break-all select-all text-xs text-lion-muted">{newRegisterUrl}</p>
             {copyNotice && <p className="mt-2 text-xs text-lion-gold" role="status">{copyNotice}</p>}
           </div>
         )}
