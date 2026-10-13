@@ -14,6 +14,7 @@ import { calculateLionYears, formatJoinDate } from "@/lib/experience-data";
 type Me = {
   id: string;
   name: string;
+  nickname: string | null;
   email: string;
   title: string | null;
   bio: string | null;
@@ -57,6 +58,7 @@ export default function ProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [name, setName] = useState("");
+  const [nickname, setNickname] = useState("");
   const [title, setTitle] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -130,6 +132,7 @@ export default function ProfilePage() {
     setAvatarPreview(me.photoUrl);
     setAvatarFile(null);
     setName(me.name);
+    setNickname(me.nickname ?? "");
     setTitle(me.title ?? "");
     setEmail(me.email);
     setPhone(me.phone ?? "");
@@ -188,7 +191,7 @@ export default function ProfilePage() {
       const res = await fetch("/api/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, title, email, phone, bio, tags, photoUrl: photoUrl ?? "", birthday }),
+        body: JSON.stringify({ name, nickname, title, email, phone, bio, tags, photoUrl: photoUrl ?? "", birthday }),
       });
       if (!res.ok) {
         const result = await res.json().catch(() => ({}));
@@ -328,7 +331,8 @@ export default function ProfilePage() {
             <div className="flex items-center gap-4">
               <Avatar name={me.name} color={colorFromId(me.id)} imageUrl={me.photoUrl} size={64} />
               <div>
-                <p className="text-lg font-bold">{me.name}</p>
+                <p className="text-lg font-bold">{me.nickname || me.name}</p>
+                {me.nickname && <p className="text-xs text-lion-muted">{me.name}</p>}
                 <p className="text-sm text-lion-muted">
                   {me.organization.name} · {me.title ?? "會員"}
                 </p>
@@ -453,6 +457,17 @@ export default function ProfilePage() {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
+                />
+              </div>
+              <div className="col-span-2">
+                <label htmlFor="profile-nickname" className="text-xs text-lion-muted mb-1 block">暱稱（選填）</label>
+                <input
+                  id="profile-nickname"
+                  autoComplete="nickname"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="大家習慣怎麼稱呼你"
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
                 />
               </div>

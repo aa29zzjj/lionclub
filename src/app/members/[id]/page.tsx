@@ -17,6 +17,7 @@ import {
 type MemberProfile = {
   id: string;
   name: string;
+  nickname: string | null;
   title: string | null;
   bio: string | null;
   photoUrl: string | null;
@@ -135,7 +136,8 @@ export default function MemberProfilePage() {
           <div className="mx-auto mb-3 w-fit">
             <Avatar name={member.name} color={colorFromId(member.id)} imageUrl={member.photoUrl} size={84} />
           </div>
-          <h1 className="text-xl font-bold">{member.name}</h1>
+          <h1 className="text-xl font-bold">{member.nickname || member.name}</h1>
+          {member.nickname && <p className="mt-0.5 text-xs text-lion-muted">{member.name}</p>}
           <p className="mt-1 text-sm text-lion-muted">{member.organization.name} · {member.title ?? "會員"}</p>
           {member.organization.districtCode && (
             <p className="mt-1 text-xs text-lion-gold">{member.organization.districtCode} 區</p>

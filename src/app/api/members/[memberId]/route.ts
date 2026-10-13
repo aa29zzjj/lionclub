@@ -51,6 +51,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ memberI
     member: {
       id: member.id,
       name: member.name,
+      nickname: member.nickname,
       title: member.title,
       bio: member.bio,
       photoUrl: member.photoUrl,

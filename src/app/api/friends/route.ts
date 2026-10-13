@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 
-function toCard(member: { id: string; name: string; title: string | null; photoUrl: string | null; organization: { name: string } }) {
+function toCard(member: { id: string; name: string; nickname: string | null; title: string | null; photoUrl: string | null; organization: { name: string } }) {
   return {
     id: member.id,
     name: member.name,
+    nickname: member.nickname ?? undefined,
     chapter: member.organization.name,
     title: member.title ?? undefined,
     photoUrl: member.photoUrl ?? undefined,

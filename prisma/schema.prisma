@@ -64,6 +64,7 @@ model Organization {
 model Member {
   id       String    @id @default(cuid())
   name     String
+  nickname String?
   birthday DateTime?
   photoUrl String?
   title    String? // 職缺／職稱（顯示用文字，不等於系統權限）

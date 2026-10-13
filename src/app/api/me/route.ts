@@ -14,6 +14,7 @@ export async function GET() {
   return NextResponse.json({
     id: member.id,
     name: member.name,
+    nickname: member.nickname,
     email: member.email,
     title: member.title,
     bio: member.bio,
@@ -36,6 +37,7 @@ export async function GET() {
 
 const patchSchema = z.object({
   name: z.string().min(1).optional(),
+  nickname: z.union([z.string().trim().min(1).max(50), z.literal("")]).optional(),
   title: z.string().optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
@@ -51,7 +53,7 @@ export async function PATCH(req: NextRequest) {
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "欄位格式錯誤" }, { status: 400 });
-  const { name, title, email, phone, bio, tags, photoUrl, birthday } = parsed.data;
+  const { name, nickname, title, email, phone, bio, tags, photoUrl, birthday } = parsed.data;
 
   const prisma = await getPrisma();
 
@@ -62,6 +64,7 @@ export async function PATCH(req: NextRequest) {
         where: { id: me.id },
         data: {
           name,
+          nickname: nickname === "" ? null : nickname,
           title,
           email,
           phone,
@@ -105,6 +108,7 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({
     id: member.id,
     name: member.name,
+    nickname: member.nickname,
     email: member.email,
     title: member.title,
     bio: member.bio,

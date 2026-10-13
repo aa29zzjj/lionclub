@@ -6,7 +6,7 @@ import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { colorFromId } from "@/lib/avatar-color";
 
-type Friend = { id: string; name: string; chapter: string; photoUrl?: string };
+type Friend = { id: string; name: string; nickname?: string; chapter: string; photoUrl?: string };
 type EventOption = { id: string; title: string; startAt: string };
 type SentNotification = { id: string; eventTitle: string; recipients: string[]; message: string; sentAt: string };
 
@@ -172,7 +172,7 @@ export default function NotificationsPage() {
                       }`}
                     >
                       <Avatar name={f.name} color={colorFromId(f.id)} imageUrl={f.photoUrl} size={36} />
-                      <span className="flex-1 text-sm">{f.name}</span>
+                      <span className="flex-1 text-sm">{f.nickname || f.name}</span>
                       <span
                         className={`w-5 h-5 rounded-full border flex items-center justify-center text-[11px] ${
                           isSelected ? "bg-lion-action border-lion-gold text-lion-navyDeep" : "border-white/30"
