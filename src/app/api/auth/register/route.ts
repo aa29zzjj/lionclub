@@ -24,13 +24,15 @@ export async function POST(req: NextRequest) {
     await createSession({ userId: user.id, memberId: member.id, email: user.email });
     const from = process.env.PASSWORD_RESET_FROM_EMAIL;
     if (from) {
-      void sendSesEmail({
+      // Awaited (not fire-and-forget): the serverless runtime can freeze/terminate
+      // right after the response is sent, which would silently drop un-awaited sends.
+      await sendSesEmail({
         region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-northeast-1",
         from, to: user.email, subject: "獅子會 App 註冊完成，可以開始使用",
         text: `${member.name} 您好，\n\n您的平台帳號已開通，可以立即使用。目前統一暫存於「${organization.name}」，正式分會將由授權管理者依名單核對後分派；此安排不代表正式獅子會會籍已被驗證。\n\n如果不是您本人註冊，請聯絡服務管理者。`,
       }).catch(() => console.error("Registration welcome email failed"));
       const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/$/, "");
-      void sendVerificationEmail(prisma, { userId: user.id, email: user.email, name: member.name, appOrigin }).catch(() =>
+      await sendVerificationEmail(prisma, { userId: user.id, email: user.email, name: member.name, appOrigin }).catch(() =>
         console.error("Verification email failed")
       );
     }

@@ -49,7 +49,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ mem
       },
     });
     if (from && target.email) {
-      void sendSesEmail({
+      await sendSesEmail({
         region,
         from,
         to: target.email,
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ mem
   }
 
   if (from && target.email) {
-    void sendSesEmail({
+    await sendSesEmail({
       region,
       from,
       to: target.email,

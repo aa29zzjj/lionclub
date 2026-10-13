@@ -90,7 +90,7 @@ export async function PATCH(req: NextRequest) {
       const session = await getSession();
       const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/$/, "");
       if (session) {
-        void sendVerificationEmail(prisma, { userId: session.userId, email, name: member.name, appOrigin }).catch(() =>
+        await sendVerificationEmail(prisma, { userId: session.userId, email, name: member.name, appOrigin }).catch(() =>
           console.error("Verification email failed")
         );
       }
