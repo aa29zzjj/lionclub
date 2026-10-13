@@ -14,7 +14,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "docs/CLUB_LEADER_AND_MEMBER_GUIDE_2026-10-13.md"
-OUTPUT = ROOT / "output/pdf/lionclub_leader_member_guide_2026-10-13.pdf"
+OUTPUT = ROOT / "output/pdf/lionclub_leader_member_guide_qr_only_2026-10-13.pdf"
 font = next((p for p in [Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"), Path("/Library/Fonts/Arial Unicode.ttf")] if p.is_file()), None)
 if font is None:
     raise SystemExit("A Chinese TrueType font is required; configure font path before rendering.")
@@ -49,7 +49,7 @@ def page_frame(canvas, doc):
     canvas.setLineWidth(.4)
     canvas.setStrokeColor(colors.HexColor("#DCE1E8"))
     canvas.line(18*mm, 16*mm, width-18*mm, 16*mm)
-    canvas.drawString(18*mm, 11*mm, "中央註冊版 · 正式部署完成後適用 · 2026-10-13")
+    canvas.drawString(18*mm, 11*mm, "QR-only 現場加入版 · 正式部署完成後適用 · 2026-10-13")
     canvas.drawRightString(width-18*mm, 11*mm, f"{doc.page}")
     canvas.restoreState()
 
@@ -94,6 +94,6 @@ while index < len(lines):
 
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 document = SimpleDocTemplate(str(OUTPUT), pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=24*mm, bottomMargin=22*mm,
-    title="獅子會 App - 分會長與會員操作手冊（中央註冊版）", author="Lionclub", allowSplitting=True)
+    title="獅子會 App - 分會長與會員操作手冊（QR-only 現場加入版）", author="Lionclub", allowSplitting=True)
 document.build(story, onFirstPage=page_frame, onLaterPages=page_frame)
 print(OUTPUT)

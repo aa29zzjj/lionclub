@@ -28,15 +28,14 @@ export async function getIntakeOrganization(db: Database, configuredId = process
   return organizations[0];
 }
 
-/** Only an explicit server-side false opts into public registration. Safe default: shared invite. */
-export function requiresRegistrationInvite(value = process.env.ONBOARDING_REQUIRE_INVITE) {
-  return value !== "false";
+/** QR invitation is mandatory; old public-registration flags/arguments are retired. */
+export function requiresRegistrationInvite(_legacyValue?: string) {
+  return true;
 }
 
 export const centralRegistrationSchema = z.object({
   organizationId: z.string().trim().min(1).max(200).optional(),
   token: z.string().trim().min(1).max(200).optional(),
-  pin: z.string().trim().regex(/^\d{6}$/, "請輸入 6 碼邀請 PIN").optional(),
   name: z.string().trim().min(1).max(100),
   email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
   password: z.string().min(8, "密碼至少需要 8 個字元").max(72, "密碼最多 72 個字元")
@@ -52,10 +51,12 @@ export type CentralRegistrationInput = z.infer<typeof centralRegistrationSchema>
 
 export async function createCentralMember(
   prisma: PrismaClient, input: CentralRegistrationInput, passwordHash: string,
-  requireInvite = requiresRegistrationInvite(),
+  _legacyRequireInvite?: boolean,
 ) {
+  // Never authorize by PIN or a retired open-mode flag. Legacy QR tokens stay valid.
+  if (!input.token) throw new OnboardingError(400, "請掃描共同邀請 QR Code 開啟註冊頁面");
+  const token = input.token;
   const intake = await getIntakeOrganization(prisma);
-  if (requireInvite && !input.token && !input.pin) throw new OnboardingError(400, "請使用共同邀請 QR 或輸入邀請 PIN");
   // Retry serializable conflicts; member number and invite quota share this transaction.
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -67,26 +68,23 @@ export async function createCentralMember(
         const duplicateMember = await tx.member.findFirst({ where: { email: { equals: input.email, mode: "insensitive" } }, select: { id: true } });
         if (duplicate || duplicateMember) throw new OnboardingError(409, "此 Email 已經註冊過了");
 
-        if (input.token || input.pin) {
-          const invites = await tx.clubInvite.findMany({
-            where: {
-              ...(input.token ? { token: input.token } : { organizationId: input.organizationId ?? intake.id, pin: input.pin }),
-              revokedAt: null, validFrom: { lte: now }, validUntil: { gte: now },
-              organization: { level: "club", isActive: true },
-            }, take: 2,
-          });
-          const invite = invites[0];
-          if (invites.length !== 1 || !invite || (input.token && input.organizationId && input.organizationId !== invite.organizationId)) {
-            throw new OnboardingError(400, "邀請不正確或已過期，請索取新的共同邀請");
-          }
-          // Conditional increment makes a concurrent last-slot claim fail, not overbook.
-          const claimed = await tx.clubInvite.updateMany({
-            where: { id: invite.id, revokedAt: null, validFrom: { lte: now }, validUntil: { gte: now },
-              ...(invite.usageLimit == null ? {} : { usageCount: { lt: invite.usageLimit } }) },
-            data: { usageCount: { increment: 1 } },
-          });
-          if (claimed.count !== 1) throw new OnboardingError(400, "此邀請已達使用上限或已失效，請索取新的邀請");
+        const invites = await tx.clubInvite.findMany({
+          where: {
+            token, revokedAt: null, validFrom: { lte: now }, validUntil: { gte: now },
+            organization: { level: "club", isActive: true },
+          }, take: 2,
+        });
+        const invite = invites[0];
+        if (invites.length !== 1 || !invite || (input.organizationId && input.organizationId !== invite.organizationId)) {
+          throw new OnboardingError(400, "邀請 QR Code 不正確或已過期，請索取新的共同邀請");
         }
+        // Conditional increment makes a concurrent last-slot claim fail, not overbook.
+        const claimed = await tx.clubInvite.updateMany({
+          where: { id: invite.id, revokedAt: null, validFrom: { lte: now }, validUntil: { gte: now },
+            ...(invite.usageLimit == null ? {} : { usageCount: { lt: invite.usageLimit } }) },
+          data: { usageCount: { increment: 1 } },
+        });
+        if (claimed.count !== 1) throw new OnboardingError(400, "此邀請 QR Code 已達使用上限或已失效，請索取新的邀請");
 
         const memberNo = await generateMemberNo(tx, intake.id);
         const member = await tx.member.create({

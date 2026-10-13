@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
   if (!isTrustedBrowserMutation(req)) return NextResponse.json({ error: "請從網站操作註冊" }, { status: 403 });
   const parsed = centralRegistrationSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "欄位格式錯誤" }, { status: 400 });
+  if (!parsed.data.token) return NextResponse.json({ error: "請掃描共同邀請 QR Code 開啟註冊頁面" }, { status: 400 });
   try {
     const prisma = await getPrisma();
     const passwordHash = await bcrypt.hash(parsed.data.password, 10);

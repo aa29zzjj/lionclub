@@ -6,7 +6,7 @@ import { onboardingErrorResponse } from "@/lib/onboarding-response";
 export async function GET() {
   try {
     const organization = await getIntakeOrganization(await getPrisma());
-    return NextResponse.json({ organization, requiresInvite: requiresRegistrationInvite(), mode: "central" },
+    return NextResponse.json({ organization, requiresInvite: requiresRegistrationInvite(), inviteMethod: "qr", mode: "central" },
       { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return onboardingErrorResponse(error); }
 }

@@ -193,16 +193,21 @@ function districtRole(fake: FakePrisma) {
   fake.state.adminRole = [{ id: "actor-role", memberId: ACTOR, role: "DISTRICT_ADMIN", scopeId: "district", scopeType: "district", validFrom: PAST, validUntil: null }];
 }
 
-test("registration requires invitation by default; only explicit false opens registration", () => {
+test("registration always requires QR invitation, including retired false flags", () => {
   assert.equal(requiresRegistrationInvite("true"), true);
   assert.equal(requiresRegistrationInvite(""), true);
   assert.equal(requiresRegistrationInvite("FALSE"), true);
   assert.equal(requiresRegistrationInvite("0"), true);
-  assert.equal(requiresRegistrationInvite("false"), false);
+  assert.equal(requiresRegistrationInvite("false"), true);
   const previous = process.env.ONBOARDING_REQUIRE_INVITE;
-  delete process.env.ONBOARDING_REQUIRE_INVITE;
+  const previousCentral = process.env.CENTRAL_REQUIRE_INVITE;
+  process.env.ONBOARDING_REQUIRE_INVITE = "false";
+  process.env.CENTRAL_REQUIRE_INVITE = "false";
   try { assert.equal(requiresRegistrationInvite(), true); }
-  finally { if (previous === undefined) delete process.env.ONBOARDING_REQUIRE_INVITE; else process.env.ONBOARDING_REQUIRE_INVITE = previous; }
+  finally {
+    if (previous === undefined) delete process.env.ONBOARDING_REQUIRE_INVITE; else process.env.ONBOARDING_REQUIRE_INVITE = previous;
+    if (previousCentral === undefined) delete process.env.CENTRAL_REQUIRE_INVITE; else process.env.CENTRAL_REQUIRE_INVITE = previousCentral;
+  }
 });
 
 test("intake resolution requires one active exact club match and fails closed with configured ID", async () => {
@@ -235,7 +240,7 @@ test("registration schema normalizes fields, validates dates, strips role and as
     assert.equal(centralRegistrationSchema.safeParse({ ...input, birthday }).success, false, birthday);
   }
   assert.equal(centralRegistrationSchema.safeParse({ ...input, password: "0204" }).success, false);
-  assert.equal(centralRegistrationSchema.safeParse({ ...input, pin: "1234" }).success, false);
+  assert.equal("pin" in registration({ pin: "123456" }), false, "PIN is not a central-registration authorization field");
   const assignInput = assignment({ role: "SUPER_ADMIN", status: "ACTIVE", assignedById: TARGET, memberNo: "stolen-id", organizationAssignmentVersion: 100 });
   assert.deepEqual(Object.keys(assignInput).sort(), ["organizationId", "expectedOrganizationId", "expectedAssignmentVersion", "reason"].sort());
 });
@@ -278,13 +283,14 @@ test("valid other-club invite creates active ordinary member only in intake, wit
   assert.deepEqual(fake.calls.find((call) => call.table === "$transaction")?.args, { isolationLevel: "Serializable" });
 });
 
-test("PIN lookup remains invitation source only, never client-selected destination", async () => {
+test("PIN-only registration is rejected without a QR token and cannot consume quota", async () => {
   const fake = new FakePrisma();
-  const result = await createCentralMember(fake.prisma, registration({ pin: "123456", organizationId: OTHER }), "hash", true);
-  assert.equal(result.member.organizationId, INTAKE);
-  assert.equal(fake.state.clubInvite[0].usageCount, 1);
+  const before = structuredClone(fake.state);
+  await assert.rejects(createCentralMember(fake.prisma, registration({ pin: "123456", organizationId: OTHER }), "hash"), errorStatus(400));
+  assert.deepEqual(fake.state, before);
+  assert.equal(fake.queries("clubInvite", "findMany").length, 0);
   const wrong = new FakePrisma();
-  await assert.rejects(createCentralMember(wrong.prisma, registration({ pin: "123456", organizationId: OUTSIDE }), "hash", true), errorStatus(400));
+  await assert.rejects(createCentralMember(wrong.prisma, registration({ pin: "123456", organizationId: OUTSIDE }), "hash", false), errorStatus(400));
   assert.equal(wrong.state.user.length, 0);
 });
 
@@ -298,7 +304,7 @@ test("missing, invalid, expired, future, revoked, inactive, ambiguous and full i
     { name: "revoked", input: { token: "valid-token" }, arrange: (fake) => { fake.state.clubInvite[0].revokedAt = PAST; } },
     { name: "inactive source", input: { token: "valid-token" }, arrange: (fake) => { fake.state.organization.find((org) => org.id === OTHER)!.isActive = false; } },
     { name: "full", input: { token: "valid-token" }, arrange: (fake) => { fake.state.clubInvite[0].usageCount = 5; } },
-    { name: "ambiguous PIN", input: { pin: "123456", organizationId: OTHER }, arrange: (fake) => { fake.state.clubInvite.push({ ...fake.state.clubInvite[0], id: "invite-duplicate", token: "another-token" }); } },
+    { name: "ambiguous token", input: { token: "valid-token" }, arrange: (fake) => { fake.state.clubInvite.push({ ...fake.state.clubInvite[0], id: "invite-duplicate" }); } },
   ];
   for (const item of cases) await t.test(item.name, async () => {
     const fake = new FakePrisma();
@@ -321,14 +327,33 @@ test("transaction rolls back claimed invite and member/history if account creati
   assert.deepEqual(fake.state, before);
 });
 
-test("explicit open mode permits no invite but still ignores client-selected club", async () => {
+test("retired open mode cannot bypass QR validation or assign a client-selected club", async () => {
   const fake = new FakePrisma();
-  const result = await createCentralMember(fake.prisma, registration({ organizationId: OUTSIDE }), "hash", requiresRegistrationInvite("false"));
-  assert.equal(result.member.organizationId, INTAKE);
-  assert.equal(result.member.organizationAssignmentStatus, "NEEDS_ASSIGNMENT");
+  const before = structuredClone(fake.state);
+  await assert.rejects(createCentralMember(fake.prisma, registration({ organizationId: OUTSIDE }), "hash", false), errorStatus(400));
+  assert.deepEqual(fake.state, before);
   assert.equal(fake.queries("clubInvite", "updateMany").length, 0);
   const invalid = new FakePrisma();
-  await assert.rejects(createCentralMember(invalid.prisma, registration({ token: "invalid" }), "hash", false), errorStatus(400), "open mode cannot bypass an explicitly provided invalid invite");
+  await assert.rejects(createCentralMember(invalid.prisma, registration({ token: "invalid" }), "hash", false), errorStatus(400), "retired open mode cannot bypass an invalid QR token");
+});
+
+test("valid legacy QR token does not need organization hint or PIN and always lands in intake", async () => {
+  const fake = new FakePrisma();
+  const result = await createCentralMember(fake.prisma, registration({ token: "valid-token", pin: "not-a-pin" }), "hash", false);
+  assert.equal(result.member.organizationId, INTAKE);
+  assert.equal(result.member.status, "ACTIVE");
+  assert.equal(result.member.organizationAssignmentStatus, "NEEDS_ASSIGNMENT");
+  const inviteQuery = fake.queries("clubInvite", "findMany")[0].where!;
+  assert.equal(inviteQuery.token, "valid-token");
+  assert.equal("pin" in inviteQuery, false);
+  assert.equal(fake.state.clubInvite[0].usageCount, 1);
+});
+
+test("missing QR token is rejected before database access even with an unavailable intake", async () => {
+  const fake = new FakePrisma();
+  fake.state.organization = [];
+  await assert.rejects(createCentralMember(fake.prisma, registration({ pin: "123456" }), "hash", false), errorStatus(400));
+  assert.equal(fake.calls.length, 0);
 });
 
 test("serializable registration conflicts retry three attempts, claim once, then return 409 on exhaustion", async () => {

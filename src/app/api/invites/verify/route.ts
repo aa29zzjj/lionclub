@@ -31,6 +31,5 @@ export async function GET(req: NextRequest) {
     valid: true,
     organizationId: invite.organization.id,
     organizationName: invite.organization.name,
-    pin: invite.pin,
   });
 }

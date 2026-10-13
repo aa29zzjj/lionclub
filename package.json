@@ -10,7 +10,9 @@
     "postinstall": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "app-store:check": "node scripts/check-app-store-readiness.mjs",
-    "test:onboarding": "node --import tsx --test tests/*.test.ts"
+    "test:onboarding": "node --import tsx --test tests/*.test.ts",
+    "demo:preview": "node scripts/demo-preview.mjs",
+    "test:demo": "node --test scripts/demo-*.test.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

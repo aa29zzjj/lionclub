@@ -21,6 +21,12 @@ function generatePin() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+// Retain the legacy DB column, but never expose it as a signup method.
+function qrInvite<T extends { pin: string }>(invite: T): Omit<T, "pin"> {
+  const { pin: _legacyPin, ...output } = invite;
+  return output;
+}
+
 export async function GET() {
   const member = await getCurrentMember();
   if (!member) return NextResponse.json({ error: "未登入" }, { status: 401 });
@@ -35,7 +41,7 @@ export async function GET() {
     include: { organization: { select: { name: true } } },
   });
 
-  return NextResponse.json({ invites });
+  return NextResponse.json({ invites: invites.map(qrInvite) });
 }
 
 const bodySchema = z.object({
@@ -49,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "邀請設定格式錯誤" }, { status: 400 });
-  const validDays = parsed.data.validDays ?? 365;
+  const validDays = parsed.data.validDays ?? 3;
   const usageLimit = parsed.data.usageLimit;
   const prisma = await getPrisma();
   try {
@@ -66,7 +72,7 @@ export async function POST(req: NextRequest) {
     registerUrl.searchParams.set("org", invite.organizationId);
     registerUrl.searchParams.set("token", invite.token);
 
-    return NextResponse.json({ invite, registerUrl: registerUrl.toString() });
+    return NextResponse.json({ invite: qrInvite(invite), registerUrl: registerUrl.toString() });
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "P2034") return NextResponse.json({ error: "會籍或權限同時更新，請重新載入後操作" }, { status: 409 });
     return onboardingErrorResponse(error);

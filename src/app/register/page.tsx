@@ -8,7 +8,8 @@ import { memberTitleOptions, tagOptions } from "@/lib/mock-data";
 type Step = "invite" | "profile" | "done";
 type Onboarding = {
   organization: { id: string; name: string; districtCode: string | null };
-  requiresInvite: boolean;
+  requiresInvite: true;
+  inviteMethod: "qr";
   mode: "central";
 };
 type VerifiedInvite = { token: string; organizationId: string; organizationName: string };
@@ -21,7 +22,7 @@ const secondaryButtonClass = "min-h-12 rounded-xl border border-lion-border bg-l
 function isOnboarding(value: unknown): value is Onboarding {
   if (!value || typeof value !== "object") return false;
   const data = value as Partial<Onboarding>;
-  return data.mode === "central" && typeof data.requiresInvite === "boolean"
+  return data.mode === "central" && data.requiresInvite === true && data.inviteMethod === "qr"
     && Boolean(data.organization)
     && typeof data.organization?.id === "string" && Boolean(data.organization.id)
     && typeof data.organization.name === "string" && Boolean(data.organization.name)
@@ -42,7 +43,6 @@ function RegisterForm() {
   const [onboardingLoading, setOnboardingLoading] = useState(true);
   const [onboardingError, setOnboardingError] = useState("");
   const [onboardingAttempt, setOnboardingAttempt] = useState(0);
-  const [pin, setPin] = useState("");
   const [verifiedInvite, setVerifiedInvite] = useState<VerifiedInvite | null>(null);
   const [inviteStatus, setInviteStatus] = useState<InviteStatus>("idle");
   const [inviteAttempt, setInviteAttempt] = useState(0);
@@ -63,9 +63,8 @@ function RegisterForm() {
 
   const currentVerifiedInvite = verifiedInvite?.token === tokenFromUrl ? verifiedInvite : null;
   const configurationReady = Boolean(onboarding) && !onboardingLoading && !onboardingError;
-  const invitationReady = configurationReady && (tokenFromUrl
-    ? inviteStatus === "valid" && Boolean(currentVerifiedInvite)
-    : !onboarding?.requiresInvite || /^\d{6}$/.test(pin));
+  const invitationReady = configurationReady && Boolean(tokenFromUrl)
+    && inviteStatus === "valid" && Boolean(currentVerifiedInvite);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -90,7 +89,7 @@ function RegisterForm() {
 
   useEffect(() => {
     if (!onboarding || tokenFromUrl) return;
-    setStep(onboarding.requiresInvite ? "invite" : "profile");
+    setStep("invite");
   }, [onboarding, tokenFromUrl]);
 
   useEffect(() => {
@@ -132,12 +131,8 @@ function RegisterForm() {
   function handleInviteSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!configurationReady) return;
-    if (tokenFromUrl && !currentVerifiedInvite) {
+    if (!tokenFromUrl || !currentVerifiedInvite) {
       setInviteError("請先完成邀請連結驗證，或使用邀請人提供的新連結。");
-      return;
-    }
-    if (!tokenFromUrl && onboarding?.requiresInvite && !/^\d{6}$/.test(pin)) {
-      setInviteError("請輸入共同邀請的 6 碼 PIN。");
       return;
     }
     setInviteError("");
@@ -166,8 +161,8 @@ function RegisterForm() {
     setProfileError("");
     setSubmitting(true);
     try {
-      const invitePayload = currentVerifiedInvite ? { token: currentVerifiedInvite.token }
-        : onboarding.requiresInvite ? { organizationId: onboarding.organization.id, pin } : {};
+      if (!currentVerifiedInvite) return;
+      const invitePayload = { token: currentVerifiedInvite.token };
       const response = await fetch("/api/auth/register", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -180,7 +175,7 @@ function RegisterForm() {
       const data = await response.json().catch(() => null);
       if (!response.ok) {
         const message = typeof data?.error === "string" ? data.error : "註冊失敗，請稍後再試。";
-        if (/PIN|邀請|invite|token/i.test(message)) {
+        if (/QR|邀請|invite|token/i.test(message)) {
           setInviteError(message);
           setStep("invite");
           if (tokenFromUrl) { setVerifiedInvite(null); setInviteStatus("invalid"); }
@@ -220,7 +215,7 @@ function RegisterForm() {
           <p className="text-xs text-lion-muted">新帳號統一加入</p>
           <p className="mt-1 font-semibold">{onboarding.organization.name}</p>
           {onboarding.organization.districtCode && <p className="mt-1 text-xs text-lion-muted">{onboarding.organization.districtCode}</p>}
-          <p className="mt-3 text-sm leading-relaxed text-lion-muted">註冊完成即可使用。正式會員名單核對後，再由授權管理者分派至所屬分會。</p>
+          <p className="mt-3 text-sm leading-relaxed text-lion-muted">掃邀請 QR 註冊完成即可使用。這是平台暫存分會，不代表正式獅子會會籍已核實；之後由授權管理者依名單或分會長確認結果分派。</p>
           {currentVerifiedInvite && <p className="mt-3 border-t border-lion-border pt-3 text-xs leading-relaxed text-lion-muted">邀請來源：{currentVerifiedInvite.organizationName}。邀請來源只供核對，實際加入的是上述中央分會。</p>}
         </div>}
         {configurationReady && onboarding && step === "invite" && <form onSubmit={handleInviteSubmit} className="flex flex-col gap-5">
@@ -230,16 +225,15 @@ function RegisterForm() {
             {inviteStatus === "invalid" && <>
               <p className="text-sm text-lion-cream" role="alert">{inviteError}</p>
               <button type="button" className={`${secondaryButtonClass} mt-4 w-full`} onClick={() => setInviteAttempt((value) => value + 1)}>重新驗證邀請</button>
-              <Link href="/register" className="mt-2 flex min-h-12 items-center justify-center text-sm text-lion-gold">{onboarding.requiresInvite ? "改用共同邀請 PIN" : "重新開啟一般註冊"}</Link>
+              <p className="mt-3 text-xs leading-relaxed text-lion-muted">請重新掃描現場提供的有效邀請 QR，或向邀請人索取新連結。</p>
             </>}
           </div> : <div>
-            <p className="mb-5 text-sm leading-relaxed text-lion-muted">請開啟邀請人提供的共同 QR Code 連結，或輸入共同邀請 PIN。手動 PIN 使用中央分會，不需要選擇其他分會。</p>
-            <label htmlFor="register-pin" className="mb-1 block text-sm font-medium">共同邀請 PIN</label>
-            <input id="register-pin" name="pin" type="text" inputMode="numeric" autoComplete="off" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 6))} required={onboarding.requiresInvite} maxLength={6} pattern="[0-9]{6}" placeholder="請輸入 6 碼 PIN" aria-describedby="register-pin-help" className={`${inputClass} tracking-widest`} />
-            <p id="register-pin-help" className="mt-2 text-xs leading-relaxed text-lion-muted">PIN 由共同邀請提供者發放，註冊送出時會再次驗證。</p>
+            <h2 className="mb-3 text-lg font-semibold">請掃描邀請 QR Code</h2>
+            <p className="text-sm leading-relaxed text-lion-muted">用手機相機掃描現場的共同邀請 QR，或開啟邀請人分享的 QR 連結，即可填寫資料並立即使用。</p>
+            <p className="mt-3 text-xs leading-relaxed text-lion-muted">此頁不提供代碼註冊；必須有有效的邀請連結。</p>
             {inviteError && <p className="mt-3 text-sm text-lion-danger" role="alert">{inviteError}</p>}
           </div>}
-          <button type="submit" disabled={!invitationReady || inviteStatus === "loading"} className={`${primaryButtonClass} w-full`}>下一步</button>
+          {tokenFromUrl && <button type="submit" disabled={!invitationReady} className={`${primaryButtonClass} w-full`}>下一步</button>}
           <Link href="/login" className="flex min-h-12 items-center justify-center text-sm text-lion-muted">已經是會員？返回登入</Link>
         </form>}
         {configurationReady && onboarding && step === "profile" && <form onSubmit={handleProfileSubmit} className="flex flex-col gap-5" aria-busy={submitting}>
@@ -295,7 +289,7 @@ function RegisterForm() {
           <p className="rounded-xl bg-lion-soft p-4 text-sm leading-relaxed text-lion-muted">頭像可以在註冊完成後，到「我的檔案」上傳。</p>
           {profileError && <p className="text-sm text-lion-danger" role="alert">{profileError}</p>}
           <div className="flex gap-3">
-            {(onboarding.requiresInvite || tokenFromUrl) && <button type="button" disabled={submitting} onClick={() => setStep("invite")} className={`${secondaryButtonClass} flex-1`}>上一步</button>}
+            <button type="button" disabled={submitting} onClick={() => setStep("invite")} className={`${secondaryButtonClass} flex-1`}>查看邀請</button>
             <button type="submit" disabled={submitting || !invitationReady} className={`${primaryButtonClass} flex-1`}>{submitting ? "正在註冊…" : "完成註冊並開通"}</button>
           </div>
           <Link href="/login" className="flex min-h-12 items-center justify-center text-sm text-lion-muted" aria-disabled={submitting} onClick={(event) => { if (submitting) event.preventDefault(); }}>已有帳號？返回登入</Link>

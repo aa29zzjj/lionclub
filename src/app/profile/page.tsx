@@ -200,7 +200,7 @@ export default function ProfilePage() {
     {
       href: "/admin/invites",
       title: "入會邀請",
-      description: "產生本分會的入會 QR 與 PIN",
+      description: "產生共同入會 QR，設定註冊有效期",
       Icon: QrIcon,
       visible: hasAdminTools,
     },
