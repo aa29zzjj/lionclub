@@ -163,6 +163,14 @@ textarea {
   }
 }
 
+/* iOS Safari renders type="date" with its own oversized intrinsic line-height
+   that ignores padding, making it balloon taller than every other field. */
+.app-frame input[type="date"] {
+  height: 48px;
+  line-height: 1.2;
+  -webkit-appearance: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; }
 }
