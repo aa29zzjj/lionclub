@@ -6,6 +6,7 @@ import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { PinIcon } from "@/components/icons";
+import { colorFromId } from "@/lib/avatar-color";
 
 type EventDetail = {
   id: string;
@@ -20,6 +21,20 @@ type EventDetail = {
   registeredCount: number;
   isFull: boolean;
   canManage: boolean;
+};
+
+type Registration = {
+  id: string;
+  registeredAt: string;
+  member: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    title: string | null;
+    photoUrl: string | null;
+    organization: { name: string };
+  };
 };
 
 export default function EventDetailPage() {
@@ -39,6 +54,9 @@ export default function EventDetailPage() {
   const [description, setDescription] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [registrationsLoading, setRegistrationsLoading] = useState(false);
+  const [registrationsError, setRegistrationsError] = useState("");
   const [error, setError] = useState("");
 
   function loadForm(nextEvent: EventDetail) {
@@ -86,6 +104,28 @@ export default function EventDetailPage() {
       })
       .finally(() => setLoading(false));
   }, [params.id, router]);
+
+  useEffect(() => {
+    if (!event?.canManage) return;
+    let cancelled = false;
+    setRegistrationsLoading(true);
+    setRegistrationsError("");
+    fetch(`/api/events/${event.id}/registrations`, { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "無法讀取報名名單");
+        if (!cancelled) setRegistrations(result.registrations ?? []);
+      })
+      .catch((loadError: Error) => {
+        if (!cancelled) setRegistrationsError(loadError.message);
+      })
+      .finally(() => {
+        if (!cancelled) setRegistrationsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [event?.canManage, event?.id, event?.registeredCount]);
 
   async function toggleRegister() {
     if (!event) return;
@@ -294,6 +334,57 @@ export default function EventDetailPage() {
             <h2 className="font-semibold mb-2">活動說明</h2>
             <p className="text-sm text-lion-cream/70 leading-relaxed">{event.description}</p>
           </div>
+        )}
+
+        {event.canManage && (
+          <section className="mb-6 rounded-2xl border border-white/[0.06] bg-lion-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] tracking-[0.16em] text-lion-gold">REGISTRATIONS</p>
+                <h2 className="mt-1 font-semibold">活動報名名單</h2>
+              </div>
+              <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-lion-muted">
+                {event.registeredCount} 人
+              </span>
+            </div>
+
+            {registrationsLoading ? (
+              <p className="py-8 text-center text-sm text-lion-muted">讀取名單中…</p>
+            ) : registrationsError ? (
+              <p className="mt-4 text-sm text-red-300">{registrationsError}</p>
+            ) : registrations.length === 0 ? (
+              <div className="mt-4 rounded-xl border border-dashed border-white/10 px-4 py-7 text-center text-sm text-lion-muted">
+                目前還沒有人報名
+              </div>
+            ) : (
+              <div className="mt-4 flex flex-col divide-y divide-white/[0.06]">
+                {registrations.map((registration) => {
+                  const { member } = registration;
+                  return (
+                    <div key={registration.id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
+                      <Avatar name={member.name} color={colorFromId(member.id)} imageUrl={member.photoUrl} size={42} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{member.name}</p>
+                            <p className="truncate text-xs text-lion-muted">{member.organization.name}{member.title ? ` · ${member.title}` : ""}</p>
+                          </div>
+                          <span className="shrink-0 text-[10px] text-lion-muted">
+                            {new Date(registration.registeredAt).toLocaleDateString("zh-TW")}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                          {member.phone && <a href={`tel:${member.phone}`} className="text-lion-gold">{member.phone}</a>}
+                          {member.email && <a href={`mailto:${member.email}`} className="break-all text-lion-gold">{member.email}</a>}
+                          {!member.phone && !member.email && <span className="text-lion-muted">未提供聯絡方式</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         )}
 
         <button
