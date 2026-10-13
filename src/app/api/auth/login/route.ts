@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { createSession } from "@/lib/session";
 import { findUserByEmail } from "@/lib/user-email";
+import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
 const bodySchema = z.object({
   email: z.string().trim().email(),
@@ -11,6 +12,10 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  if (await isRateLimited(`login:${getClientIp(req)}`, 20)) {
+    return NextResponse.json({ error: "嘗試次數過多，請稍後再試" }, { status: 429 });
+  }
+
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "請輸入帳號與密碼" }, { status: 400 });

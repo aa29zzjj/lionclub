@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
+import { isBlockedEitherWay } from "@/lib/member-block";
 
 const bodySchema = z.object({ memberId: z.string().min(1) });
 
@@ -15,6 +16,9 @@ export async function POST(req: NextRequest) {
   if (memberId === me.id) return NextResponse.json({ error: "不能加自己為好友" }, { status: 400 });
 
   const prisma = await getPrisma();
+  if (await isBlockedEitherWay(prisma, me.id, memberId)) {
+    return NextResponse.json({ error: "無法送出好友邀請" }, { status: 403 });
+  }
   const existing = await prisma.friendship.findFirst({
     where: {
       OR: [

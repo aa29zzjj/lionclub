@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/current-member";
 import { getPrisma } from "@/lib/prisma";
 import { serializeExperience } from "@/lib/member-experience";
+import { isBlockedEitherWay } from "@/lib/member-block";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ memberId: string }> }) {
   const me = await getCurrentMember();
@@ -11,6 +12,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ memberI
   const prisma = await getPrisma();
 
   if (memberId !== me.id) {
+    if (await isBlockedEitherWay(prisma, me.id, memberId)) {
+      return NextResponse.json({ error: "找不到此會員" }, { status: 404 });
+    }
     const friendship = await prisma.friendship.findFirst({
       where: {
         status: "ACCEPTED",
@@ -38,6 +42,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ memberI
 
   if (!member) return NextResponse.json({ error: "找不到此會員" }, { status: 404 });
 
+  const blockedByMe =
+    memberId === me.id
+      ? false
+      : Boolean(await prisma.memberBlock.findUnique({ where: { blockerId_blockedId: { blockerId: me.id, blockedId: memberId } } }));
+
   return NextResponse.json({
     member: {
       id: member.id,
@@ -51,6 +60,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ memberI
       organization: member.organization,
       tags: member.tags,
       experiences: member.experiences.map(serializeExperience),
+      blockedByMe,
     },
   });
 }

@@ -23,6 +23,7 @@ type Me = {
   joinYear: number | null;
   joinMonth: number | null;
   birthday: string | null;
+  emailVerifiedAt?: string | null;
   organizationAssignmentStatus?: "NEEDS_ASSIGNMENT" | "ASSIGNED";
   declaredOrganizationName?: string | null;
   organization: { name: string };
@@ -63,6 +64,38 @@ export default function ProfilePage() {
   const [bio, setBio] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [toast, setToast] = useState("");
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteForm, setShowDeleteForm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+
+  async function deleteAccount() {
+    if (!window.confirm("確定要永久刪除帳號嗎？此動作無法復原。")) return;
+    setDeleting(true);
+    setDeleteError("");
+    const res = await fetch("/api/me/account-deletion", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: deletePassword }),
+    });
+    if (res.ok) {
+      router.push("/login");
+      router.refresh();
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    setDeleteError(data.error ?? "刪除失敗，請稍後再試");
+    setDeleting(false);
+  }
+
+  async function resendVerification() {
+    setResendingVerification(true);
+    const res = await fetch("/api/me/resend-verification", { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setToast(res.ok ? "驗證信已寄出，請至信箱查看" : data.error ?? "寄送失敗，請稍後再試");
+    setResendingVerification(false);
+  }
 
   function loadMe() {
     setLoadError("");
@@ -195,6 +228,7 @@ export default function ProfilePage() {
   const roleNames = new Set(me.adminRoles.map((adminRole) => adminRole.role));
   const hasAdminTools = adminToolRoles.some((roleName) => roleNames.has(roleName));
   const canManageRoles = roleManagerRoles.some((roleName) => roleNames.has(roleName));
+  const isSuperAdmin = roleNames.has("SUPER_ADMIN");
   const joinDate = formatJoinDate(me.joinYear, me.joinMonth);
   const adminTools = [
     {
@@ -232,6 +266,13 @@ export default function ProfilePage() {
       Icon: PeopleIcon,
       visible: canManageRoles,
     },
+    {
+      href: "/admin/reports",
+      title: "檢舉管理",
+      description: "查看並處理會員檢舉",
+      Icon: UserIcon,
+      visible: isSuperAdmin,
+    },
   ].filter((tool) => tool.visible);
 
   return (
@@ -260,6 +301,20 @@ export default function ProfilePage() {
             <h2 className="text-sm font-semibold">正式分會待名單核對</h2>
             <p className="mt-1 text-xs leading-relaxed text-lion-muted">目前暫存於 {me.organization.name}，正式分會待名單核對；您可正常使用會員功能。</p>
             {me.declaredOrganizationName && <p className="mt-2 break-words text-xs text-lion-muted">登記分會：{me.declaredOrganizationName}</p>}
+          </section>
+        )}
+
+        {!me.emailVerifiedAt && (
+          <section className="mb-5 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4" aria-label="Email 驗證狀態">
+            <h2 className="text-sm font-semibold text-amber-200">Email 尚未驗證</h2>
+            <p className="mt-1 text-xs leading-relaxed text-amber-200/80">請至 {me.email} 收取驗證信並完成驗證，以確保帳號安全。</p>
+            <button
+              onClick={resendVerification}
+              disabled={resendingVerification}
+              className="mt-2 text-xs font-medium text-amber-200 underline disabled:opacity-50"
+            >
+              {resendingVerification ? "寄送中…" : "重新寄送驗證信"}
+            </button>
           </section>
         )}
 
@@ -515,6 +570,46 @@ export default function ProfilePage() {
             >
               登出
             </button>
+
+            {!showDeleteForm ? (
+              <button
+                onClick={() => setShowDeleteForm(true)}
+                className="mt-2 w-full rounded-xl py-2.5 text-center text-xs text-red-300/70 hover:bg-red-500/10"
+              >
+                刪除帳號
+              </button>
+            ) : (
+              <div className="mt-3 rounded-2xl border border-red-400/30 bg-red-500/5 p-4">
+                <p className="text-xs text-red-200">此動作會永久刪除您的帳號與所有資料，無法復原。請輸入密碼以確認。</p>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="輸入密碼"
+                  className="mt-3 w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-red-400"
+                />
+                {deleteError && <p className="mt-2 text-xs text-red-300">{deleteError}</p>}
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowDeleteForm(false);
+                      setDeletePassword("");
+                      setDeleteError("");
+                    }}
+                    className="flex-1 rounded-xl bg-white/10 text-lion-cream/70 font-medium py-2 text-sm"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={deleteAccount}
+                    disabled={deleting || !deletePassword}
+                    className="flex-1 rounded-xl bg-red-500 text-white font-semibold py-2 text-sm disabled:opacity-50"
+                  >
+                    {deleting ? "刪除中…" : "確認永久刪除"}
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

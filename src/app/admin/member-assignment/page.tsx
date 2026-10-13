@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
+import BulkAssignmentImport from "@/components/BulkAssignmentImport";
 
 type AssignmentStatus = "NEEDS_ASSIGNMENT" | "ASSIGNED";
 type StatusFilter = AssignmentStatus | "ALL";
@@ -231,6 +232,8 @@ export default function MemberAssignmentPage() {
     <h1 className="text-xl font-bold">會員分會分派</h1>
     <p className="mt-1 text-xs leading-relaxed text-lion-muted">會員帳號已可使用。請依正式會員名單核對分會；待分派與入會審核為不同狀態。</p>
     <p className="mt-3 rounded-xl border border-lion-border bg-lion-card px-3 py-2.5 text-xs leading-relaxed text-lion-muted">{canAssignAcrossAllClubs ? "您可選擇所有啟用分會。" : "名單及目標分會限您有權管理的範圍。"}姓名與聯絡資料僅供授權幹部核對。</p>
+
+    <BulkAssignmentImport organizations={organizations} onCommitted={() => void loadList()} />
 
     <div className="mt-5 grid grid-cols-3 gap-1 rounded-xl bg-lion-soft p-1" role="group" aria-label="分派狀態">
       {(Object.keys(filterLabels) as StatusFilter[]).map((value) => <button key={value} type="button" disabled={saving} aria-pressed={status === value} onClick={() => { setStatus(value); setPage(1); }} className={`min-h-12 rounded-lg px-2 text-xs font-medium disabled:opacity-50 ${status === value ? "bg-lion-action text-lion-navyDeep" : "text-lion-muted"}`}>{filterLabels[value]}</button>)}

@@ -26,6 +26,7 @@ type MemberProfile = {
   organization: { id: string; name: string; districtCode: string | null };
   tags: Array<{ id: string; name: string; category: string }>;
   experiences: MemberExperience[];
+  blockedByMe?: boolean;
 };
 
 function positionName(experience: MemberExperience) {
@@ -39,6 +40,41 @@ export default function MemberProfilePage() {
   const [member, setMember] = useState<MemberProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [toast, setToast] = useState("");
+
+  async function toggleBlock() {
+    if (!member) return;
+    const blocking = !member.blockedByMe;
+    if (blocking && !window.confirm(`確定要封鎖 ${member.name} 嗎？封鎖後會自動解除好友關係。`)) return;
+    setBusy(true);
+    const res = await fetch(`/api/members/${member.id}/block`, { method: blocking ? "POST" : "DELETE" });
+    if (res.ok) {
+      setMember((prev) => (prev ? { ...prev, blockedByMe: blocking } : prev));
+      setToast(blocking ? "已封鎖" : "已取消封鎖");
+      setTimeout(() => setToast(""), 2500);
+    }
+    setBusy(false);
+  }
+
+  async function submitReport() {
+    if (!member || !reportReason.trim()) return;
+    setBusy(true);
+    const res = await fetch(`/api/members/${member.id}/report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: reportReason.trim() }),
+    });
+    if (res.ok) {
+      setShowReportForm(false);
+      setReportReason("");
+      setToast("已送出檢舉，感謝您的回報");
+      setTimeout(() => setToast(""), 2500);
+    }
+    setBusy(false);
+  }
 
   useEffect(() => {
     fetch(`/api/members/${params.id}`)
@@ -89,6 +125,12 @@ export default function MemberProfilePage() {
       <div className="px-5 pb-8 pt-6">
         <button onClick={() => router.back()} className="mb-5 text-sm text-lion-muted">← 返回</button>
 
+        {toast && (
+          <div className="mb-4 rounded-xl bg-lion-gold/15 border border-lion-gold/40 text-lion-gold text-xs px-3 py-2">
+            {toast}
+          </div>
+        )}
+
         <section className="theme-brand-panel mb-5 rounded-3xl border border-lion-gold/25 bg-gradient-to-br from-[#19264a] via-lion-navyLight to-[#10172b] p-5 text-center">
           <div className="mx-auto mb-3 w-fit">
             <Avatar name={member.name} color={colorFromId(member.id)} imageUrl={member.photoUrl} size={84} />
@@ -109,6 +151,50 @@ export default function MemberProfilePage() {
             </div>
           </div>
         </section>
+
+        <div className="mb-5 flex gap-2">
+          <button
+            onClick={toggleBlock}
+            disabled={busy}
+            className="flex-1 rounded-xl bg-white/10 text-lion-cream/70 font-medium py-2 text-xs disabled:opacity-50"
+          >
+            {member.blockedByMe ? "取消封鎖" : "封鎖此會員"}
+          </button>
+          <button
+            onClick={() => setShowReportForm((v) => !v)}
+            className="flex-1 rounded-xl bg-white/10 text-lion-cream/70 font-medium py-2 text-xs"
+          >
+            檢舉
+          </button>
+        </div>
+
+        {showReportForm && (
+          <div className="mb-5 rounded-2xl border border-white/[0.06] bg-lion-card p-4">
+            <label className="mb-1 block text-xs text-lion-muted">檢舉原因</label>
+            <textarea
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              rows={3}
+              placeholder="請簡述檢舉原因"
+              className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm outline-none focus:border-lion-gold resize-none"
+            />
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={() => setShowReportForm(false)}
+                className="flex-1 rounded-xl bg-white/10 text-lion-cream/70 font-medium py-2 text-xs"
+              >
+                取消
+              </button>
+              <button
+                onClick={submitReport}
+                disabled={busy || !reportReason.trim()}
+                className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-2 text-xs disabled:opacity-50"
+              >
+                送出檢舉
+              </button>
+            </div>
+          </div>
+        )}
 
         {member.tags.length > 0 && (
           <section className="mb-5">

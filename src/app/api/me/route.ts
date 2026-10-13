@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 import { getSession } from "@/lib/session";
+import { sendVerificationEmail } from "@/lib/email-verification";
 
 export async function GET() {
   const member = await getCurrentMember();
@@ -23,6 +24,7 @@ export async function GET() {
     joinMonth: member.joinMonth,
     birthday: member.birthday,
     status: member.status,
+    emailVerifiedAt: member.emailVerifiedAt,
     organizationAssignmentStatus: member.organizationAssignmentStatus,
     organizationAssignmentVersion: member.organizationAssignmentVersion,
     declaredOrganizationName: member.declaredOrganizationName,
@@ -66,6 +68,7 @@ export async function PATCH(req: NextRequest) {
           bio,
           photoUrl: photoUrl === "" ? null : photoUrl,
           birthday: birthday === "" ? null : birthday ? new Date(birthday) : undefined,
+          emailVerifiedAt: email ? null : undefined,
           tags: tags
             ? { set: [], connectOrCreate: tags.map((tagName) => ({ where: { name: tagName }, create: { name: tagName } })) }
             : undefined,
@@ -82,6 +85,16 @@ export async function PATCH(req: NextRequest) {
 
       return updated;
     });
+
+    if (email) {
+      const session = await getSession();
+      const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/$/, "");
+      if (session) {
+        void sendVerificationEmail(prisma, { userId: session.userId, email, name: member.name, appOrigin }).catch(() =>
+          console.error("Verification email failed")
+        );
+      }
+    }
   } catch (err) {
     if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
       return NextResponse.json({ error: "此 Email 已被使用" }, { status: 409 });
@@ -102,6 +115,7 @@ export async function PATCH(req: NextRequest) {
     joinMonth: member.joinMonth,
     birthday: member.birthday,
     status: member.status,
+    emailVerifiedAt: member.emailVerifiedAt,
     organizationAssignmentStatus: member.organizationAssignmentStatus,
     organizationAssignmentVersion: member.organizationAssignmentVersion,
     declaredOrganizationName: member.declaredOrganizationName,

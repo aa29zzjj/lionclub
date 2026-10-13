@@ -4,11 +4,16 @@ import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { sendSesEmail } from "@/lib/aws-http";
 import { findUserByEmail } from "@/lib/user-email";
+import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
 const bodySchema = z.object({ email: z.string().trim().email() });
 const genericMessage = "如果此信箱已註冊，我們會寄出密碼重設連結。";
 
 export async function POST(request: NextRequest) {
+  if (await isRateLimited(`forgot-password:${getClientIp(request)}`, 5)) {
+    return NextResponse.json({ error: "嘗試次數過多，請稍後再試" }, { status: 429 });
+  }
+
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "請輸入有效的 Email" }, { status: 400 });
 

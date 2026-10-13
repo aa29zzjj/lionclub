@@ -94,6 +94,7 @@ model Member {
   tags Tag[] @relation("MemberTags")
 
   user User?
+  emailVerifiedAt DateTime?
 
   experiences         MemberExperience[]       @relation("MemberExperiences")
   verifiedExperiences MemberExperience[]       @relation("ExperienceVerifiedBy")
@@ -111,6 +112,12 @@ model Member {
 
   adminRoles      AdminRole[] @relation("AdminRoleMember")
   grantedRoles    AdminRole[] @relation("AdminRoleGrantedBy")
+
+  blocksMade      MemberBlock[]  @relation("BlockerMember")
+  blockedBy       MemberBlock[]  @relation("BlockedMember")
+  reportsMade     MemberReport[] @relation("ReporterMember")
+  reportsReceived MemberReport[] @relation("ReportedMember")
+  reportsReviewed MemberReport[] @relation("ReportReviewedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -147,7 +154,8 @@ model User {
   member       Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
 
-  passwordResetTokens PasswordResetToken[]
+  passwordResetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
 }
 
 model PasswordResetToken {
@@ -160,6 +168,55 @@ model PasswordResetToken {
   createdAt DateTime @default(now())
 
   @@index([userId, expiresAt])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+// 以 (key) 為單位的固定時窗計數器；key 形如 "login:<ip>" 或 "register:<ip>"。
+model RateLimitAttempt {
+  key         String   @id
+  windowStart DateTime
+  count       Int      @default(0)
+}
+
+model MemberBlock {
+  id        String   @id @default(cuid())
+  blockerId String
+  blocker   Member   @relation("BlockerMember", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   Member   @relation("BlockedMember", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+model MemberReport {
+  id           String    @id @default(cuid())
+  reporterId   String
+  reporter     Member    @relation("ReporterMember", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetId     String
+  target       Member    @relation("ReportedMember", fields: [targetId], references: [id], onDelete: Cascade)
+  reason       String
+  details      String?
+  status       String    @default("PENDING") // PENDING | REVIEWED | DISMISSED
+  reviewedById String?
+  reviewedBy   Member?   @relation("ReportReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([status])
+  @@index([targetId])
 }
 
 // ────────────────────────────────
