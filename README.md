@@ -15,7 +15,9 @@
 - **日夜主題**：系統／淺色／深色，個人檔案補填與幹部工具卡片，行動安全區。
 - **App Store**：已準備文案、契約草稿與檢查工具；正式原生封裝、刪除／檢舉流程與開發者資料續做。
 
-本次 [進版紀錄](docs/RELEASE_2026-10-13.md)、[Jerry 交接](docs/HAO_TO_JERRY_HANDOFF_2026-10-13.md)、[App Store 準備](docs/app-store/README.md)。
+最新 [QR-only 進版紀錄](docs/RELEASE_QR_ONLY_2026-10-13.md)、[Jerry 部署交接](docs/JERRY_HANDOFF_QR_ONLY_2026-10-13.md)、[交接 PDF](output/pdf/lionclub_jerry_handoff_qr_only_2026-10-13.pdf)。正式資料庫必須先套 migration，再部署新程式；Git push 不代表正式網站已完成部署。
+
+歷史 [日夜主題進版](docs/RELEASE_2026-10-13.md)、[先前 Jerry 交接](docs/HAO_TO_JERRY_HANDOFF_2026-10-13.md)、[App Store 準備](docs/app-store/README.md)。
 
 接續實作：[中央註冊與分會分派](docs/CENTRAL_ONBOARDING_2026-10-13.md)、[分會長與會員使用手冊](docs/CLUB_LEADER_AND_MEMBER_GUIDE_2026-10-13.md)。本版需先部署新增 migration；共同邀請 QR 註冊後立即可用，再依名單／分會長確認結果核對分會。QR 是平台邀請，不代表正式獅子會會籍已核實。效期預設 3 天，只影響新註冊，不是帳號試用期限。
 

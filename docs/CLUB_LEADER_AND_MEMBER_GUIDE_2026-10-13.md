@@ -2,7 +2,7 @@
 
 版本日期：2026-10-13｜中央註冊、QR-only 版
 
-適用條件：本次 QR-only 更新尚未推送 `main`；資料庫更新與程式正式部署完成後，才適用本手冊。這是手機可使用的網站版，並非已上架的 App Store 或 Google Play 原生 App。
+適用條件：本手冊對應本次 QR-only 發布程式；資料庫更新、程式正式部署與驗收完成後，才適用本手冊。GitHub 進版不代表正式站已部署。這是手機可使用的網站版，並非已上架的 App Store 或 Google Play 原生 App。
 
 正式網站：[https://lionclubsmembership.com/](https://lionclubsmembership.com/)
 

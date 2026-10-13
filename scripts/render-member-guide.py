@@ -1,5 +1,6 @@
 """Render the central-onboarding leader/member guide as a chapter-based Chinese PDF."""
 from pathlib import Path
+import argparse
 import re
 from urllib.parse import urljoin
 from xml.sax.saxutils import escape, quoteattr
@@ -13,8 +14,14 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "docs/CLUB_LEADER_AND_MEMBER_GUIDE_2026-10-13.md"
-OUTPUT = ROOT / "output/pdf/lionclub_leader_member_guide_qr_only_2026-10-13.pdf"
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--source", type=Path, default=ROOT / "docs/CLUB_LEADER_AND_MEMBER_GUIDE_2026-10-13.md")
+parser.add_argument("--output", type=Path, default=ROOT / "output/pdf/lionclub_leader_member_guide_qr_only_2026-10-13.pdf")
+parser.add_argument("--title", default="獅子會 App - 分會長與會員操作手冊（QR-only 現場加入版）")
+parser.add_argument("--header", default="LIONCLUB | 會長・幹部・會員操作教學")
+parser.add_argument("--footer", default="QR-only 現場加入版 · 正式部署完成後適用 · 2026-10-13")
+args = parser.parse_args()
+SOURCE, OUTPUT = args.source, args.output
 font = next((p for p in [Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"), Path("/Library/Fonts/Arial Unicode.ttf")] if p.is_file()), None)
 if font is None:
     raise SystemExit("A Chinese TrueType font is required; configure font path before rendering.")
@@ -25,6 +32,7 @@ title = ParagraphStyle("Title", parent=body, fontSize=22, leading=29, spaceAfter
 chapter = ParagraphStyle("Chapter", parent=body, fontSize=16, leading=23, textColor=gold, spaceBefore=9, spaceAfter=12, keepWithNext=True)
 cell = ParagraphStyle("Cell", parent=body, fontSize=10.2, leading=15.8, spaceAfter=0)
 quote = ParagraphStyle("Quote", parent=body, fontSize=10.5, leading=17.4, leftIndent=10, rightIndent=10, borderPadding=8, backColor=colors.HexColor("#F7F3E8"), spaceBefore=7, spaceAfter=13)
+code = ParagraphStyle("Code", parent=body, fontSize=10, leading=15.5, borderPadding=8, backColor=colors.HexColor("#EEF1F5"), spaceAfter=12)
 
 def inline(value):
     value = value.replace("–", "-").replace("—", "-").replace("‑", "-").replace("`", "")
@@ -45,11 +53,11 @@ def page_frame(canvas, doc):
     canvas.line(18*mm, height-16*mm, width-18*mm, height-16*mm)
     canvas.setFont("LionGuide", 8.5)
     canvas.setFillColor(muted)
-    canvas.drawString(18*mm, height-12*mm, "LIONCLUB | 會長・幹部・會員操作教學")
+    canvas.drawString(18*mm, height-12*mm, args.header)
     canvas.setLineWidth(.4)
     canvas.setStrokeColor(colors.HexColor("#DCE1E8"))
     canvas.line(18*mm, 16*mm, width-18*mm, 16*mm)
-    canvas.drawString(18*mm, 11*mm, "QR-only 現場加入版 · 正式部署完成後適用 · 2026-10-13")
+    canvas.drawString(18*mm, 11*mm, args.footer)
     canvas.drawRightString(width-18*mm, 11*mm, f"{doc.page}")
     canvas.restoreState()
 
@@ -58,6 +66,15 @@ story, index, chapters = [], 0, 0
 while index < len(lines):
     line = lines[index].strip()
     if not line:
+        index += 1
+        continue
+    if line.startswith("```"):
+        code_lines = []
+        index += 1
+        while index < len(lines) and not lines[index].strip().startswith("```"):
+            code_lines.append(escape(lines[index]))
+            index += 1
+        story.append(Paragraph("<br/>".join(code_lines), code))
         index += 1
         continue
     if line.startswith("| "):
@@ -94,6 +111,6 @@ while index < len(lines):
 
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 document = SimpleDocTemplate(str(OUTPUT), pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=24*mm, bottomMargin=22*mm,
-    title="獅子會 App - 分會長與會員操作手冊（QR-only 現場加入版）", author="Lionclub", allowSplitting=True)
+    title=args.title, author="Lionclub", allowSplitting=True)
 document.build(story, onFirstPage=page_frame, onLaterPages=page_frame)
 print(OUTPUT)

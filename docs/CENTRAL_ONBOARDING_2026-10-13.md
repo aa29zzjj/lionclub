@@ -1,6 +1,6 @@
 # 中央註冊與正式分會分派交接（2026-10-13）
 
-狀態：本機中央註冊版接續調整為 **僅透過有效邀請 QR 註冊**，尚未推送 `main`；本文件不表示正式資料庫已遷移或網站已部署。本次以 `ab36c86` 為基底，新註冊共同進 AI臺科大獅子會，之後依正式名單由授權管理者分派。沒有 30 天試用／自動停權機制，沒有改動 demo 或其他帳號密碼。
+狀態：本次發布程式為 **僅透過有效邀請 QR 註冊**，Hao 已授權 main 進版；正式資料庫 migration、Amplify 部署與驗收仍須由 Jerry 確認。最新執行交接見 [Jerry QR-only 交接](JERRY_HANDOFF_QR_ONLY_2026-10-13.md)。本次以 `ab36c86` 為基底，新註冊共同進 AI臺科大獅子會，之後依正式名單由授權管理者分派。沒有 30 天試用／自動停權機制，沒有改動 demo 或其他帳號密碼。
 
 ## 已實作
 
@@ -30,10 +30,12 @@ demo 的正式資料庫角色未於本輪查讀或修改。如果 demo 只有 AI
 
 ## 資料庫／部署順序（Jerry）
 
+本次 main 推送前，Hao 已確認自動部署暫停、migration 尚未完成。請保持暫停直到下列前置條件完成；本輪未登入 AWS／RDS 查證或恢復部署。
+
 1. 先確認 RDS 備份、唯一啟用的中央分會與實際 ID。不要搬動既有分會會員或重設帳號。
 2. 用含本次 migration 的 checkout 執行 `npx prisma migrate deploy`。新增 migration：`20261013042000_central_onboarding_assignment`；只加欄位／索引／異動表。既有會員 default `ASSIGNED` 是沿用舊資料，不代表重新核驗正式獅子會身分；既有 PENDING 不自動開通。
 3. 若中央分會名稱唯一為 AI臺科大獅子會，不必追加設定。多筆同名／不符名稱時，配置服務執行期 `ONBOARDING_ORGANIZATION_ID` 為正確 ID；缺少或歧義時回 503，不自行建立新會。
-4. 確認執行期採有效 QR token 作註冊資格，不開放免邀請建帳或其他手動邀請方式。若沿用 `ONBOARDING_REQUIRE_INVITE` 設定，保持 `true` 或不設定；Amplify 的 SSR runtime 配置由 Jerry 驗證，不能只核對建置環境。
+4. 註冊固定要求有效 QR token，不開放免邀請或 PIN 建帳。`ONBOARDING_REQUIRE_INVITE`／`CENTRAL_REQUIRE_INVITE` 已退役，可移除舊設定；即使 false 也不能繞過 QR。Amplify 的中央分會 SSR runtime 配置由 Jerry 驗證，不能只核對建置環境。
 5. 資料庫遷移成功後再部署程式；更新 Prisma Client 由安裝流程處理。未先遷移可能讓原有 Member 查詢因新欄位不存在而失敗。本輪沒有對正式 RDS 執行任何命令。
 6. 確認 `NEXT_PUBLIC_APP_URL` 正式 Origin；新註冊與分派 POST 檢查 Origin。以 browser 同源 API 操作；未來原生登入須另外設計，不能用缺 Origin 的 curl 測試判定功能故障。
 7. 以受控測試帳號驗收有效 QR、無 token／過期／滿額拒絕、1／3／7／30 天效期與預設 3 天、立即使用、一般會員 403、雙邊範圍／跨區權限、同分會核對、不同分會改派、其他裝置的最新分會與舊角色撤銷。確認 QR 到期後既有帳號仍可使用；手冊於此後才可作正式操作版。
@@ -44,7 +46,7 @@ Migration 為 additive：可先遷移後保留舊程式暫用。不應刪除 mig
 
 | API | 契約 |
 | --- | --- |
-| GET /api/onboarding | 中央 organization、requiresInvite、mode=central；失配 503 |
+| GET /api/onboarding | 中央 organization、requiresInvite=true、inviteMethod=qr、mode=central；失配 503 |
 | POST /api/auth/register | 姓名、Email、密碼與有效 QR token；可選生日／電話／原分會／簡介；成功即登入並回 NEEDS_ASSIGNMENT |
 | POST /api/invites | 授權幹部產生註冊 QR；validDays 可選 1／3／7／30 天、預設 3 天；效期限制新註冊，不限制已建帳者使用期限 |
 | GET /api/admin/member-assignments | status、q、page；每頁 30 筆、範圍內 ACTIVE 會員、不列操作者本人；回可管理啟用分會及分頁 |
