@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "status": "draft",
+  "reviewedOn": "2026-10-13",
+  "locale": "zh-Hant",
+  "app": {
+    "name": "獅子會 App",
+    "nameConfirmed": false,
+    "bundleId": null,
+    "androidApplicationId": null,
+    "appleTeamId": null,
+    "legalEntityName": null,
+    "copyright": null,
+    "brandAuthorizationConfirmed": false
+  },
+  "contacts": {
+    "supportEmail": null,
+    "privacyEmail": null,
+    "reviewContactName": null,
+    "reviewContactEmail": null,
+    "reviewContactPhone": null
+  },
+  "urls": {
+    "website": "https://lionclubsmembership.com/",
+    "support": null,
+    "privacyPolicy": null,
+    "accountDeletion": null,
+    "marketing": null
+  },
+  "listing": {
+    "subtitle": "會員交流、服務活動與資歷管理",
+    "promotionalText": "集中管理會員檔案、服務資歷與活動報名，透過會員 QR Code 與獅友建立連結。",
+    "description": "獅子會 App 為會員提供日常交流與服務活動工具。\n\n・會員檔案：管理頭像、聯絡資料、專長與個人介紹。\n・服務資歷：記錄所屬分會、任職組織與獅子年度經歷。\n・獅友交流：搜尋會員、掃描會員 QR Code 加好友，查看好友檔案。\n・活動報名：查看活動資訊、報名與接收站內通知。\n・幹部工具：授權幹部可審核會員與資歷、管理分會權限，並查看活動報名名單。\n・日夜外觀：支援淺色、深色與跟隨系統設定。\n\n本服務需要會員帳號與網路連線。幹部工具依所屬組織及授權顯示；加入分會可能需要邀請與審核。",
+    "keywords": "獅子會,獅友,會員,服務,活動,分會,資歷",
+    "googlePlayShortDescription": "管理會員檔案與服務資歷、掃描獅友 QR Code、參與分會活動。",
+    "category": "SOCIAL_NETWORKING",
+    "categoryConfirmed": false,
+    "ageRating": null,
+    "territories": null,
+    "price": null
+  },
+  "release": {
+    "version": null,
+    "buildNumber": null,
+    "nativeArchitecture": null,
+    "appleDeveloperEnrollmentConfirmed": false,
+    "appStoreConnectAppCreated": false,
+    "googlePlayAccountType": null,
+    "signingConfigured": false,
+    "physicalDeviceVerificationComplete": false
+  },
+  "review": {
+    "demoAccountConfigured": false,
+    "credentialsDelivery": "App Store Connect App Review Information；不要將正式審查帳密寫入此 JSON",
+    "sampleQrPath": null,
+    "notes": "需提供已審核、可直接登入的獨立審查帳號與第二名合成會員的 QR Code，讓審查人員驗證好友流程。一般會員與幹部權限需清楚說明。",
+    "privacyLabelsReviewed": false,
+    "dataSafetyReviewed": false,
+    "accountDeletionImplemented": false,
+    "ugcModerationImplemented": false
+  },
+  "assets": {
+    "appIcon1024": null,
+    "iphoneScreenshots": [],
+    "ipadScreenshots": [],
+    "googlePlayIcon512": null,
+    "googlePlayFeatureGraphic": null,
+    "androidScreenshots": []
+  }
+}

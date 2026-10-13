@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "app-store:check": "node scripts/check-app-store-readiness.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
