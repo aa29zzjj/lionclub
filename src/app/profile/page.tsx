@@ -310,7 +310,7 @@ export default function ProfilePage() {
               <span className="mt-0.5 shrink-0 text-lg" aria-hidden="true">⚠️</span>
               <div>
                 <h2 className="text-sm font-bold text-amber-200">Email 尚未驗證</h2>
-                <p className="mt-1 text-xs leading-relaxed text-amber-200/90">請至 {me.email} 收取驗證信並完成驗證，以確保帳號安全。</p>
+                <p className="mt-1 text-xs leading-relaxed text-amber-200">請至 {me.email} 收取驗證信並完成驗證，以確保帳號安全。</p>
                 <button
                   onClick={resendVerification}
                   disabled={resendingVerification}
