@@ -3,9 +3,10 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { createSession } from "@/lib/session";
+import { findUserByEmail } from "@/lib/user-email";
 
 const bodySchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
   password: z.string().min(1),
 });
 
@@ -17,10 +18,7 @@ export async function POST(req: NextRequest) {
   const { email, password } = parsed.data;
 
   const prisma = await getPrisma();
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: { member: true },
-  });
+  const user = await findUserByEmail(prisma, email);
   if (!user) {
     return NextResponse.json({ error: "帳號或密碼錯誤" }, { status: 401 });
   }

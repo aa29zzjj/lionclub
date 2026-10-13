@@ -32,7 +32,7 @@ Apple 要 App 內可發起整個帳號刪除，不能只停權或要求一般使
 
 Session 撤銷與受限狀態需有具體實作；若申請後立即登出，後續狀態透過驗證 Email／安全連結告知，不能靠已失效的 Session 查詢。完成後寄通知；日期由實際 worker／營運能力決定，未知時不顯示假期限。正式 API 回覆契約應在實作前統一。
 
-現有 `session.ts` 是 30 天 JWT，沒有伺服器 Session 撤銷／版本欄位；`destroySession` 只清目前瀏覽器 Cookie，重設密碼也不撤銷其他裝置 Session。`getCurrentMember` 只依 JWT 的 memberId 查會員，未檢查 User 是否仍存在或 Member.status。因此只刪 User、只改密碼或只停權，都不能保證既有 Session 失效。Jerry 需加入 Session version／撤銷機制及適當會員狀態檢查，並驗證另一台已登入裝置也失去存取權。
+現有 `session.ts` 是 30 天 JWT，沒有伺服器 Session 撤銷／版本欄位；`destroySession` 只清目前瀏覽器 Cookie，重設密碼也不撤銷其他裝置 Session。中央註冊接續版本已讓 `getCurrentMember` 檢查 User 綁定與 Member.status=ACTIVE，刪 User／停權後下一次會員 API 存取會被擋，但 Token 本身仍未被撤銷。Jerry 仍需加入 Session version／撤銷機制，並驗證改密碼及帳號刪除後另一台已登入裝置也失去存取權。
 
 ### Jerry 必須先決定的資料策略
 

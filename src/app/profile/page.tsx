@@ -23,6 +23,8 @@ type Me = {
   joinYear: number | null;
   joinMonth: number | null;
   birthday: string | null;
+  organizationAssignmentStatus?: "NEEDS_ASSIGNMENT" | "ASSIGNED";
+  declaredOrganizationName?: string | null;
   organization: { name: string };
   tags: { name: string }[];
   adminRoles: { role: string }[];
@@ -223,6 +225,13 @@ export default function ProfilePage() {
       Icon: PeopleIcon,
       visible: canManageRoles,
     },
+    {
+      href: "/admin/member-assignment",
+      title: "會員分會分派",
+      description: "核對會員名單、確認正式分會與分派歷史",
+      Icon: PeopleIcon,
+      visible: canManageRoles,
+    },
   ].filter((tool) => tool.visible);
 
   return (
@@ -244,6 +253,14 @@ export default function ProfilePage() {
           <div role="status" className="mb-4 rounded-xl bg-lion-gold/15 border border-lion-gold/40 text-lion-gold text-xs px-3 py-2">
             {toast}
           </div>
+        )}
+
+        {me.organizationAssignmentStatus === "NEEDS_ASSIGNMENT" && (
+          <section className="mb-5 rounded-2xl border border-lion-gold/30 bg-lion-card p-4" aria-label="分會核對狀態">
+            <h2 className="text-sm font-semibold">正式分會待名單核對</h2>
+            <p className="mt-1 text-xs leading-relaxed text-lion-muted">目前暫存於 {me.organization.name}，正式分會待名單核對；您可正常使用會員功能。</p>
+            {me.declaredOrganizationName && <p className="mt-2 break-words text-xs text-lion-muted">登記分會：{me.declaredOrganizationName}</p>}
+          </section>
         )}
 
         {!editing && (

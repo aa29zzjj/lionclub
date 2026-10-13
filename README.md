@@ -17,6 +17,8 @@
 
 本次 [進版紀錄](docs/RELEASE_2026-10-13.md)、[Jerry 交接](docs/HAO_TO_JERRY_HANDOFF_2026-10-13.md)、[App Store 準備](docs/app-store/README.md)。
 
+接續實作：[中央註冊與分會分派](docs/CENTRAL_ONBOARDING_2026-10-13.md)、[分會長與會員使用手冊](docs/CLUB_LEADER_AND_MEMBER_GUIDE_2026-10-13.md)。本版需先部署新增 migration；共同邀請 QR／PIN 註冊後立即可用，再依正式名單核對分會。
+
 資歷資料契約與待辦請見 [docs/MEMBER_EXPERIENCE_HANDOFF.md](docs/MEMBER_EXPERIENCE_HANDOFF.md)，好友 QR 規格與驗證紀錄請見 [docs/FRIEND_QR_HANDOFF.md](docs/FRIEND_QR_HANDOFF.md)。
 
 ## 開發

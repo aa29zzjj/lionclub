@@ -1,22 +1,26 @@
 import { getPrisma } from "./prisma";
 import { getSession } from "./session";
+import type { Prisma } from "@prisma/client";
 
 export async function getCurrentMember() {
   const session = await getSession();
   if (!session) return null;
 
   const prisma = await getPrisma();
+  const now = new Date();
   const member = await prisma.member.findUnique({
     where: { id: session.memberId },
     include: {
       organization: true,
       adminRoles: {
-        where: { validUntil: null },
+        where: { validFrom: { lte: now }, OR: [{ validUntil: null }, { validUntil: { gt: now } }] },
       },
       tags: true,
+      user: { select: { id: true } },
     },
   });
 
+  if (!member || member.status !== "ACTIVE" || member.user?.id !== session.userId) return null;
   return member;
 }
 
@@ -24,15 +28,17 @@ export async function getCurrentMember() {
 export async function hasAdminRoleForOrganization(
   memberId: string,
   organizationId: string,
-  allowedRoles: string[]
+  allowedRoles: string[],
+  database?: Prisma.TransactionClient,
 ) {
   const now = new Date();
-  const prisma = await getPrisma();
+  const prisma = database ?? await getPrisma();
 
   const roles = await prisma.adminRole.findMany({
     where: {
       memberId,
       role: { in: allowedRoles },
+      validFrom: { lte: now },
       OR: [{ validUntil: null }, { validUntil: { gt: now } }],
     },
   });
@@ -55,7 +61,10 @@ export async function hasAdminRoleForOrganization(
 
   // 往上層找：分會的上層是分區/專區/複合區，管理角色若掛在上層也算通過
   let current = org;
+  const visited = new Set([org.id]);
   while (current.parentId) {
+    if (visited.has(current.parentId)) return false;
+    visited.add(current.parentId);
     if (scopeIds.has(current.parentId)) return true;
     const parent = await prisma.organization.findUnique({ where: { id: current.parentId } });
     if (!parent) break;

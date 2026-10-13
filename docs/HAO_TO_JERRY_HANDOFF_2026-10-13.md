@@ -1,5 +1,7 @@
 # Hao → Jerry：進版與 App Store 接續交接（2026-10-13）
 
+接續更新：新增的中央註冊、立即使用與正式分會分派，需要另一筆 migration。最新部署步驟見 [中央註冊交接](CENTRAL_ONBOARDING_2026-10-13.md)，操作教學見 [會長與會員手冊](CLUB_LEADER_AND_MEMBER_GUIDE_2026-10-13.md)。下文保留 `ab36c86` 進版時的歷史紀錄，不能把其中「沒有新增 migration」套用至接續版本；既有交接 PDF 也屬該次歷史版。
+
 本輪以 Jerry `548f0ec` 為基底，接上 Hao 的 `db94479`（報名名單／跨分會管理）與 `72016f8`（日夜主題／檔案整理）。Hao 已批准直接併入 `main`。
 
 ## Jerry 先看這幾點

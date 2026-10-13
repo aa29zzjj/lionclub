@@ -6,7 +6,8 @@ import { getPrisma } from "@/lib/prisma";
 
 const bodySchema = z.object({
   token: z.string().min(20),
-  password: z.string().min(8, "密碼至少需要 8 個字元"),
+  password: z.string().min(8, "密碼至少需要 8 個字元")
+    .refine((value) => new TextEncoder().encode(value).length <= 72, "密碼最多 72 位元組"),
 });
 
 export async function POST(request: NextRequest) {

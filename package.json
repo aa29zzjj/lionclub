@@ -9,7 +9,8 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
-    "app-store:check": "node scripts/check-app-store-readiness.mjs"
+    "app-store:check": "node scripts/check-app-store-readiness.mjs",
+    "test:onboarding": "node --import tsx --test tests/*.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

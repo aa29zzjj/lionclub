@@ -13,6 +13,7 @@
   --lion-surface: 20 26 43;
   --lion-text: 243 241 234;
   --lion-muted: 139 146 168;
+  --lion-danger: 253 162 155;
   --lion-border: 255 255 255 / 0.08;
   --lion-soft: 255 255 255 / 0.06;
   --lion-overlay: 255 255 255;
@@ -26,6 +27,7 @@
   --lion-surface: 255 255 255;
   --lion-text: 20 32 55;
   --lion-muted: 91 103 126;
+  --lion-danger: 180 35 24;
   --lion-border: 20 32 55 / 0.12;
   --lion-soft: 20 32 55 / 0.055;
   --lion-overlay: 20 32 55;

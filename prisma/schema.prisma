@@ -83,6 +83,14 @@ model Member {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  // ACTIVE 僅表示可以使用平台；正式分會歸屬核對獨立追蹤。
+  // 既有會員保持 ASSIGNED，只有中央新註冊寫入 NEEDS_ASSIGNMENT。
+  organizationAssignmentStatus  String @default("ASSIGNED")
+  organizationAssignmentVersion Int    @default(0)
+  declaredOrganizationName      String? // 本人自填，尚未核對，不作為授權依據
+  organizationAssignments       MemberOrganizationAssignment[] @relation("OrganizationAssignmentMember")
+  assignmentsMade               MemberOrganizationAssignment[] @relation("OrganizationAssignmentActor")
+
   tags Tag[] @relation("MemberTags")
 
   user User?
@@ -106,6 +114,29 @@ model Member {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([organizationAssignmentStatus, organizationId])
+}
+
+// 每次確認／改派同交易寫入；保留組織名稱快照，不改寫資歷或活動歷史。
+model MemberOrganizationAssignment {
+  id                     String @id @default(cuid())
+  memberId               String
+  member                 Member @relation("OrganizationAssignmentMember", fields: [memberId], references: [id], onDelete: Cascade)
+  fromOrganizationId     String?
+  fromOrganizationName   String?
+  toOrganizationId       String
+  toOrganizationName     String
+  previousAssignmentStatus String
+  assignmentStatus       String
+  assignedById           String?
+  assignedBy             Member? @relation("OrganizationAssignmentActor", fields: [assignedById], references: [id], onDelete: SetNull)
+  reason                 String
+  revokedRoleNames       String[] @default([])
+  revokedInviteCount     Int @default(0)
+  assignedAt             DateTime @default(now())
+
+  @@index([memberId, assignedAt])
 }
 
 model User {

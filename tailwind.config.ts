@@ -16,6 +16,7 @@ const config: Config = {
           card: "rgb(var(--lion-surface) / <alpha-value>)",
           cream: "rgb(var(--lion-text) / <alpha-value>)",
           muted: "rgb(var(--lion-muted) / <alpha-value>)",
+          danger: "rgb(var(--lion-danger) / <alpha-value>)",
           page: "rgb(var(--lion-page) / <alpha-value>)",
           canvas: "rgb(var(--lion-canvas) / <alpha-value>)",
           border: "rgb(var(--lion-border))",

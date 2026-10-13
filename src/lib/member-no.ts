@@ -1,10 +1,11 @@
 import { getPrisma } from "./prisma";
+import type { Prisma } from "@prisma/client";
 
 /**
  * Generates the next member number for an organization's district, formatted as
  * `{districtCode}-{seq}` (e.g. "300A-1-0007") so the district is identifiable at a glance.
  */
-export async function generateMemberNo(prisma: Awaited<ReturnType<typeof getPrisma>>, organizationId: string) {
+export async function generateMemberNo(prisma: Pick<Prisma.TransactionClient, "organization" | "member"> | Awaited<ReturnType<typeof getPrisma>>, organizationId: string) {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     select: { districtCode: true },

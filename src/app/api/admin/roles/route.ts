@@ -3,13 +3,11 @@ import { z } from "zod";
 import { getAdministeredOrganizationIds } from "@/lib/admin-scope";
 import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-member";
 import { getPrisma } from "@/lib/prisma";
+import { OnboardingError } from "@/lib/central-onboarding";
+import { onboardingErrorResponse } from "@/lib/onboarding-response";
 
 const managerRoles = ["CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
 const assignableRoles = ["CLUB_OFFICER", "CLUB_FINANCE", "CLUB_VICE_PRESIDENT", "CLUB_PRESIDENT"] as const;
-
-async function canManage(memberId: string, organizationId: string) {
-  return hasAdminRoleForOrganization(memberId, organizationId, managerRoles);
-}
 
 async function getManageableClubs(memberId: string) {
   const prisma = await getPrisma();
@@ -83,36 +81,24 @@ export async function POST(request: NextRequest) {
 
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "欄位格式錯誤" }, { status: 400 });
-  if (!(await canManage(me.id, parsed.data.organizationId))) {
-    return NextResponse.json({ error: "沒有權限管理此分會" }, { status: 403 });
-  }
-
   const prisma = await getPrisma();
-  const organization = await prisma.organization.findFirst({
-    where: { id: parsed.data.organizationId, level: "club", isActive: true },
-    select: { id: true },
-  });
-  if (!organization) return NextResponse.json({ error: "找不到可管理的分會" }, { status: 404 });
-
-  const target = await prisma.member.findFirst({
-    where: { id: parsed.data.memberId, organizationId: organization.id, status: "ACTIVE" },
-    select: { id: true },
-  });
-  if (!target) return NextResponse.json({ error: "找不到此分會的啟用會員" }, { status: 404 });
-
-  const existing = await prisma.adminRole.findFirst({
-    where: { memberId: target.id, role: parsed.data.role, scopeId: organization.id, validUntil: null },
-  });
-  if (existing) return NextResponse.json({ error: "此會員已有相同權限" }, { status: 409 });
-
-  const role = await prisma.adminRole.create({
-    data: {
-      memberId: target.id,
-      role: parsed.data.role,
-      scopeType: "club",
-      scopeId: organization.id,
-      grantedById: me.id,
-    },
-  });
-  return NextResponse.json({ role }, { status: 201 });
+  try {
+    const role = await prisma.$transaction(async (tx) => {
+      const actor = await tx.member.findFirst({ where: { id: me.id, status: "ACTIVE" }, select: { id: true } });
+      if (!actor || !(await hasAdminRoleForOrganization(me.id, parsed.data.organizationId, managerRoles, tx))) throw new OnboardingError(403, "沒有權限管理此分會");
+      const organization = await tx.organization.findFirst({ where: { id: parsed.data.organizationId, level: "club", isActive: true }, select: { id: true } });
+      if (!organization) throw new OnboardingError(404, "找不到可管理的分會");
+      // Reading the target within this serializable transaction participates in transfer conflicts.
+      const target = await tx.member.findFirst({ where: { id: parsed.data.memberId, organizationId: organization.id, status: "ACTIVE" }, select: { id: true } });
+      if (!target) throw new OnboardingError(404, "找不到此分會的啟用會員");
+      const now = new Date();
+      const existing = await tx.adminRole.findFirst({ where: { memberId: target.id, role: parsed.data.role, scopeId: organization.id, OR: [{ validUntil: null }, { validUntil: { gt: now } }] } });
+      if (existing) throw new OnboardingError(409, "此會員已有相同權限");
+      return tx.adminRole.create({ data: { memberId: target.id, role: parsed.data.role, scopeType: "club", scopeId: organization.id, grantedById: me.id } });
+    }, { isolationLevel: "Serializable" });
+    return NextResponse.json({ role }, { status: 201 });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2034") return NextResponse.json({ error: "會籍或權限同時更新，請重新載入後操作" }, { status: 409 });
+    return onboardingErrorResponse(error);
+  }
 }

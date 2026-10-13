@@ -11,13 +11,14 @@ export async function GET(req: NextRequest) {
   const prisma = await getPrisma();
   const invite = await prisma.clubInvite.findUnique({
     where: { token },
-    include: { organization: { select: { id: true, name: true } } },
+    include: { organization: { select: { id: true, name: true, level: true, isActive: true } } },
   });
 
   const now = new Date();
   const valid =
     !!invite &&
     !invite.revokedAt &&
+    invite.organization.isActive && invite.organization.level === "club" &&
     invite.validFrom <= now &&
     invite.validUntil >= now &&
     (invite.usageLimit == null || invite.usageCount < invite.usageLimit);

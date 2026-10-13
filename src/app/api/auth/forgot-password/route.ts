@@ -3,8 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { sendSesEmail } from "@/lib/aws-http";
+import { findUserByEmail } from "@/lib/user-email";
 
-const bodySchema = z.object({ email: z.string().trim().toLowerCase().email() });
+const bodySchema = z.object({ email: z.string().trim().email() });
 const genericMessage = "如果此信箱已註冊，我們會寄出密碼重設連結。";
 
 export async function POST(request: NextRequest) {
@@ -12,9 +13,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "請輸入有效的 Email" }, { status: 400 });
 
   const prisma = await getPrisma();
-  const user = await prisma.user.findFirst({
-    where: { email: { equals: parsed.data.email, mode: "insensitive" } },
-  });
+  const user = await findUserByEmail(prisma, parsed.data.email);
   if (!user) return NextResponse.json({ ok: true, message: genericMessage });
 
   const from = process.env.PASSWORD_RESET_FROM_EMAIL;

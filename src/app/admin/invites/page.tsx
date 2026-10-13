@@ -113,6 +113,7 @@ export default function AdminInvitesPage() {
       <div className="px-5 pt-6 pb-4">
         <h1 className="text-xl font-bold mb-1">產生邀請 QR</h1>
         {me && <p className="text-xs text-lion-muted mb-4">{me.organization.name}</p>}
+        <p className="mb-4 rounded-xl border border-lion-border bg-lion-card p-3 text-xs leading-relaxed text-lion-muted">目前新註冊統一暫存於 AI臺科大獅子會、立即開通；此 QR 只作邀請來源，不會直接決定正式分會。請在核對名單後使用「會員分會分派」。</p>
 
         <button
           onClick={handleCreate}
