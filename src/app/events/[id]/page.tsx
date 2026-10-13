@@ -306,7 +306,7 @@ export default function EventDetailPage() {
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2.5 text-sm resize-none" placeholder="活動說明" />
             <div className="flex gap-2">
               <button type="button" onClick={() => { loadForm(event); setEditing(false); setError(""); }} className="flex-1 rounded-xl bg-white/10 py-2 text-sm">取消</button>
-              <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep py-2 text-sm font-semibold disabled:opacity-50">{saving ? "儲存中…" : "儲存"}</button>
+              <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-lion-action text-lion-navyDeep py-2 text-sm font-semibold disabled:opacity-50">{saving ? "儲存中…" : "儲存"}</button>
             </div>
             <button type="button" onClick={deleteEvent} className="text-xs text-red-300 py-1">刪除活動</button>
           </form>
@@ -391,7 +391,7 @@ export default function EventDetailPage() {
           onClick={toggleRegister}
           disabled={toggling || (!event.isRegistered && event.isFull)}
           className={`w-full rounded-xl font-semibold py-3 text-sm transition-colors disabled:opacity-60 ${
-            event.isRegistered ? "bg-white/10 text-lion-cream" : "bg-lion-gold text-lion-navyDeep"
+            event.isRegistered ? "bg-white/10 text-lion-cream" : "bg-lion-action text-lion-navyDeep"
           }`}
         >
           {event.isRegistered ? "已報名（點擊取消）" : event.isFull ? "名額已滿" : "我要報名"}

@@ -2,13 +2,164 @@
 @tailwind components;
 @tailwind utilities;
 
+:root,
+:root[data-theme="dark"] {
+  --lion-gold: 200 169 81;
+  --lion-gold-light: 227 203 133;
+  --lion-action: 200 169 81;
+  --lion-action-hover: 227 203 133;
+  --lion-page: 10 13 24;
+  --lion-canvas: 16 20 32;
+  --lion-surface: 20 26 43;
+  --lion-text: 243 241 234;
+  --lion-muted: 139 146 168;
+  --lion-border: 255 255 255 / 0.08;
+  --lion-soft: 255 255 255 / 0.06;
+  --lion-overlay: 255 255 255;
+}
+
+:root[data-theme="light"] {
+  --lion-gold: 139 103 21;
+  --lion-gold-light: 176 137 43;
+  --lion-page: 248 246 240;
+  --lion-canvas: 231 235 241;
+  --lion-surface: 255 255 255;
+  --lion-text: 20 32 55;
+  --lion-muted: 91 103 126;
+  --lion-border: 20 32 55 / 0.12;
+  --lion-soft: 20 32 55 / 0.055;
+  --lion-overlay: 20 32 55;
+}
+
 html,
 body {
   height: 100%;
 }
 
 body {
-  background: #e9ebf1;
+  background: rgb(var(--lion-canvas));
+  color: rgb(var(--lion-text));
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.theme-brand-panel {
+  --lion-gold: 227 203 133;
+  --lion-gold-light: 239 222 169;
+  --lion-text: 243 241 234;
+  --lion-muted: 174 183 207;
+  --lion-overlay: 255 255 255;
+  color: rgb(var(--lion-text));
+}
+
+.app-canvas,
+.app-frame {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.app-frame {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.app-frame-no-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.auth-frame {
+  padding-top: max(3rem, env(safe-area-inset-top, 0px));
+  padding-bottom: max(3rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+}
+
+.bottom-nav-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.modal-safe {
+  padding-top: max(1rem, env(safe-area-inset-top, 0px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  overflow-y: auto;
+}
+
+.modal-safe > div {
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem);
+  overflow-y: auto;
+}
+
+/* Legacy translucent dark-theme utilities get readable light-theme equivalents. */
+:root[data-theme="light"] .bg-white\/\[0\.03\],
+:root[data-theme="light"] .bg-white\/\[0\.04\],
+:root[data-theme="light"] .bg-white\/5 {
+  background-color: rgb(var(--lion-overlay) / 0.045);
+}
+
+:root[data-theme="light"] .bg-white\/\[0\.06\],
+:root[data-theme="light"] .bg-white\/10 {
+  background-color: rgb(var(--lion-overlay) / 0.075);
+}
+
+:root[data-theme="light"] .border-white\/\[0\.06\],
+:root[data-theme="light"] .border-white\/\[0\.08\],
+:root[data-theme="light"] .border-white\/10 {
+  border-color: rgb(var(--lion-overlay) / 0.12);
+}
+
+:root[data-theme="light"] .border-white\/15 {
+  border-color: rgb(var(--lion-overlay) / 0.2);
+}
+
+:root[data-theme="light"] .border-white\/30 {
+  border-color: rgb(var(--lion-overlay) / 0.34);
+}
+
+:root[data-theme="light"] .divide-white\/\[0\.06\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(var(--lion-overlay) / 0.1);
+}
+
+:root[data-theme="light"] .text-red-300,
+:root[data-theme="light"] .text-red-400,
+:root[data-theme="light"] .text-red-300\/80 {
+  color: #B42318;
+}
+
+:root[data-theme="light"] .text-emerald-300 { color: #067647; }
+:root[data-theme="light"] .text-amber-300\/80 { color: #8B6715; }
+
+/* Secondary copy should stay readable rather than fade into a light surface. */
+:root[data-theme="light"] :is(.text-lion-cream\/25, .text-lion-cream\/30, .text-lion-cream\/40, .text-lion-cream\/50, .text-lion-cream\/55, .text-lion-cream\/60, .text-lion-cream\/70) {
+  color: rgb(var(--lion-muted));
+}
+
+:root[data-theme="light"] :is(.placeholder\:text-lion-cream\/25, .placeholder\:text-lion-cream\/30)::placeholder {
+  color: rgb(var(--lion-muted));
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--lion-gold));
+  outline-offset: 3px;
+}
+
+@media (max-width: 480px), (pointer: coarse) {
+  .app-frame button { min-height: 48px; min-width: 48px; }
+  .app-frame :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    font-size: max(1rem, 1em);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; }
 }
 
 ::-webkit-scrollbar {

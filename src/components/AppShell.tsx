@@ -11,8 +11,8 @@ export default function AppShell({
   showNav?: boolean;
 }) {
   return (
-    <div className="min-h-screen w-full bg-[#eef0f4] flex justify-center">
-      <div className="relative w-full max-w-[480px] min-h-screen bg-lion-navyDeep text-lion-cream flex flex-col">
+    <div className="app-canvas w-full bg-lion-canvas flex justify-center">
+      <div className={`app-frame relative w-full max-w-[480px] bg-lion-page text-lion-cream flex flex-col ${showNav ? "" : "app-frame-no-nav"}`}>
         <div className="flex-1">{children}</div>
         {showNav && <BottomNav />}
       </div>

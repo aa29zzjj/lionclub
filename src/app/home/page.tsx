@@ -110,7 +110,7 @@ export default function HomePage() {
         </Link>
 
         {/* 數位會員證 */}
-        <div className="relative rounded-2xl bg-gradient-to-br from-lion-navy via-lion-navyLight to-[#2a3660] border border-white/[0.06] p-4 mb-6 overflow-hidden">
+        <div className="theme-brand-panel relative rounded-2xl bg-gradient-to-br from-lion-navy via-lion-navyLight to-[#2a3660] border border-white/[0.06] p-4 mb-6 overflow-hidden">
           <div className="absolute -right-6 -top-10 w-32 h-32 rounded-full bg-white/[0.04]" />
           <div className="flex items-center gap-2 mb-4">
             <span className="w-6 h-6 rounded-full bg-white border border-lion-gold flex items-center justify-center p-0.5">

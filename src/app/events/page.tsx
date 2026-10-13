@@ -171,7 +171,7 @@ export default function EventsPage() {
           <h1 className="text-xl font-bold">活動</h1>
           <button
             onClick={() => setCreating(true)}
-            className="flex items-center gap-1 text-xs font-medium bg-lion-gold text-lion-navyDeep px-3 py-1.5 rounded-full"
+            className="flex items-center gap-1 text-xs font-medium bg-lion-action text-lion-navyDeep px-3 py-1.5 rounded-full"
           >
             <PlusIcon className="w-3.5 h-3.5" /> 發布活動
           </button>
@@ -317,7 +317,7 @@ export default function EventsPage() {
               </button>
               <button
                 type="submit"
-                className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-2.5 text-sm"
+                className="flex-1 rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-2.5 text-sm"
               >
                 發布活動
               </button>

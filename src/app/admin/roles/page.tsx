@@ -112,7 +112,7 @@ export default function AdminRolesPage() {
               className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none focus:border-lion-gold disabled:opacity-50"
             >
               {organizations.map((item) => (
-                <option key={item.id} value={item.id} className="text-black">
+                <option key={item.id} value={item.id} className="bg-lion-card text-lion-cream">
                   {item.districtCode ? `${item.districtCode} · ` : ""}{item.name}
                 </option>
               ))}
@@ -131,16 +131,16 @@ export default function AdminRolesPage() {
             <div>
               <label htmlFor="role-member" className="mb-1 block text-xs text-lion-muted">會員</label>
               <select id="role-member" value={memberId} onChange={(event) => setMemberId(event.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm">
-                {members.map((member) => <option key={member.id} value={member.id} className="text-black">{member.name}{member.email ? ` · ${member.email}` : ""}</option>)}
+                {members.map((member) => <option key={member.id} value={member.id} className="bg-lion-card text-lion-cream">{member.name}{member.email ? ` · ${member.email}` : ""}</option>)}
               </select>
             </div>
             <div>
               <label htmlFor="role-type" className="mb-1 block text-xs text-lion-muted">系統權限</label>
               <select id="role-type" value={role} onChange={(event) => setRole(event.target.value as AssignableRole)} className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm">
-                {Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value} className="text-black">{label}</option>)}
+                {Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value} className="bg-lion-card text-lion-cream">{label}</option>)}
               </select>
             </div>
-            <button type="submit" disabled={!memberId || !organization || saving} className="rounded-xl bg-lion-gold py-2.5 text-sm font-semibold text-lion-navyDeep disabled:opacity-40">
+            <button type="submit" disabled={!memberId || !organization || saving} className="rounded-xl bg-lion-action py-2.5 text-sm font-semibold text-lion-navyDeep disabled:opacity-40">
               {saving ? "處理中…" : "授予權限"}
             </button>
           </form>

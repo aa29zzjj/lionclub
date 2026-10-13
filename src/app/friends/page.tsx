@@ -158,7 +158,7 @@ export default function FriendsPage() {
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`flex-1 text-xs font-medium py-2 rounded-full transition-colors ${
-                tab === t.id ? "bg-lion-gold text-lion-navyDeep" : "bg-white/[0.04] text-lion-muted"
+                tab === t.id ? "bg-lion-action text-lion-navyDeep" : "bg-white/[0.04] text-lion-muted"
               }`}
             >
               {t.label}
@@ -212,7 +212,7 @@ export default function FriendsPage() {
                 <div className="flex gap-1.5 shrink-0">
                   <button
                     onClick={() => acceptRequest(f.friendshipId)}
-                    className="text-xs bg-lion-gold text-lion-navyDeep font-medium px-3 py-1.5 rounded-full"
+                    className="text-xs bg-lion-action text-lion-navyDeep font-medium px-3 py-1.5 rounded-full"
                   >
                     接受
                   </button>
@@ -238,7 +238,7 @@ export default function FriendsPage() {
               <div className="flex gap-2 mt-1">
                 <button
                   onClick={() => setScanning(true)}
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-lion-gold text-lion-navyDeep font-medium py-2.5 text-sm"
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-lion-action text-lion-navyDeep font-medium py-2.5 text-sm"
                 >
                   <ScanIcon className="w-4 h-4" /> 掃描好友 QR
                 </button>
@@ -267,7 +267,7 @@ export default function FriendsPage() {
                     <button
                       disabled={f.status === "pending-out"}
                       onClick={() => sendRequest(f.id)}
-                      className="text-xs shrink-0 font-medium px-3 py-1.5 rounded-full bg-lion-gold text-lion-navyDeep disabled:bg-white/10 disabled:text-lion-muted"
+                      className="text-xs shrink-0 font-medium px-3 py-1.5 rounded-full bg-lion-action text-lion-navyDeep disabled:bg-white/10 disabled:text-lion-muted"
                     >
                       {f.status === "pending-out" ? "已送出" : "加好友"}
                     </button>

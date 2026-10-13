@@ -391,13 +391,13 @@ export default function ExperiencePage() {
           </button>
           <button
             onClick={openNewForm}
-            className="rounded-full bg-lion-gold text-lion-navyDeep px-3.5 py-2 text-xs font-semibold"
+            className="rounded-full bg-lion-action text-lion-navyDeep px-3.5 py-2 text-xs font-semibold"
           >
             ＋ 新增資歷
           </button>
         </div>
 
-        <div className="rounded-3xl bg-gradient-to-br from-[#19264a] via-lion-navyLight to-[#10172b] border border-lion-gold/25 p-5 mb-4 overflow-hidden relative">
+        <div className="theme-brand-panel rounded-3xl bg-gradient-to-br from-[#19264a] via-lion-navyLight to-[#10172b] border border-lion-gold/25 p-5 mb-4 overflow-hidden relative">
           <div className="absolute -right-10 -top-12 w-32 h-32 rounded-full border border-lion-gold/10" />
           <p className="text-[10px] tracking-[0.24em] text-lion-gold mb-4">LIONS CLUB EXPERIENCE</p>
           <div className="flex items-center gap-3.5 relative">
@@ -486,7 +486,7 @@ export default function ExperiencePage() {
                     className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm outline-none focus:border-lion-gold"
                   >
                     {organizationLevelOptions.map((option) => (
-                      <option key={option.value} value={option.value} className="text-black">{option.label}</option>
+                      <option key={option.value} value={option.value} className="bg-lion-card text-lion-cream">{option.label}</option>
                     ))}
                   </select>
                 </div>
@@ -498,9 +498,9 @@ export default function ExperiencePage() {
                     onChange={(event) => setDraft((previous) => ({ ...previous, positionCode: event.target.value }))}
                     className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm outline-none focus:border-lion-gold"
                   >
-                    {availablePositions.length === 0 && <option value="" className="text-black">此層級暫無選項</option>}
+                    {availablePositions.length === 0 && <option value="" className="bg-lion-card text-lion-cream">此層級暫無選項</option>}
                     {availablePositions.map((position) => (
-                      <option key={position.code} value={position.code} className="text-black">{position.label}</option>
+                      <option key={position.code} value={position.code} className="bg-lion-card text-lion-cream">{position.label}</option>
                     ))}
                   </select>
                 </div>
@@ -518,7 +518,7 @@ export default function ExperiencePage() {
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm outline-none focus:border-lion-gold"
                 >
                   {multipleDistrictOptions.map((code) => (
-                    <option key={code} value={code} className="text-black">MD{code}</option>
+                    <option key={code} value={code} className="bg-lion-card text-lion-cream">MD{code}</option>
                   ))}
                 </select>
                 </div>
@@ -532,7 +532,7 @@ export default function ExperiencePage() {
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm outline-none focus:border-lion-gold"
                 >
                   {availableDistricts.map((code) => (
-                    <option key={code} value={code} className="text-black">{code} 區</option>
+                    <option key={code} value={code} className="bg-lion-card text-lion-cream">{code} 區</option>
                   ))}
                 </select>
                   </div>
@@ -575,9 +575,9 @@ export default function ExperiencePage() {
                   onChange={(event) => setDraft((previous) => ({ ...previous, organizationName: event.target.value }))}
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm outline-none focus:border-lion-gold"
                 >
-                  <option value="" className="text-black">請選擇分會</option>
+                  <option value="" className="bg-lion-card text-lion-cream">請選擇分會</option>
                   {availableClubs.map((club) => (
-                    <option key={club} value={club} className="text-black">{club}</option>
+                    <option key={club} value={club} className="bg-lion-card text-lion-cream">{club}</option>
                   ))}
                 </select>
               ) : (
@@ -624,7 +624,7 @@ export default function ExperiencePage() {
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm outline-none focus:border-lion-gold"
                 >
                   {yearOptions.map((year) => (
-                    <option key={year} value={year} className="text-black">
+                    <option key={year} value={year} className="bg-lion-card text-lion-cream">
                       {draft.kind === "membership" ? year : `${year}–${year + 1}`}
                     </option>
                   ))}
@@ -639,7 +639,7 @@ export default function ExperiencePage() {
                   onChange={(event) => setDraft((previous) => ({ ...previous, endYear: Number(event.target.value) }))}
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm outline-none focus:border-lion-gold disabled:opacity-40"
                 >
-                  {yearOptions.map((year) => <option key={year} value={year} className="text-black">{year}–{year + 1}</option>)}
+                  {yearOptions.map((year) => <option key={year} value={year} className="bg-lion-card text-lion-cream">{year}–{year + 1}</option>)}
                 </select>
               </div>
             </div>
@@ -662,9 +662,9 @@ export default function ExperiencePage() {
                 onChange={(event) => setDraft((previous) => ({ ...previous, visibility: event.target.value as ExperienceVisibility }))}
                 className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm outline-none focus:border-lion-gold"
               >
-                <option value="public" className="text-black">公開</option>
-                <option value="members" className="text-black">會員可見</option>
-                <option value="only-me" className="text-black">僅自己</option>
+                <option value="public" className="bg-lion-card text-lion-cream">公開</option>
+                <option value="members" className="bg-lion-card text-lion-cream">會員可見</option>
+                <option value="only-me" className="bg-lion-card text-lion-cream">僅自己</option>
               </select>
             </div>
 
@@ -684,7 +684,7 @@ export default function ExperiencePage() {
 
             <div className="flex gap-2">
               <button type="button" onClick={closeForm} className="flex-1 rounded-xl bg-white/10 py-2.5 text-sm text-lion-cream/70">取消</button>
-              <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-lion-gold py-2.5 text-sm font-semibold text-lion-navyDeep disabled:opacity-50">
+              <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-lion-action py-2.5 text-sm font-semibold text-lion-navyDeep disabled:opacity-50">
                 {saving ? "儲存中…" : "儲存資歷"}
               </button>
             </div>
@@ -710,10 +710,10 @@ export default function ExperiencePage() {
           <div className="flex flex-col gap-3">
             {sortedExperiences.map((experience) => (
               <article key={experience.id} className="relative rounded-2xl bg-lion-card border border-white/[0.06] p-4 ml-3">
-                <span className="absolute -left-[22px] top-5 w-3 h-3 rounded-full bg-lion-gold border-[3px] border-lion-navyDeep" />
+                <span className="absolute -left-[22px] top-5 w-3 h-3 rounded-full bg-lion-action border-[3px] border-lion-navyDeep" />
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="inline-flex rounded-lg bg-[#173d78] px-2.5 py-1 text-xs font-medium text-lion-cream mb-2">
+                    <p className="inline-flex rounded-lg bg-[#173d78] px-2.5 py-1 text-xs font-medium text-[#F3F1EA] mb-2">
                       {formatLionsYear(experience)}
                     </p>
                     <h3 className="font-semibold">{experience.positionName}</h3>
@@ -726,7 +726,7 @@ export default function ExperiencePage() {
                     </p>
                   </div>
                   {experience.isCurrent && (
-                    <span className="shrink-0 rounded-full bg-lion-gold text-lion-navyDeep px-2 py-1 text-[10px] font-semibold">現任</span>
+                    <span className="shrink-0 rounded-full bg-lion-action text-lion-navyDeep px-2 py-1 text-[10px] font-semibold">現任</span>
                   )}
                 </div>
 

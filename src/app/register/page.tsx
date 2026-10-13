@@ -146,8 +146,8 @@ function RegisterForm() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#eef0f4] flex justify-center">
-      <div className="w-full max-w-[480px] min-h-screen bg-lion-navyDeep text-lion-cream flex flex-col px-6 py-10">
+    <div className="app-canvas w-full bg-lion-canvas flex justify-center">
+      <div className="w-full max-w-[480px] app-frame auth-frame bg-lion-page text-lion-cream flex flex-col px-6 py-10">
         <div className="flex items-center gap-3 mb-8">
           <span className="w-9 h-9 rounded-full bg-white flex items-center justify-center p-1 shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -191,11 +191,11 @@ function RegisterForm() {
                 onChange={(e) => setOrganizationId(e.target.value)}
                 className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-3 text-sm outline-none focus:border-lion-gold"
               >
-                <option value="" className="text-black">
+                <option value="" className="bg-lion-card text-lion-cream">
                   請選擇分會
                 </option>
                 {organizations.map((o) => (
-                  <option key={o.id} value={o.id} className="text-black">
+                  <option key={o.id} value={o.id} className="bg-lion-card text-lion-cream">
                     {o.name}
                   </option>
                 ))}
@@ -220,7 +220,7 @@ function RegisterForm() {
 
             <button
               type="submit"
-              className="mt-2 w-full rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-3 hover:bg-lion-goldLight transition-colors"
+              className="mt-2 w-full rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-3 hover:bg-lion-actionHover transition-colors"
             >
               下一步
             </button>
@@ -289,7 +289,7 @@ function RegisterForm() {
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
                 >
                   {memberTitleOptions.map((t) => (
-                    <option key={t} value={t} className="text-black">
+                    <option key={t} value={t} className="bg-lion-card text-lion-cream">
                       {t}
                     </option>
                   ))}
@@ -348,7 +348,7 @@ function RegisterForm() {
                       onClick={() => toggleTag(tag)}
                       className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                         active
-                          ? "bg-lion-gold text-lion-navyDeep border-lion-gold"
+                          ? "bg-lion-action text-lion-navyDeep border-lion-gold"
                           : "bg-white/5 text-lion-cream/60 border-white/15"
                       }`}
                     >
@@ -383,7 +383,7 @@ function RegisterForm() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-3 text-sm hover:bg-lion-goldLight transition-colors disabled:opacity-60"
+                className="flex-1 rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-3 text-sm hover:bg-lion-actionHover transition-colors disabled:opacity-60"
               >
                 {submitting ? "送出中..." : "送出申請"}
               </button>
@@ -407,7 +407,7 @@ function RegisterForm() {
             </p>
             <button
               onClick={() => router.push("/login")}
-              className="mt-4 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-3 px-8 hover:bg-lion-goldLight transition-colors"
+              className="mt-4 rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-3 px-8 hover:bg-lion-actionHover transition-colors"
             >
               返回登入頁
             </button>

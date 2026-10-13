@@ -110,7 +110,7 @@ export default function FriendQrScanner({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-5" role="dialog" aria-modal="true">
+    <div className="modal-safe fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-5" role="dialog" aria-modal="true">
       <div className="w-full max-w-[380px] rounded-2xl bg-lion-card border border-white/10 p-5">
         <div className="mb-4 text-center">
           <p className="font-semibold mb-1">掃描好友 QR Code</p>
@@ -123,7 +123,7 @@ export default function FriendQrScanner({
             className="w-full min-h-[280px] [&_video]:min-h-[280px] [&_video]:object-cover"
           />
           {status !== "active" && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/75 px-6 text-center text-xs text-lion-cream/70">
+            <div className="theme-brand-panel absolute inset-0 flex items-center justify-center bg-black/75 px-6 text-center text-xs text-lion-cream/70">
               {status === "starting" && "正在開啟相機…"}
               {status === "processing" && "正在辨識…"}
               {status === "error" && error}
@@ -131,7 +131,7 @@ export default function FriendQrScanner({
           )}
         </div>
 
-        <label className="mb-2 flex w-full cursor-pointer items-center justify-center rounded-xl bg-white/10 py-2.5 text-sm font-medium text-lion-cream">
+        <label className="mb-2 flex min-h-12 w-full cursor-pointer items-center justify-center rounded-xl bg-white/10 py-2.5 text-sm font-medium text-lion-cream">
           從相簿選擇 QR 圖片
           <input
             type="file"

@@ -89,7 +89,7 @@ export default function MemberProfilePage() {
       <div className="px-5 pb-8 pt-6">
         <button onClick={() => router.back()} className="mb-5 text-sm text-lion-muted">← 返回</button>
 
-        <section className="mb-5 rounded-3xl border border-lion-gold/25 bg-gradient-to-br from-[#19264a] via-lion-navyLight to-[#10172b] p-5 text-center">
+        <section className="theme-brand-panel mb-5 rounded-3xl border border-lion-gold/25 bg-gradient-to-br from-[#19264a] via-lion-navyLight to-[#10172b] p-5 text-center">
           <div className="mx-auto mb-3 w-fit">
             <Avatar name={member.name} color={colorFromId(member.id)} imageUrl={member.photoUrl} size={84} />
           </div>

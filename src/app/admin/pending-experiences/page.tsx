@@ -122,7 +122,7 @@ export default function PendingExperiencesPage() {
                 <button
                   onClick={() => respond(e.id, "verify")}
                   disabled={busyId === e.id}
-                  className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-2 text-sm disabled:opacity-50"
+                  className="flex-1 rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-2 text-sm disabled:opacity-50"
                 >
                   核實
                 </button>

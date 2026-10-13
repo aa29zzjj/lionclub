@@ -15,7 +15,7 @@ export default function QrModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-8"
+      className="modal-safe fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-8"
       onClick={onClose}
     >
       <div
@@ -29,7 +29,7 @@ export default function QrModal({
         </div>
         <button
           onClick={onClose}
-          className="w-full rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-2.5 text-sm"
+          className="min-h-12 w-full rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-2.5 text-sm"
         >
           關閉
         </button>

@@ -98,7 +98,7 @@ export default function NotificationsPage() {
           <h1 className="text-xl font-bold">活動通知</h1>
           <button
             onClick={() => setComposing(true)}
-            className="text-xs font-medium bg-lion-gold text-lion-navyDeep px-3 py-1.5 rounded-full"
+            className="text-xs font-medium bg-lion-action text-lion-navyDeep px-3 py-1.5 rounded-full"
           >
             + 發送通知
           </button>
@@ -143,7 +143,7 @@ export default function NotificationsPage() {
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-lion-cream outline-none focus:border-lion-gold"
                 >
                   {events.map((ev) => (
-                    <option key={ev.id} value={ev.id} className="text-black">
+                    <option key={ev.id} value={ev.id} className="bg-lion-card text-lion-cream">
                       {ev.title}（{new Date(ev.startAt).toLocaleDateString("zh-TW")}）
                     </option>
                   ))}
@@ -175,7 +175,7 @@ export default function NotificationsPage() {
                       <span className="flex-1 text-sm">{f.name}</span>
                       <span
                         className={`w-5 h-5 rounded-full border flex items-center justify-center text-[11px] ${
-                          isSelected ? "bg-lion-gold border-lion-gold text-lion-navyDeep" : "border-white/30"
+                          isSelected ? "bg-lion-action border-lion-gold text-lion-navyDeep" : "border-white/30"
                         }`}
                       >
                         {isSelected ? "✓" : ""}
@@ -209,7 +209,7 @@ export default function NotificationsPage() {
               <button
                 onClick={handleSend}
                 disabled={(recipientType === "selected" && selected.length === 0) || events.length === 0}
-                className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-2.5 text-sm disabled:opacity-40"
+                className="flex-1 rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-2.5 text-sm disabled:opacity-40"
               >
                 {recipientType === "organization" ? "通知整個分會" : `發送給 ${selected.length} 位好友`}
               </button>

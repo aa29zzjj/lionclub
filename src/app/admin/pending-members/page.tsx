@@ -148,7 +148,7 @@ export default function PendingMembersPage() {
                 <button
                   onClick={() => respond(m.id, "approve")}
                   disabled={busyId === m.id}
-                  className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-2 text-sm disabled:opacity-50"
+                  className="flex-1 rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-2 text-sm disabled:opacity-50"
                 >
                   核准
                 </button>

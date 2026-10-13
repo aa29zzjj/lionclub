@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
+import ThemeSelector from "@/components/ThemeSelector";
+import { CalendarIcon, ChevronRightIcon, PeopleIcon, QrIcon, UserIcon } from "@/components/icons";
 import { memberTitleOptions, tagOptions } from "@/lib/mock-data";
 import { colorFromId } from "@/lib/avatar-color";
 import { calculateLionYears, formatJoinDate } from "@/lib/experience-data";
@@ -26,12 +28,28 @@ type Me = {
   adminRoles: { role: string }[];
 };
 
+const adminToolRoles = [
+  "CLUB_OFFICER",
+  "CLUB_VICE_PRESIDENT",
+  "CLUB_PRESIDENT",
+  "CLUB_FINANCE",
+  "ZONE_ADMIN",
+  "DISTRICT_ADMIN",
+  "MULTIDISTRICT_ADMIN",
+  "SUPER_ADMIN",
+];
+
+const roleManagerRoles = ["CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
+
 export default function ProfilePage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [focusField, setFocusField] = useState<"phone" | "birthday" | null>(null);
   const [editing, setEditing] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -45,17 +63,20 @@ export default function ProfilePage() {
   const [toast, setToast] = useState("");
 
   function loadMe() {
+    setLoadError("");
     return fetch("/api/me")
       .then(async (res) => {
         if (res.status === 401) {
           router.push("/login");
           return null;
         }
+        if (!res.ok) throw new Error("個人資料暫時無法載入，請稍後再試");
         return res.json();
       })
       .then((data: Me | null) => {
         if (data) setMe(data);
-      });
+      })
+      .catch(() => setLoadError("連線暫時中斷，請確認網路後重試"));
   }
 
   useEffect(() => {
@@ -65,7 +86,11 @@ export default function ProfilePage() {
 
   const lionYears = me?.joinYear ? calculateLionYears(String(me.joinYear)) : null;
 
-  function startEditing() {
+  useEffect(() => {
+    if (editing && focusField) document.getElementById(`profile-${focusField}`)?.focus();
+  }, [editing, focusField]);
+
+  function startEditing(field?: "phone" | "birthday") {
     if (!me) return;
     setAvatarPreview(me.photoUrl);
     setAvatarFile(null);
@@ -76,6 +101,7 @@ export default function ProfilePage() {
     setBirthday(me.birthday ? me.birthday.slice(0, 10) : "");
     setBio(me.bio ?? "");
     setTags(me.tags.map((t) => t.name));
+    setFocusField(field ?? null);
     setEditing(true);
   }
 
@@ -97,45 +123,61 @@ export default function ProfilePage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    let photoUrl = me?.photoUrl ?? null;
-    if (avatarFile) {
-      const signResponse = await fetch("/api/me/avatar-upload", {
-        method: "POST",
+    if (saving) return;
+    setSaving(true);
+    setToast("");
+    try {
+      let photoUrl = me?.photoUrl ?? null;
+      if (avatarFile) {
+        const signResponse = await fetch("/api/me/avatar-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contentType: avatarFile.type, size: avatarFile.size }),
+        });
+        const signResult = await signResponse.json();
+        if (!signResponse.ok) {
+          setToast(signResult.error ?? "無法準備大頭貼上傳");
+          return;
+        }
+        const uploadResponse = await fetch(signResult.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": avatarFile.type },
+          body: avatarFile,
+        });
+        if (!uploadResponse.ok) {
+          setToast("大頭貼上傳失敗，請稍後再試");
+          return;
+        }
+        photoUrl = signResult.photoUrl;
+      }
+      const res = await fetch("/api/me", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contentType: avatarFile.type, size: avatarFile.size }),
+        body: JSON.stringify({ name, title, email, phone, bio, tags, photoUrl: photoUrl ?? "", birthday }),
       });
-      const signResult = await signResponse.json();
-      if (!signResponse.ok) {
-        setToast(signResult.error ?? "無法準備大頭貼上傳");
+      if (!res.ok) {
+        const result = await res.json().catch(() => ({}));
+        setToast(result.error ?? "更新失敗，請再試一次");
         return;
       }
-      const uploadResponse = await fetch(signResult.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": avatarFile.type },
-        body: avatarFile,
-      });
-      if (!uploadResponse.ok) {
-        setToast("大頭貼上傳失敗，請稍後再試");
-        return;
-      }
-      photoUrl = signResult.photoUrl;
-    }
-    const res = await fetch("/api/me", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, title, email, phone, bio, tags, photoUrl, birthday }),
-    });
-    if (!res.ok) {
-      setToast("更新失敗，請再試一次");
+      const updated = await res.json();
+      setMe(updated);
+      setAvatarFile(null);
+      setEditing(false);
+      setToast("個人資料已更新");
       setTimeout(() => setToast(""), 2500);
-      return;
+    } catch {
+      setToast("連線暫時中斷，資料尚未儲存，請再試一次");
+    } finally {
+      setSaving(false);
     }
-    const updated = await res.json();
-    setMe(updated);
-    setAvatarFile(null);
-    setEditing(false);
-    setToast("個人資料已更新");
-    setTimeout(() => setToast(""), 2500);
+  }
+
+  if (loadError && !me) {
+    return <AppShell><div className="px-5 py-16 text-center">
+      <p role="alert" className="text-sm text-lion-muted">{loadError}</p>
+      <button type="button" onClick={() => { setLoading(true); void loadMe().finally(() => setLoading(false)); }} className="mt-4 min-h-12 rounded-xl bg-lion-action px-5 text-sm font-semibold text-lion-navyDeep">重新載入</button>
+    </div></AppShell>;
   }
 
   if (loading || !me) {
@@ -148,6 +190,41 @@ export default function ProfilePage() {
     );
   }
 
+  const roleNames = new Set(me.adminRoles.map((adminRole) => adminRole.role));
+  const hasAdminTools = adminToolRoles.some((roleName) => roleNames.has(roleName));
+  const canManageRoles = roleManagerRoles.some((roleName) => roleNames.has(roleName));
+  const joinDate = formatJoinDate(me.joinYear, me.joinMonth);
+  const adminTools = [
+    {
+      href: "/admin/invites",
+      title: "入會邀請",
+      description: "產生本分會的入會 QR 與 PIN",
+      Icon: QrIcon,
+      visible: hasAdminTools,
+    },
+    {
+      href: "/admin/pending-members",
+      title: "審核新會員",
+      description: "核准或拒絕待審核的會員申請",
+      Icon: UserIcon,
+      visible: hasAdminTools,
+    },
+    {
+      href: "/admin/pending-experiences",
+      title: "審核會員資歷",
+      description: "核實會員自行填寫的任職紀錄",
+      Icon: CalendarIcon,
+      visible: hasAdminTools,
+    },
+    {
+      href: "/admin/roles",
+      title: "管理系統權限",
+      description: "授予或撤銷分會幹部權限",
+      Icon: PeopleIcon,
+      visible: canManageRoles,
+    },
+  ].filter((tool) => tool.visible);
+
   return (
     <AppShell>
       <div className="px-5 pt-6 pb-6">
@@ -155,8 +232,8 @@ export default function ProfilePage() {
           <h1 className="text-xl font-bold">我的檔案</h1>
           {!editing && (
             <button
-              onClick={startEditing}
-              className="text-xs font-medium bg-lion-gold text-lion-navyDeep px-3 py-1.5 rounded-full"
+              onClick={() => startEditing()}
+              className="min-h-12 text-xs font-medium bg-lion-action text-lion-navyDeep px-3 py-1.5 rounded-full"
             >
               編輯我的檔案
             </button>
@@ -164,7 +241,7 @@ export default function ProfilePage() {
         </div>
 
         {toast && (
-          <div className="mb-4 rounded-xl bg-lion-gold/15 border border-lion-gold/40 text-lion-gold text-xs px-3 py-2">
+          <div role="status" className="mb-4 rounded-xl bg-lion-gold/15 border border-lion-gold/40 text-lion-gold text-xs px-3 py-2">
             {toast}
           </div>
         )}
@@ -181,40 +258,48 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="rounded-2xl bg-lion-card border border-white/[0.06] p-4 flex flex-col gap-3 text-sm">
-              <div className="flex justify-between">
+            <div className="rounded-2xl bg-lion-card border border-lion-border px-4 text-sm divide-y divide-white/[0.06]">
+              <div className="flex min-h-11 items-center justify-between gap-4 py-2.5">
                 <span className="text-lion-muted">Email</span>
-                <span>{me.email}</span>
+                <span className="min-w-0 truncate text-right">{me.email}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex min-h-11 items-center justify-between gap-4 py-2.5">
                 <span className="text-lion-muted">手機</span>
-                <span>{me.phone || "—"}</span>
+                {me.phone ? <span>{me.phone}</span> : (
+                  <button type="button" aria-label="補填手機" onClick={() => startEditing("phone")} className="min-h-12 text-xs font-medium text-lion-gold">尚未填寫 · 補上</button>
+                )}
               </div>
-              <div className="flex justify-between">
+              <div className="flex min-h-11 items-center justify-between gap-4 py-2.5">
                 <span className="text-lion-muted">生日</span>
-                <span>{me.birthday ? new Date(me.birthday).toLocaleDateString("zh-TW") : "—"}</span>
+                {me.birthday ? <span>{new Date(me.birthday).toLocaleDateString("zh-TW")}</span> : (
+                  <button type="button" aria-label="補填生日" onClick={() => startEditing("birthday")} className="min-h-12 text-xs font-medium text-lion-gold">尚未填寫 · 補上</button>
+                )}
               </div>
-              <div className="flex justify-between">
+              <div className="flex min-h-11 items-center justify-between gap-4 py-2.5">
                 <span className="text-lion-muted">會員編號</span>
-                <span>{me.memberNo || "—"}</span>
+                <span>{me.memberNo || "待系統編號"}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex min-h-11 items-center justify-between gap-4 py-2.5">
                 <span className="text-lion-muted">入會年／獅齡</span>
-                <span>{formatJoinDate(me.joinYear, me.joinMonth) ?? "—"}／{lionYears ?? "—"} 年</span>
+                <span className={joinDate ? "" : "text-xs text-lion-muted"}>
+                  {joinDate ? `${joinDate}／${lionYears ?? "—"} 年` : "待幹部補登"}
+                </span>
               </div>
             </div>
 
             <Link
               href="/profile/experience"
-              className="rounded-2xl bg-gradient-to-br from-lion-navyLight to-[#243968] border border-lion-gold/25 p-4 flex items-center justify-between"
+              className="theme-brand-panel rounded-2xl bg-gradient-to-br from-lion-navyLight to-[#243968] border border-lion-gold/25 p-4 flex items-center justify-between"
             >
               <div>
                 <p className="text-[11px] tracking-[0.18em] text-lion-gold mb-1">LIONS EXPERIENCE</p>
                 <p className="font-semibold">獅子會資歷</p>
                 <p className="text-xs text-lion-muted mt-1">查看任職紀錄與會籍資歷</p>
               </div>
-              <span className="w-9 h-9 rounded-full bg-lion-gold text-lion-navyDeep flex items-center justify-center text-lg">→</span>
+              <span className="w-9 h-9 rounded-full bg-lion-action text-lion-navyDeep flex items-center justify-center text-lg">→</span>
             </Link>
+
+            <ThemeSelector />
 
             {me.tags.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -232,6 +317,29 @@ export default function ProfilePage() {
                 <p className="text-sm text-lion-cream/70 leading-relaxed">{me.bio}</p>
               </div>
             )}
+
+            {adminTools.length > 0 && (
+              <section className="overflow-hidden rounded-2xl border border-lion-border bg-lion-card">
+                <div className="border-b border-lion-border px-4 py-3">
+                  <p className="text-[11px] font-medium tracking-[0.14em] text-lion-gold">ADMIN TOOLS</p>
+                  <h2 className="mt-0.5 text-sm font-semibold">幹部工具</h2>
+                </div>
+                <div className="divide-y divide-white/[0.06]">
+                  {adminTools.map(({ href, title, description, Icon }) => (
+                    <Link key={href} href={href} className="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors hover:bg-lion-soft">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-lion-gold/10 text-lion-gold">
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium">{title}</span>
+                        <span className="mt-0.5 block text-xs text-lion-muted">{description}</span>
+                      </span>
+                      <ChevronRightIcon className="h-4 w-4 shrink-0 text-lion-muted" />
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         )}
 
@@ -240,6 +348,7 @@ export default function ProfilePage() {
             <div className="flex flex-col items-center">
               <button
                 type="button"
+                aria-label="選擇大頭貼"
                 onClick={() => fileInputRef.current?.click()}
                 className="relative w-24 h-24 rounded-full bg-white/10 border-2 border-dashed border-lion-gold/50 flex items-center justify-center overflow-hidden"
               >
@@ -260,30 +369,39 @@ export default function ProfilePage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="text-xs text-lion-muted mb-1 block">姓名</label>
+                <label htmlFor="profile-name" className="text-xs text-lion-muted mb-1 block">姓名</label>
                 <input
+                  id="profile-name"
+                  autoComplete="name"
+                  required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
                 />
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-lion-muted mb-1 block">職稱／身分</label>
+                <label htmlFor="profile-title" className="text-xs text-lion-muted mb-1 block">職稱／身分</label>
                 <select
+                  id="profile-title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
                 >
+                  <option value="" className="bg-lion-card text-lion-cream">尚未設定</option>
+                  {title && !memberTitleOptions.includes(title) && <option value={title} className="bg-lion-card text-lion-cream">{title}</option>}
                   {memberTitleOptions.map((t) => (
-                    <option key={t} value={t} className="text-black">
+                    <option key={t} value={t} className="bg-lion-card text-lion-cream">
                       {t}
                     </option>
                   ))}
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-lion-muted mb-1 block">Email</label>
+                <label htmlFor="profile-email" className="text-xs text-lion-muted mb-1 block">Email</label>
                 <input
+                  id="profile-email"
+                  autoComplete="email"
+                  required
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -291,16 +409,21 @@ export default function ProfilePage() {
                 />
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-lion-muted mb-1 block">手機</label>
+                <label htmlFor="profile-phone" className="text-xs text-lion-muted mb-1 block">手機</label>
                 <input
+                  id="profile-phone"
+                  type="tel"
+                  autoComplete="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
                 />
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-lion-muted mb-1 block">生日</label>
+                <label htmlFor="profile-birthday" className="text-xs text-lion-muted mb-1 block">生日</label>
                 <input
+                  id="profile-birthday"
+                  autoComplete="bday"
                   type="date"
                   value={birthday}
                   onChange={(e) => setBirthday(e.target.value)}
@@ -321,7 +444,7 @@ export default function ProfilePage() {
                       onClick={() => toggleTag(tag)}
                       className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                         active
-                          ? "bg-lion-gold text-lion-navyDeep border-lion-gold"
+                          ? "bg-lion-action text-lion-navyDeep border-lion-gold"
                           : "bg-white/5 text-lion-cream/60 border-white/15"
                       }`}
                     >
@@ -333,8 +456,9 @@ export default function ProfilePage() {
             </div>
 
             <div>
-              <label className="text-xs text-lion-muted mb-1 block">關於我</label>
+              <label htmlFor="profile-bio" className="text-xs text-lion-muted mb-1 block">關於我</label>
               <textarea
+                id="profile-bio"
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 rows={3}
@@ -346,15 +470,17 @@ export default function ProfilePage() {
               <button
                 type="button"
                 onClick={() => setEditing(false)}
-                className="flex-1 rounded-xl bg-white/10 text-lion-cream/70 font-medium py-2.5 text-sm"
+                disabled={saving}
+                className="min-h-12 flex-1 rounded-xl bg-white/10 text-lion-cream/70 font-medium py-2.5 text-sm disabled:opacity-50"
               >
                 取消
               </button>
               <button
                 type="submit"
-                className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-2.5 text-sm"
+                disabled={saving}
+                className="min-h-12 flex-1 rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-2.5 text-sm disabled:opacity-50"
               >
-                儲存變更
+                {saving ? "儲存中…" : "儲存變更"}
               </button>
             </div>
           </form>
@@ -362,34 +488,13 @@ export default function ProfilePage() {
 
         {!editing && (
           <>
-            <Link
-              href="/admin/invites"
-              className="mt-8 block w-full text-center text-xs text-lion-gold"
-            >
-              幹部專用：產生入會邀請 QR
-            </Link>
-            {me.adminRoles.some((adminRole) => ["CLUB_OFFICER", "CLUB_VICE_PRESIDENT", "CLUB_PRESIDENT", "CLUB_FINANCE", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"].includes(adminRole.role)) && (
-              <>
-                <Link href="/admin/pending-members" className="mt-3 block w-full text-center text-xs text-lion-gold">
-                  幹部專用：審核新會員
-                </Link>
-                <Link href="/admin/pending-experiences" className="mt-3 block w-full text-center text-xs text-lion-gold">
-                  幹部專用：審核會員資歷
-                </Link>
-              </>
-            )}
-            {me.adminRoles.some((adminRole) => ["CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"].includes(adminRole.role)) && (
-              <Link href="/admin/roles" className="mt-3 block w-full text-center text-xs text-lion-gold">
-                會長／區幹部：管理系統權限
-              </Link>
-            )}
             <button
               onClick={async () => {
                 await fetch("/api/auth/logout", { method: "POST" });
                 router.push("/login");
                 router.refresh();
               }}
-              className="mt-3 w-full text-center text-xs text-lion-muted"
+              className="mt-5 w-full rounded-xl py-2.5 text-center text-xs text-lion-muted hover:bg-lion-soft"
             >
               登出
             </button>

@@ -40,8 +40,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#e9ebf1] flex justify-center">
-      <div className="w-full max-w-[480px] min-h-screen bg-lion-navyDeep text-lion-cream flex flex-col justify-center px-8 py-12">
+    <div className="app-canvas w-full bg-lion-canvas flex justify-center">
+      <div className="w-full max-w-[480px] app-frame auth-frame bg-lion-page text-lion-cream flex flex-col justify-center px-8 py-12">
         <div className="flex flex-col items-center mb-10">
           <div className="w-20 h-20 rounded-full bg-white border-2 border-lion-gold flex items-center justify-center p-2 mb-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -85,7 +85,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="mt-2 w-full rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-3 hover:bg-lion-goldLight transition-colors disabled:opacity-60"
+            className="mt-2 w-full rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-3 hover:bg-lion-actionHover transition-colors disabled:opacity-60"
           >
             {loading ? "登入中..." : "登入"}
           </button>

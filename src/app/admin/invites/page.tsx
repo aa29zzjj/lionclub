@@ -117,7 +117,7 @@ export default function AdminInvitesPage() {
         <button
           onClick={handleCreate}
           disabled={creating}
-          className="w-full rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-3 text-sm mb-4 disabled:opacity-60"
+          className="w-full rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-3 text-sm mb-4 disabled:opacity-60"
         >
           {creating ? "產生中..." : "+ 產生新的邀請 QR"}
         </button>
