@@ -305,16 +305,21 @@ export default function ProfilePage() {
         )}
 
         {!me.emailVerifiedAt && (
-          <section className="mb-5 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4" aria-label="Email 驗證狀態">
-            <h2 className="text-sm font-semibold text-amber-200">Email 尚未驗證</h2>
-            <p className="mt-1 text-xs leading-relaxed text-amber-200/80">請至 {me.email} 收取驗證信並完成驗證，以確保帳號安全。</p>
-            <button
-              onClick={resendVerification}
-              disabled={resendingVerification}
-              className="mt-2 text-xs font-medium text-amber-200 underline disabled:opacity-50"
-            >
-              {resendingVerification ? "寄送中…" : "重新寄送驗證信"}
-            </button>
+          <section className="mb-5 rounded-2xl border-2 border-amber-400/60 bg-amber-400/10 p-4 shadow-sm" aria-label="Email 驗證狀態">
+            <div className="flex items-start gap-2.5">
+              <span className="mt-0.5 shrink-0 text-lg" aria-hidden="true">⚠️</span>
+              <div>
+                <h2 className="text-sm font-bold text-amber-200">Email 尚未驗證</h2>
+                <p className="mt-1 text-xs leading-relaxed text-amber-200/90">請至 {me.email} 收取驗證信並完成驗證，以確保帳號安全。</p>
+                <button
+                  onClick={resendVerification}
+                  disabled={resendingVerification}
+                  className="mt-2 text-xs font-semibold text-amber-200 underline underline-offset-2 disabled:opacity-50"
+                >
+                  {resendingVerification ? "寄送中…" : "重新寄送驗證信"}
+                </button>
+              </div>
+            </div>
           </section>
         )}
 

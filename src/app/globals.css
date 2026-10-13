@@ -138,6 +138,9 @@ textarea {
 
 :root[data-theme="light"] .text-emerald-300 { color: #067647; }
 :root[data-theme="light"] .text-amber-300\/80 { color: #8B6715; }
+:root[data-theme="light"] :is(.text-amber-200, .text-amber-200\/80) { color: #8B6715; }
+:root[data-theme="light"] .border-amber-400\/30 { border-color: rgb(139 103 21 / 0.35); }
+:root[data-theme="light"] .bg-amber-400\/10 { background-color: rgb(139 103 21 / 0.08); }
 
 /* Secondary copy should stay readable rather than fade into a light surface. */
 :root[data-theme="light"] :is(.text-lion-cream\/25, .text-lion-cream\/30, .text-lion-cream\/40, .text-lion-cream\/50, .text-lion-cream\/55, .text-lion-cream\/60, .text-lion-cream\/70) {
