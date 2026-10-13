@@ -34,10 +34,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     select: {
       id: true,
       registeredAt: true,
+      checkedInAt: true,
       member: {
         select: {
           id: true,
           name: true,
+          nickname: true,
           email: true,
           phone: true,
           title: true,

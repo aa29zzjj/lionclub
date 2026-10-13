@@ -104,6 +104,7 @@ model Member {
   friendRequestsReceived Friendship[] @relation("FriendshipAddressee")
 
   eventRegistrations EventRegistration[]
+  checkedInRegistrations EventRegistration[] @relation("EventCheckedInBy")
   createdEvents       Event[]              @relation("EventCreatedBy")
 
   sentNotifications      EventNotification[]          @relation("NotificationSender")
@@ -366,6 +367,9 @@ model EventRegistration {
   member       Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
   status       String   @default("REGISTERED")
   registeredAt DateTime @default(now())
+  checkedInAt  DateTime?
+  checkedInById String?
+  checkedInBy   Member?  @relation("EventCheckedInBy", fields: [checkedInById], references: [id], onDelete: SetNull)
 
   @@unique([eventId, memberId])
 }

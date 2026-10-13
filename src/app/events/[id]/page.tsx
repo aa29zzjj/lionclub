@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
+import FriendQrScanner from "@/components/FriendQrScanner";
 import { PinIcon } from "@/components/icons";
 import { colorFromId } from "@/lib/avatar-color";
 
@@ -26,9 +27,11 @@ type EventDetail = {
 type Registration = {
   id: string;
   registeredAt: string;
+  checkedInAt: string | null;
   member: {
     id: string;
     name: string;
+    nickname: string | null;
     email: string | null;
     phone: string | null;
     title: string | null;
@@ -58,6 +61,29 @@ export default function EventDetailPage() {
   const [registrationsLoading, setRegistrationsLoading] = useState(false);
   const [registrationsError, setRegistrationsError] = useState("");
   const [error, setError] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [checkInToast, setCheckInToast] = useState("");
+
+  async function handleCheckInScan(decodedText: string) {
+    setScanning(false);
+    if (!event) return;
+    const res = await fetch(`/api/events/${event.id}/check-in`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ qrValue: decodedText }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      const displayName = data.member?.nickname || data.member?.name || "會員";
+      setCheckInToast(data.alreadyCheckedIn ? `${displayName} 先前已報到過` : `${displayName} 報到成功`);
+      setRegistrations((prev) =>
+        prev.map((r) => (r.member.id === data.member?.id ? { ...r, checkedInAt: data.checkedInAt } : r))
+      );
+    } else {
+      setCheckInToast(data.error ?? "報到失敗，請再試一次");
+    }
+    setTimeout(() => setCheckInToast(""), 3000);
+  }
 
   function loadForm(nextEvent: EventDetail) {
     const date = new Date(nextEvent.startAt);
@@ -348,6 +374,15 @@ export default function EventDetailPage() {
               </span>
             </div>
 
+            <button
+              type="button"
+              onClick={() => setScanning(true)}
+              className="mt-3 w-full rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-2.5 text-sm"
+            >
+              掃會員證報到
+            </button>
+            {checkInToast && <p className="mt-2 text-center text-xs text-lion-gold">{checkInToast}</p>}
+
             {registrationsLoading ? (
               <p className="py-8 text-center text-sm text-lion-muted">讀取名單中…</p>
             ) : registrationsError ? (
@@ -366,12 +401,19 @@ export default function EventDetailPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">{member.name}</p>
+                            <p className="truncate text-sm font-medium">{member.nickname || member.name}</p>
                             <p className="truncate text-xs text-lion-muted">{member.organization.name}{member.title ? ` · ${member.title}` : ""}</p>
                           </div>
-                          <span className="shrink-0 text-[10px] text-lion-muted">
-                            {new Date(registration.registeredAt).toLocaleDateString("zh-TW")}
-                          </span>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <span className="text-[10px] text-lion-muted">
+                              {new Date(registration.registeredAt).toLocaleDateString("zh-TW")}
+                            </span>
+                            {registration.checkedInAt ? (
+                              <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] text-emerald-300">已報到</span>
+                            ) : (
+                              <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-lion-muted">未報到</span>
+                            )}
+                          </div>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
                           {member.phone && <a href={`tel:${member.phone}`} className="text-lion-gold">{member.phone}</a>}
@@ -401,6 +443,15 @@ export default function EventDetailPage() {
           通知好友一起參加 →
         </Link>
       </div>
+
+      {scanning && (
+        <FriendQrScanner
+          title="掃會員證報到"
+          subtitle="將會員的數位會員證 QR 對準掃描框"
+          onScan={(decodedText) => void handleCheckInScan(decodedText)}
+          onClose={() => setScanning(false)}
+        />
+      )}
     </AppShell>
   );
 }

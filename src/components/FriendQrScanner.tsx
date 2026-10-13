@@ -8,9 +8,13 @@ type ScannerStatus = "starting" | "active" | "processing" | "error";
 export default function FriendQrScanner({
   onScan,
   onClose,
+  title = "掃描好友 QR Code",
+  subtitle = "將對方的會員 QR 對準掃描框",
 }: {
   onScan: (decodedText: string) => void;
   onClose: () => void;
+  title?: string;
+  subtitle?: string;
 }) {
   const scannerElementId = `friend-qr-scanner-${useId().replace(/:/g, "")}`;
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -113,8 +117,8 @@ export default function FriendQrScanner({
     <div className="modal-safe fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-5" role="dialog" aria-modal="true">
       <div className="w-full max-w-[380px] rounded-2xl bg-lion-card border border-white/10 p-5">
         <div className="mb-4 text-center">
-          <p className="font-semibold mb-1">掃描好友 QR Code</p>
-          <p className="text-xs text-lion-muted">將對方的會員 QR 對準掃描框</p>
+          <p className="font-semibold mb-1">{title}</p>
+          <p className="text-xs text-lion-muted">{subtitle}</p>
         </div>
 
         <div className="relative min-h-[280px] overflow-hidden rounded-xl bg-black mb-3">
