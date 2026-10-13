@@ -242,11 +242,11 @@ function RegisterForm() {
               <label htmlFor="register-name" className="mb-1 block text-sm font-medium">姓名</label>
               <input id="register-name" name="name" autoComplete="name" required value={name} onChange={(event) => setName(event.target.value)} placeholder="王小明" className={inputClass} />
             </div>
-            <div>
+            <div className="min-[360px]:col-span-2">
               <label htmlFor="register-birthday" className="mb-1 block text-sm font-medium">生日（選填）</label>
               <input id="register-birthday" name="birthday" type="date" autoComplete="bday" value={birthday} onChange={(event) => setBirthday(event.target.value)} className={inputClass} />
             </div>
-            <div>
+            <div className="min-[360px]:col-span-2">
               <label htmlFor="register-title" className="mb-1 block text-sm font-medium">職稱／身分（選填）</label>
               <select id="register-title" name="title" autoComplete="organization-title" value={title} onChange={(event) => setTitle(event.target.value)} className={inputClass}>
                 <option value="">請選擇</option>
