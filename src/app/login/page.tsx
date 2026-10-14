@@ -113,6 +113,12 @@ export default function LoginPage() {
             掃描邀請 QR Code 加入
           </Link>
         </p>
+
+        <p className="text-center text-xs text-lion-muted mt-4 flex items-center justify-center gap-3">
+          <Link href="/privacy" className="hover:text-lion-gold">隱私權政策</Link>
+          <span aria-hidden="true">·</span>
+          <Link href="/support" className="hover:text-lion-gold">客服／聯絡我們</Link>
+        </p>
       </div>
     </div>
   );
