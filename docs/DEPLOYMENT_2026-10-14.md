@@ -2,17 +2,19 @@
 
 ## 授權與實際狀態
 
-使用者已授權直接推 main、正式資料庫 migration、開啟正式部署。本文件不是再次詢問是否准許部署。
+使用者先前已授權推 main 與正式 migration；2026-10-14 最新決策為：目前無法執行的 AWS／資料庫工作交給 Jerry，修改與 MD 先存 GitHub。因新版依賴新 schema，本輪改存發版分支、不觸發 main 部署；不是撤銷發版授權或再等待使用者登入。
 
 目前已確認：
 
 - GitHub `aa29zzjj/lionclub`（公開 repository）可讀寫，main 基準為 `8962dd40c397a37ebbe91e449a84d05684bfcfc0`；本輪 fetch 無新的 main commit。
 - 倉庫沒有 GitHub Actions workflows、Actions secrets、Actions variables 或 GitHub deployments 記錄，不能假設已有可代跑正式 migration 的 CI。
 - 本機無 AWS shared profile／credential、AWS 環境憑證、正式 `.env` 或正式 DB URL；SDK default credentials provider 未取得身分。
-- AWS Console 顯示未登入；已保留登入頁等待使用者登入。整合搜尋僅找到資料分析用途插件，不是 Amplify／RDS 部署工具；[插件目錄](https://chatgpt.com/plugins)仍可能有其他整合。
+- AWS Console 顯示未登入，沒有適用的已連線 Amplify／RDS 部署管道。本輪不再要求使用者提供 AWS 登入，由 Jerry 在受控環境接續。
 - **尚未執行正式 migration、尚未推 main、尚未重啟／啟用 Amplify 部署。** 不能把本機成功或 Git commit 視為資料庫備份與已上線證據。
 
-因此只先保存本機發版候選。取得對應 AWS 帳號／區域的登入後，接續下方步驟；不需要使用者把金鑰、DB 密碼或私鑰貼在聊天。
+發版候選保存在 `codex/acceptance-fixes-2026-10-14`，功能 commit 為 `0e99138`；GitHub 交接版以該分支最新 HEAD 為準。Jerry 的單一接續入口是 [JERRY_HANDOFF_RELEASE_2026-10-14.md](JERRY_HANDOFF_RELEASE_2026-10-14.md)，更新摘要為 [RELEASE_2026-10-14.md](RELEASE_2026-10-14.md)。不需要在聊天貼金鑰、DB 密碼或私鑰。
+
+手機工程、商店素材與測試 APK 的準備可並行；**新版實際後端必須先 migration 再部署，同版後端通過驗收後才接正式原生 App／送審。** 不以 App Store 或 APK 取代 DB migration，也不保證延後 migration 時新版能運作。
 
 ## 本次上線前追加補強
 
@@ -24,13 +26,13 @@
 - 原有未使用 token 會失效；sessionVersion 使舊登入重登。新欄位、掃表、索引及限制性外鍵仍會持鎖，不保證尖峰零停頓。
 - `.gitignore` 增加環境檔、備份與原生簽章／安裝包排除，避免公開 repository 混入密碼、DB dump、Apple／Android signing material。
 
-## 取得 AWS 存取後的執行順序
+## Jerry 在受控環境接續的執行順序
 
 1. 確認 STS／Console 帳號、區域、Amplify app 與 main branch，網域必須對應 `lionclubsmembership.com`；查明自動部署是否暫停。不把另一個 AWS profile 當正式環境。
 2. 確認 RDS instance、Secrets Manager 中實際 DB target、加密連線及復原能力。執行備份／snapshot，等待狀態 available，記錄 snapshot ARN／時間；Git commit 不代替這一步。備份內容不得進 GitHub。
 3. 選短維護窗口／停寫，記錄 migration history、前置數量與長交易；檢查沒有先前失敗 migration、缺少前置版本或 checksum 改動。不要強制中斷未知業務交易。
 4. 在同版完整 checkout 以已驗證 DB target 執行 `prisma migrate deploy`；不使用 `db push`、`migrate dev`、reset 或 seed。正式密碼由受控執行環境注入，不在終端列印。
-5. 套用後比對 migration checksum、欄位、FK、Member／User／Event／Registration 數量與月份約束；本次 migration 不應降低四類數量。套用失敗時先檢查 DB，不能只憑 CLI 非零就推論所有內容已還原。
+5. 套用後比對 migration checksum、欄位、FK、Member／User／Event／Registration 數量與月份約束；停寫窗口前後四類數量應完全相同，資歷／token 總數也不應減少。preflight 不自動比兩次 JSON，須人工核對；token 失效與舊月份保持空另行確認。套用失敗時先檢查 DB，不能只憑 CLI 非零就推論所有內容已還原。
 6. 推相同候選 commit 到 main；若 main 已前進，先整合及重跑測試，不 force push。確認 Amplify 建置採用正確 commit、部署成功，才恢復流量／自動部署。
 7. 驗收 release SHA、登入／重寄信、QR 註冊、月曆、7 月制資歷、報到、管理範圍與 401／403。使用專用測試資料；實際 SES／S3／相機結果另外記錄，不用模擬結果代簽。
 8. 部署結果回填本文件：備份識別、migration status、候選與正式 SHA、Amplify job ID、網域驗收時間、背景清理工作狀態。

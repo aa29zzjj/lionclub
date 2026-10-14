@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
   "status": "draft",
-  "reviewedOn": "2026-10-13",
+  "ready": false,
+  "reviewedOn": "2026-10-14",
   "locale": "zh-Hant",
   "app": {
     "name": "獅子會 App",
@@ -30,7 +31,7 @@
   "listing": {
     "subtitle": "會員交流、服務活動與資歷管理",
     "promotionalText": "集中管理會員檔案、服務資歷與活動報名，透過會員 QR Code 與獅友建立連結。",
-    "description": "獅子會 App 為會員提供日常交流與服務活動工具。\n\n・會員檔案：管理頭像、聯絡資料、專長與個人介紹。\n・服務資歷：記錄所屬分會、任職組織與獅子年度經歷。\n・獅友交流：搜尋會員、掃描會員 QR Code 加好友，查看好友檔案。\n・活動報名：查看活動資訊、報名與接收站內通知。\n・幹部工具：授權幹部可審核會員與資歷、管理分會權限，並查看活動報名名單。\n・日夜外觀：支援淺色、深色與跟隨系統設定。\n\n本服務需要會員帳號與網路連線。幹部工具依所屬組織及授權顯示；加入分會可能需要邀請與審核。",
+    "description": "獅子會 App 為會員提供日常交流與服務活動工具。\n\n・會員檔案：管理頭像、聯絡資料、專長與個人介紹。\n・服務資歷：記錄所屬分會、任職組織及每年 7 月起算的會籍與幹部任期。\n・獅友交流：搜尋會員、掃描會員 QR Code 加好友，查看好友檔案。\n・活動月曆：切換月份查看活動、報名與接收站內通知。\n・幹部工具：授權幹部可審核會員與資歷、核對分派會籍，並管理活動名單及報到。\n・日夜外觀：支援淺色、深色與跟隨系統設定。\n\n本服務需要會員帳號與網路連線。註冊需共同邀請 QR Code，先開通平台並暫存台科大 AI 分會；正式會籍由授權管理者依名單核對分派。幹部工具依組織範圍及授權顯示。",
     "keywords": "獅子會,獅友,會員,服務,活動,分會,資歷",
     "googlePlayShortDescription": "管理會員檔案與服務資歷、掃描獅友 QR Code、參與分會活動。",
     "category": "SOCIAL_NETWORKING",
@@ -43,17 +44,37 @@
     "version": null,
     "buildNumber": null,
     "nativeArchitecture": null,
+    "appleAccountReportedAvailable": true,
     "appleDeveloperEnrollmentConfirmed": false,
     "appStoreConnectAppCreated": false,
+    "googlePlayAccountCreated": false,
     "googlePlayAccountType": null,
+    "nativeProjectCreated": false,
+    "iosBuildEnvironmentVerified": false,
+    "androidBuildEnvironmentVerified": false,
+    "releaseArtifactGenerated": false,
     "signingConfigured": false,
-    "physicalDeviceVerificationComplete": false
+    "physicalDeviceVerificationComplete": false,
+    "submissionReady": false
+  },
+  "deploymentDependencies": {
+    "status": "pending_jerry",
+    "productionDatabaseMigrationVerified": false,
+    "matchingProductionApiDeploymentVerified": false,
+    "nativeLiveApiAcceptanceComplete": false,
+    "order": [
+      "Jerry 核對目標環境、備份與 migration，先完成同版資料庫更新",
+      "部署相容的同版 API，驗證登入、Session、QR、刪帳與權限",
+      "原生客戶端接同版 API 完成實機端到端驗收",
+      "簽章、商店資料與政策驗收通過後才提交審查"
+    ],
+    "notes": "本次未取得可用正式 AWS 存取，migration 與正式 API 部署交 Jerry 執行及回報。可先準備文件、素材、mock 與原生設計；不可先把依賴新欄位的後端部署到舊 schema，再等待後補 migration。尚無原生工程、完整工具鏈或可發布產物；未提交商店。"
   },
   "review": {
     "demoAccountConfigured": false,
     "credentialsDelivery": "App Store Connect App Review Information；不要將正式審查帳密寫入此 JSON",
     "sampleQrPath": null,
-    "notes": "需提供已審核、可直接登入的獨立審查帳號與第二名合成會員的 QR Code，讓審查人員驗證好友流程。一般會員與幹部權限需清楚說明。",
+    "notes": "尚未提交審查。需建立可直接登入的獨立合成審查帳號與第二名合成會員 QR Code，不能使用正式會員個資或公開舊 demo／短密碼帳號。原生包須接已完成同版 migration 與部署驗收的 API；一般會員及幹部權限需清楚說明。",
     "privacyLabelsReviewed": false,
     "dataSafetyReviewed": false,
     "accountDeletionImplemented": false,

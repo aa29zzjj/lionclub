@@ -2,6 +2,8 @@
 
 日期：2026-10-14。供 Hao、Jerry、Tom 與商店帳號所有人填寫；未知項目保持未定，不捏造法律實體、客服、Bundle ID、Team ID 或驗收狀態。這不是商店提交紀錄，網站部署與正式 migration 由主線另行驗證。
 
+本輪決策：目前無可用正式 AWS 存取，AWS／正式 migration 與相容 API 部署交 Jerry 執行並回報；本機準備與 GitHub 留存不代表正式環境已更新。原生工作可以並行準備，但目前沒有原生專案、完整工具鏈或可發布產物，也尚未送審。
+
 ## 1. 請產品／帳號所有人先提供
 
 | 資料 | 目前值 | 要確認什麼 |
@@ -57,7 +59,22 @@ Google 尺寸依官方素材文件；iOS 1024 母檔是本案準備建議，最�
 
 待使用者授權安裝／設定後，使用 Xcode 26+／iOS 26 SDK、Android Studio 2025.2.1+／SDK 36 與相容 JBR。Capacitor 8 的 iOS 15、Android API 24 是最低裝置基線；SDK 26／target 36 是不同概念。[Apple](https://developer.apple.com/news/upcoming-requirements/)、[Capacitor 環境](https://capacitorjs.com/docs/getting-started/environment-setup)、[Capacitor 8](https://capacitorjs.com/docs/updating/8-0)
 
-## 4. 第一個里程碑：登入與 QR 垂直試作
+## 4. migration 可以後補嗎：準備可並行，上線必須 DB-first
+
+可以等 Jerry 處理正式 migration 的同時，先做商店文案、素材規格、原生登入／導航設計、合成資料與 mock 驗收；這些工作不需碰正式資料庫，也不等於原生實機端到端已通過。
+
+不能先部署會讀寫新欄位／資料表的後端到舊 schema，再把 migration 當作稍後補件。新版 Session、Email Token、刪帳清理與報到歷史等功能依賴此次 schema；未更新會造成登入或操作失敗，並可能讓安全防護未生效。
+
+依賴順序：
+
+1. Jerry 核對部署目標、備份／還原安排、migration 狀態及待部署版本，先在隔離環境驗證，再於正式環境完成同版 migration；不以 reset 或 seed 代替。
+2. 部署相容的同版 API，核對 schema／程式版本一致；驗證 Session、重設／驗證信、QR、刪帳、報到與授權，回報可供 App 使用的版本及結果。新 migration 會使舊登入失效、舊未用驗證／重設連結需重寄，須一併告知夥伴。
+3. Hao 的原生客戶端接已確認相容的 API，再完成 iPhone／Android 實機端到端驗收。之前的 mock／合成測試只能證明本機情境，不證明 AWS、SES、S3 或正式環境通過。
+4. 工具、簽章、隱私／刪帳／內容管理、商店資料及審查帳號全部驗收後才送審；不可只因網站有網址就宣稱 App 已完成或可發布。
+
+若 Jerry 要採零停機或分階段部署，需另確認舊／新程式的 schema 相容窗口；這份文件沒有宣稱現有版本已具備可任意倒序部署的相容性。
+
+## 5. 第一個原生里程碑：登入與 QR 垂直試作
 
 目前是動態 Next.js 網站，不是可原樣放進手機的靜態資產。建議獨立 mobile React／Capacitor 客戶端，共用適合的 UI／型別，Prisma／AWS 留在 API。不要用 production server.url 遠端殼，也不為封裝停用 Web Origin／CSRF 防護。[Capacitor config](https://capacitorjs.com/docs/config)、[Next.js 限制](https://nextjs.org/docs/app/guides/static-exports)
 
@@ -71,7 +88,7 @@ Jerry／Hao 先選一種版本化 native auth 契約：
 
 Camera 外掛不等於 QR 解碼器，掃碼外掛／實作另評估並盤點 SDK 權限與隱私。站內通知不是 APNs／FCM，首版未做就不索取或宣傳推播。[Capacitor Camera](https://capacitorjs.com/docs/apis/camera)
 
-## 5. 隱私與刪帳需定案的阻擋項目
+## 6. 隱私與刪帳需定案的阻擋項目
 
 現有功能不是「完全沒有 API」，但仍不能直接勾上架已驗收：
 
@@ -84,11 +101,11 @@ Camera 外掛不等於 QR 解碼器，掃碼外掛／實作另評估並盤點 SD
 
 依據：[Apple 刪帳與 UGC](https://developer.apple.com/help/app-review/guideline-reference/5-1-1-account-deletion)、[Apple 內容與審查](https://developer.apple.com/app-store/review/guidelines/)、[Google User Data](https://support.google.com/googleplay/android-developer/answer/10144311)、[Google 外部刪帳](https://support.google.com/googleplay/android-developer/answer/13327111)。這是工程／政策盤點，不替法律實體判斷保留義務。
 
-## 6. 從測試到商店的完成定義
+## 7. 從測試到商店的完成定義
 
 1. 收齊名稱／帳號／App ID／素材，核准首版、發行範圍及資料規則。
-2. 工具鏈可用，native auth／QR 試作通過；先交標明環境的 Android 測試 APK 與 iOS TestFlight build。
-3. 全功能、政策／客服／外部刪帳／UGC 完整；有實機驗收紀錄。瀏覽器截圖不能冒充尚未存在的原生 App。
+2. 工具鏈及原生專案可用，native auth／QR 本機試作通過；可先交標明 mock／測試環境的安裝包。沒有 Google Play 帳號不擋 APK 本機開發，但目前工具與工程缺口仍需補齊，不能承諾已產包。
+3. Jerry 完成 DB-first migration、同版 API 部署並回報；全功能、政策／客服／外部刪帳／UGC 完整，原生接真 API 有實機驗收紀錄，再交正式測試 APK／TestFlight。瀏覽器截圖不能冒充原生 App。
 4. Play 準備 signed AAB；iOS 由正確 Team Archive／上傳。版本與簽章所有權可追溯，密鑰不進 Git，審查樣本 QR 持續可用。
 5. 若為 2023-11-13 後新個人 Play 帳號，至少 12 人連續 14 天 closed testing 再申請 production；APK／internal testing 不抵免。
 6. 所有人確認 App Privacy／Data safety、年齡問卷、地區、定價及協議才提交。商店核准後才稱正式上架，不保證審查時間。
