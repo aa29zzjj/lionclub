@@ -4,15 +4,9 @@ import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-member";
 import type { Prisma } from "@prisma/client";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
+import { EVENT_ATTENDANCE_ROLES } from "@/lib/event-attendance";
 
-const managementRoles = [
-  "CLUB_OFFICER",
-  "CLUB_PRESIDENT",
-  "ZONE_ADMIN",
-  "DISTRICT_ADMIN",
-  "MULTIDISTRICT_ADMIN",
-  "SUPER_ADMIN",
-];
+const managementRoles = EVENT_ATTENDANCE_ROLES;
 
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(160),

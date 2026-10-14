@@ -2,7 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { parseFriendQrPayload } from "./friend-qr";
 
-export const EVENT_ATTENDANCE_ROLES = ["CLUB_OFFICER", "CLUB_VICE_PRESIDENT", "CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
+export const EVENT_ATTENDANCE_ROLES = ["CLUB_OFFICER", "CLUB_VICE_PRESIDENT", "CLUB_PRESIDENT", "CLUB_FINANCE", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
 export class AttendanceError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
