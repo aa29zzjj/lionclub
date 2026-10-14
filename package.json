@@ -13,6 +13,7 @@
     "native:check": "node scripts/check-native-environment.mjs",
     "production:preflight": "node scripts/production-preflight.mjs",
     "cleanup:account-deletion": "node scripts/discover-account-deletion-jobs.mjs",
+    "cleanup:rate-limit": "node scripts/cleanup-rate-limit-attempts.mjs",
     "test:onboarding": "node --import tsx --test tests/*.test.ts",
     "test:simulation": "node --test tests/*.test.mjs",
     "simulation:preview": "node scripts/simulation-preview.mjs",

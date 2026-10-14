@@ -1,0 +1,33 @@
+name: Rate limit attempt cleanup
+
+on:
+  schedule:
+    # Once a day is plenty — this is just housekeeping on dead rows.
+    - cron: "17 18 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm ci
+
+      - name: Delete RateLimitAttempt rows older than 48h
+        env:
+          RATE_LIMIT_CLEANUP_DATABASE_URL: ${{ secrets.ACCOUNT_CLEANUP_DATABASE_URL }}
+          ACCOUNT_CLEANUP_CONFIRM_HOST: ${{ secrets.ACCOUNT_CLEANUP_CONFIRM_HOST }}
+          ACCOUNT_CLEANUP_CONFIRM_DATABASE: ${{ secrets.ACCOUNT_CLEANUP_CONFIRM_DATABASE }}
+        run: |
+          node scripts/cleanup-rate-limit-attempts.mjs \
+            --environment production \
+            --confirm-host "$ACCOUNT_CLEANUP_CONFIRM_HOST" \
+            --confirm-database "$ACCOUNT_CLEANUP_CONFIRM_DATABASE" \
+            --retain-hours 48 \
+            --execute
