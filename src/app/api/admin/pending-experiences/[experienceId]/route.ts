@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
-import { APPROVER_ROLES, getAdministeredOrganizationIds } from "@/lib/admin-scope";
+import { EXPERIENCE_REVIEW_ROLES, getAdministeredOrganizationIds } from "@/lib/admin-scope";
 import { activeAdminRoleWhere } from "@/lib/active-admin-role";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ exp
 
   const prisma = await getPrisma();
   const roles = await prisma.adminRole.findMany({
-    where: { memberId: me.id, role: { in: APPROVER_ROLES }, ...activeAdminRoleWhere() },
+    where: { memberId: me.id, role: { in: EXPERIENCE_REVIEW_ROLES }, ...activeAdminRoleWhere() },
   });
   if (roles.length === 0) return NextResponse.json({ error: "您沒有審核權限" }, { status: 403 });
 

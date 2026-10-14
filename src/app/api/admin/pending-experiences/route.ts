@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
-import { APPROVER_ROLES, getAdministeredOrganizationIds } from "@/lib/admin-scope";
+import { EXPERIENCE_REVIEW_ROLES, getAdministeredOrganizationIds } from "@/lib/admin-scope";
 import { serializeExperience } from "@/lib/member-experience";
 import { activeAdminRoleWhere } from "@/lib/active-admin-role";
 
@@ -11,7 +11,7 @@ export async function GET() {
 
   const prisma = await getPrisma();
   const roles = await prisma.adminRole.findMany({
-    where: { memberId: me.id, role: { in: APPROVER_ROLES }, ...activeAdminRoleWhere() },
+    where: { memberId: me.id, role: { in: EXPERIENCE_REVIEW_ROLES }, ...activeAdminRoleWhere() },
   });
   if (roles.length === 0) {
     return NextResponse.json({ error: "您沒有審核權限" }, { status: 403 });

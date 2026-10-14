@@ -39,9 +39,13 @@ const roleLabels: Record<string, string> = {
   CLUB_VICE_PRESIDENT: "分會副會長",
   CLUB_PRESIDENT: "分會會長",
   ZONE_ADMIN: "分區管理者",
+  REGION_ADMIN: "專區主席",
   DISTRICT_ADMIN: "區管理者",
   MULTIDISTRICT_ADMIN: "複合區管理者",
   SUPER_ADMIN: "全域管理者",
+  DISTRICT_GOVERNOR: "總監",
+  DISTRICT_SECRETARY: "秘書長",
+  DISTRICT_CABINET: "區內閣",
 };
 const filterLabels: Record<StatusFilter, string> = { NEEDS_ASSIGNMENT: "待分派", ASSIGNED: "已確認", ALL: "全部" };
 

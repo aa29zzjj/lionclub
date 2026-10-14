@@ -14,6 +14,17 @@ export const APPROVER_ROLES = [
   "SUPER_ADMIN",
 ];
 
+/**
+ * 區層級審核職務（總監／秘書長／區內閣）：僅能查核會員資歷，不具分會管理／會員異動等行政權力，
+ * 因此只加進資歷審核用的角色清單，不加入 APPROVER_ROLES（該清單同時也用於新會員申請審核等行政流程）。
+ */
+export const EXPERIENCE_REVIEW_ROLES = [
+  ...APPROVER_ROLES,
+  "DISTRICT_GOVERNOR",
+  "DISTRICT_SECRETARY",
+  "DISTRICT_CABINET",
+];
+
 async function getDescendantOrganizationIds(prisma: Database, rootId: string) {
   const ids = new Set([rootId]);
   let frontier = [rootId];
