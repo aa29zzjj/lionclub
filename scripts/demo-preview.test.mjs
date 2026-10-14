@@ -14,7 +14,7 @@ async function stop(server) {
 }
 
 test("frontend allowlist blocks hidden files, image proxy and encoded paths", () => {
-  for (const path of ["/profile", "/profile/experience", "/admin/member-assignment", "/events/preview-event", "/_next/static/chunks/app/profile/page.js"]) assert.equal(isDemoFrontendPath(path), true);
+  for (const path of ["/profile", "/profile/experience", "/admin/member-assignment", "/events/preview-event", "/_next/static/chunks/app/profile/page.js", "/_next/static/chunks/app/events/%5Bid%5D/page-hash.js"]) assert.equal(isDemoFrontendPath(path), true);
   for (const path of ["/.env", "/.git/config", "/api/me", "/_next/image", "/_next/data/x.json", "/_next/static/%2e%2e/api/me", "/profile%2fapi"]) assert.equal(isDemoFrontendPath(path), false);
 });
 

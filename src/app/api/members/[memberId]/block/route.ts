@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/current-member";
 import { getPrisma } from "@/lib/prisma";
+import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 
-export async function POST(_req: Request, { params }: { params: Promise<{ memberId: string }> }) {
+export async function POST(_req: NextRequest, { params }: { params: Promise<{ memberId: string }> }) {
+  if (!isTrustedBrowserMutation(_req)) return NextResponse.json({ error: "請從網站操作" }, { status: 403 });
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
@@ -32,7 +34,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ member
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ memberId: string }> }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ memberId: string }> }) {
+  if (!isTrustedBrowserMutation(_req)) return NextResponse.json({ error: "請從網站操作" }, { status: 403 });
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
 

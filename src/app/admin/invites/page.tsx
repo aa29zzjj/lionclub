@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import QrCode from "@/components/QrCode";
+import InviteQrDialog from "@/components/InviteQrDialog";
 
 type Invite = {
   id: string;
@@ -13,7 +14,8 @@ type Invite = {
   usageCount: number;
   usageLimit: number | null;
   revokedAt: string | null;
-  organization: { name: string };
+  organization: { id?: string; name: string };
+  registerUrl?: string;
 };
 
 type Me = {
@@ -35,6 +37,16 @@ export default function AdminInvitesPage() {
   const [error, setError] = useState("");
   const [validDays, setValidDays] = useState(3);
   const [copyNotice, setCopyNotice] = useState("");
+  const [selectedQr, setSelectedQr] = useState<{ url: string; validUntil: string } | null>(null);
+
+  function showInvite(invite: Invite) {
+    const url = invite.registerUrl || (invite.id === generatedInvite?.id ? newRegisterUrl : null);
+    const derived = new URL("/register", window.location.origin);
+    derived.searchParams.set("token", invite.token);
+    const organizationId = invite.organization?.id || me?.organization.id;
+    if (organizationId) derived.searchParams.set("org", organizationId);
+    setSelectedQr({ url: url || derived.toString(), validUntil: invite.validUntil });
+  }
 
   useEffect(() => {
     let active = true;
@@ -98,6 +110,7 @@ export default function AdminInvitesPage() {
       setGeneratedInvite(data.invite);
       setInvites((prev) => [data.invite, ...prev.filter((invite) => invite.id !== data.invite.id)]);
       setNewRegisterUrl(data.registerUrl);
+      setSelectedQr({ url: data.registerUrl, validUntil: data.invite.validUntil });
     } catch {
       setError("連線失敗，請稍後再試");
     } finally {
@@ -157,6 +170,7 @@ export default function AdminInvitesPage() {
               <QrCode value={newRegisterUrl} />
             </div>
             <p className="mb-3 text-xs text-lion-muted">註冊效期至 {new Date(generatedInvite.validUntil).toLocaleString("zh-TW")}</p>
+            <button type="button" onClick={() => showInvite(generatedInvite)} className="mb-2 min-h-12 w-full rounded-xl bg-lion-action px-4 text-base font-semibold text-lion-navyDeep">放大／下載這張 QR</button>
             <button type="button" className="min-h-12 rounded-xl border border-lion-border px-5 text-sm" onClick={async () => {
               try { await navigator.clipboard.writeText(newRegisterUrl); setCopyNotice("QR 連結已複製，可傳給現場夥伴"); }
               catch { setCopyNotice("無法自動複製，請改用 QR Code 給對方掃描"); }
@@ -171,8 +185,9 @@ export default function AdminInvitesPage() {
           {!invitesLoading && !error && invites.length === 0 && <p className="text-sm text-lion-muted text-center py-8">尚未產生過邀請</p>}
           {invites.map((inv, index) => {
             const expired = new Date(inv.validUntil) < new Date();
+            const live = !expired && !inv.revokedAt && new Date(inv.validFrom) <= new Date() && (inv.usageLimit == null || inv.usageCount < inv.usageLimit);
             return (
-              <div key={inv.id} className="rounded-xl bg-lion-card border border-white/[0.06] p-3 flex items-center justify-between">
+              <div key={inv.id} className="rounded-xl bg-lion-card border border-lion-border p-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">邀請 QR {index + 1}</p>
                   <p className="text-[11px] text-lion-muted">
@@ -186,13 +201,15 @@ export default function AdminInvitesPage() {
                     inv.revokedAt || expired ? "bg-white/10 text-lion-muted" : "bg-lion-gold/15 text-lion-gold"
                   }`}
                 >
-                  {inv.revokedAt ? "已停用" : expired ? "已過期" : "生效中"}
+                  {inv.revokedAt ? "已停用" : expired ? "已過期" : inv.usageLimit != null && inv.usageCount >= inv.usageLimit ? "名額已滿" : new Date(inv.validFrom) > new Date() ? "尚未生效" : "生效中"}
                 </span>
+                <button type="button" disabled={!live} onClick={() => showInvite(inv)} className="min-h-12 w-full rounded-xl border border-lion-border px-3 text-base disabled:opacity-50">{live ? "重新顯示／下載 QR" : "此邀請無法用於新註冊"}</button>
               </div>
             );
           })}
         </div>
       </div>
+      {selectedQr && <InviteQrDialog value={selectedQr.url} validUntil={selectedQr.validUntil} onClose={() => setSelectedQr(null)} />}
     </AppShell>
   );
 }

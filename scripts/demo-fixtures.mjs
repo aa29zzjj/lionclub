@@ -193,7 +193,7 @@ export async function handleDemoApi(request, response, { state, role, publicOrig
       const invite = state.invites.find((item) => item.token === token);
       return send(response, validInvite(state, invite) ? { valid: true, organizationId: invite.organizationId, organizationName: organizationById(state, invite.organizationId).name } : { valid: false });
     }
-    if (path === "/api/invites" && method === "GET") return send(response, { invites: state.invites.filter((invite) => invite.organizationId === me.organizationId).map((invite) => ({ ...qrInvite(invite), organization: { name: organizationById(state, invite.organizationId).name } })) });
+    if (path === "/api/invites" && method === "GET") return send(response, { invites: state.invites.filter((invite) => invite.organizationId === me.organizationId).map((invite) => ({ ...qrInvite(invite), registerUrl: registrationUrl(invite, memberOrigin), organization: { name: organizationById(state, invite.organizationId).name } })) });
     if (path === "/api/invites" && method === "POST") {
       requireScope(state, me.organizationId);
       const input = await body(request);

@@ -1,3 +1,6 @@
+import { formatLionYear, getLionYearStart } from "./lion-year";
+export { calculateLionYears } from "./lion-year";
+
 export type ExperienceKind = "membership" | "position" | "honorary" | "advisor" | "other";
 
 export type OrganizationLevel =
@@ -23,6 +26,8 @@ export type MemberExperience = {
   multipleDistrictCode?: string;
   districtCode?: string;
   startYear: number;
+  // Actual joining month for membership only; legacy records may be unknown.
+  startMonth?: number | null;
   endYear?: number;
   datePrecision: "month" | "lions-year" | "approximate";
   isCurrent: boolean;
@@ -158,20 +163,17 @@ export const visibilityLabels: Record<ExperienceVisibility, string> = {
 
 export function formatLionsYear(experience: MemberExperience) {
   if (experience.kind === "membership") {
-    return experience.datePrecision === "month" ? `${experience.startYear} 年 7 月` : `${experience.startYear} 年`;
+    return formatJoinDate(experience.startYear, experience.startMonth) ?? "加入日期待補";
   }
   const end = experience.endYear ?? experience.startYear;
-  if (experience.startYear === end) return `${experience.startYear}–${experience.startYear + 1} 年度`;
-  return `${experience.startYear}–${experience.startYear + 1} 至 ${end}–${end + 1} 年度`;
-}
-
-export function calculateLionYears(joinYear: string) {
-  const parsed = Number(joinYear);
-  if (!Number.isFinite(parsed)) return null;
-  return Math.max(0, new Date().getFullYear() - parsed);
+  if (experience.startYear === end) return `${formatLionYear(experience.startYear)} 年度`;
+  return `${formatLionYear(experience.startYear)} 至 ${formatLionYear(end)} 年度`;
 }
 
 export function formatJoinDate(joinYear?: number | null, joinMonth?: number | null) {
   if (!joinYear) return null;
-  return joinMonth ? `${joinYear} 年 ${joinMonth} 月` : `${joinYear} 年`;
+  const lionsYear = getLionYearStart(joinYear, joinMonth);
+  return lionsYear === null
+    ? `${joinYear} 年（月份待補，會籍年度未定）`
+    : `${joinYear} 年 ${joinMonth} 月（${formatLionYear(lionsYear, true)} 會籍）`;
 }

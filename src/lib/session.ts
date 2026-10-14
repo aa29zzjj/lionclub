@@ -1,27 +1,23 @@
-import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { getAppSecrets } from "./secrets";
+import { getPrisma } from "./prisma";
+import { isProductionDemoUser, readSessionToken, signSessionToken, SESSION_DURATION_SECONDS } from "./auth-session";
+import type { SessionPayload } from "./auth-session";
+export type { SessionPayload } from "./auth-session";
 
 const COOKIE_NAME = "lionclub_session";
-const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 30; // 30 天
 
 async function getSecretKey() {
   const { AUTH_SECRET } = await getAppSecrets();
   return new TextEncoder().encode(AUTH_SECRET);
 }
 
-export type SessionPayload = {
-  userId: string;
-  memberId: string;
-  email: string;
-};
-
-export async function createSession(payload: SessionPayload) {
-  const token = await new SignJWT({ ...payload })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime(`${SESSION_DURATION_SECONDS}s`)
-    .sign(await getSecretKey());
+export async function createSession(payload: Omit<SessionPayload, "sessionVersion"> & { sessionVersion?: number }) {
+  const prisma = await getPrisma();
+  const user = await prisma.user.findUnique({ where: { id: payload.userId }, select: { id: true, memberId: true, email: true, sessionVersion: true, member: { select: { memberNo: true } } } });
+  if (!user || user.memberId !== payload.memberId || isProductionDemoUser(user)) throw new Error("SESSION_IDENTITY_INVALID");
+  if (payload.sessionVersion !== undefined && payload.sessionVersion !== user.sessionVersion) throw new Error("SESSION_VERSION_CHANGED");
+  const token = await signSessionToken({ userId: user.id, memberId: payload.memberId, email: user.email, sessionVersion: user.sessionVersion }, await getSecretKey());
 
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, token, {
@@ -43,10 +39,9 @@ export async function getSession(): Promise<SessionPayload | null> {
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
 
-  try {
-    const { payload } = await jwtVerify(token, await getSecretKey());
-    return payload as unknown as SessionPayload;
-  } catch {
-    return null;
-  }
+  const prisma = await getPrisma();
+  return readSessionToken(token, {
+    key: await getSecretKey(),
+    findUser: (id) => prisma.user.findUnique({ where: { id }, select: { id: true, memberId: true, email: true, sessionVersion: true, member: { select: { memberNo: true } } } }),
+  });
 }

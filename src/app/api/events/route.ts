@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
+import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 
 export async function GET() {
   const me = await getCurrentMember();
@@ -11,8 +12,8 @@ export async function GET() {
   const events = await prisma.event.findMany({
     include: {
       hostOrganization: { select: { name: true } },
-      registrations: { where: { memberId: me.id }, select: { id: true } },
-      _count: { select: { registrations: true } },
+      registrations: { where: { memberId: me.id, status: "REGISTERED" }, select: { id: true } },
+      _count: { select: { registrations: { where: { status: "REGISTERED" } } } },
     },
     orderBy: { startAt: "asc" },
   });
@@ -35,15 +36,16 @@ export async function GET() {
 }
 
 const bodySchema = z.object({
-  title: z.string().min(1),
-  startAt: z.string().min(1),
-  location: z.string().min(1),
+  title: z.string().trim().min(1).max(160),
+  startAt: z.string().datetime(),
+  location: z.string().trim().min(1).max(240),
   capacity: z.number().int().positive().optional(),
-  description: z.string().optional(),
+  description: z.string().trim().max(3000).optional(),
   coverPhotoUrl: z.union([z.string().url(), z.literal("")]).optional(),
 });
 
 export async function POST(req: NextRequest) {
+  if (!isTrustedBrowserMutation(req)) return NextResponse.json({ error: "請從網站操作" }, { status: 403 });
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
@@ -54,8 +56,12 @@ export async function POST(req: NextRequest) {
   const { title, startAt, location, capacity, description, coverPhotoUrl } = parsed.data;
 
   const prisma = await getPrisma();
-  const event = await prisma.event.create({
-    data: {
+  try {
+    const event = await prisma.$transaction(async tx => {
+      const actor = await tx.member.findFirst({ where: { id: me.id, status: "ACTIVE", deletedAt: null, organizationId: me.organizationId }, select: { id: true } });
+      const club = await tx.organization.findFirst({ where: { id: me.organizationId, isActive: true }, select: { id: true } });
+      if (!actor || !club) throw new Error("EVENT_IDENTITY_CHANGED");
+      return tx.event.create({ data: {
       title,
       startAt: new Date(startAt),
       location,
@@ -64,8 +70,13 @@ export async function POST(req: NextRequest) {
       coverPhotoUrl: coverPhotoUrl || null,
       hostOrganizationId: me.organizationId,
       createdById: me.id,
-    },
-  });
+      } });
+    }, { isolationLevel: "Serializable" });
 
-  return NextResponse.json({ ok: true, eventId: event.id });
+    return NextResponse.json({ ok: true, eventId: event.id });
+  } catch (error) {
+    if (error instanceof Error && error.message === "EVENT_IDENTITY_CHANGED") return NextResponse.json({ error: "會籍或帳號已更新，請重新登入確認" }, { status: 409 });
+    if (error && typeof error === "object" && "code" in error && error.code === "P2034") return NextResponse.json({ error: "帳號或活動同時更新，請重新載入後再試" }, { status: 409 });
+    throw error;
+  }
 }

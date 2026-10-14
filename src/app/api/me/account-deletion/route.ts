@@ -4,10 +4,13 @@ import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 import { getSession, destroySession } from "@/lib/session";
+import { AccountDeletionError, anonymizeAccount } from "@/lib/account-deletion";
+import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 
 const bodySchema = z.object({ password: z.string().min(1) });
 
 export async function POST(request: NextRequest) {
+  if (!isTrustedBrowserMutation(request)) return NextResponse.json({ error: "請從網站操作帳號刪除" }, { status: 403 });
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
@@ -24,27 +27,13 @@ export async function POST(request: NextRequest) {
   const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
   if (!valid) return NextResponse.json({ error: "密碼不正確" }, { status: 401 });
 
-  const activeRoleCount = await prisma.adminRole.count({ where: { memberId: me.id, validUntil: null } });
-  if (activeRoleCount > 0) {
-    return NextResponse.json(
-      { error: "您目前持有幹部權限，請先請其他管理者撤銷後再刪除帳號" },
-      { status: 409 }
-    );
+  try {
+    const result = await anonymizeAccount(prisma, { memberId: me.id, userId: user.id, expectedPasswordHash: user.passwordHash,
+      bucket: process.env.AVATAR_BUCKET_NAME, region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-northeast-1" });
+    await destroySession();
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof AccountDeletionError) return NextResponse.json({ error: error.message }, { status: error.status });
+    throw error;
   }
-
-  const upcomingEventCount = await prisma.event.count({ where: { createdById: me.id, startAt: { gte: new Date() } } });
-  if (upcomingEventCount > 0) {
-    return NextResponse.json(
-      { error: "您有尚未開始的活動，請先刪除或請其他幹部接手該活動後再刪除帳號" },
-      { status: 409 }
-    );
-  }
-
-  await prisma.$transaction([
-    prisma.user.delete({ where: { id: user.id } }),
-    prisma.member.delete({ where: { id: me.id } }),
-  ]);
-  await destroySession();
-
-  return NextResponse.json({ ok: true });
 }

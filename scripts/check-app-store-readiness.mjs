@@ -90,7 +90,7 @@ checkAnyFile("公開隱私政策實作", ["src/app/privacy/page.tsx", "src/app/p
 checkAnyFile("公開客服頁實作", ["src/app/support/page.tsx"]);
 checkAnyFile("外部帳號刪除頁實作", ["src/app/account/delete/page.tsx"]);
 checkAnyFile("帳號刪除 API 實作", ["src/app/api/me/account-deletion/route.ts"]);
-checkAnyFile("內容檢舉 API 實作", ["src/app/api/reports/route.ts"]);
+checkAnyFile("內容檢舉 API 實作", ["src/app/api/reports/route.ts", "src/app/api/members/[memberId]/report/route.ts"]);
 checkAnyFile("專用會員封鎖 API 實作", ["src/app/api/members/[id]/block/route.ts", "src/app/api/members/[memberId]/block/route.ts"]);
 checkAnyFile("iOS 原生工程", ["ios/App/App.xcodeproj/project.pbxproj", "native/ios/App/App.xcodeproj/project.pbxproj", "mobile/ios/App/App.xcodeproj/project.pbxproj"]);
 checkAnyFile("Android 原生工程", ["android/app/build.gradle", "android/app/build.gradle.kts", "native/android/app/build.gradle", "mobile/android/app/build.gradle"]);

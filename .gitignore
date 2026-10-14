@@ -4,6 +4,19 @@ out
 npm-debug.log*
 .env
 .env*.local
+.env*
+!.env.example
+# Deployment secrets, database backups and native signing material stay local.
+backups/
+*.pem
+*.p8
+*.p12
+*.mobileprovision
+*.keystore
+*.jks
+*.ipa
+*.apk
+*.aab
 .DS_Store
 *.tsbuildinfo
 next-env.d.ts

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { getClubDirectory, isClubInDistrictDirectory } from "@/lib/club-directory";
+import { formatLionYear, formatLionYearDateRange, getCurrentLionYearStart, getLionYearStart } from "@/lib/lion-year";
 import {
   calculateLionYears,
   districtOptions,
@@ -30,6 +31,7 @@ type ExperienceDraft = {
   multipleDistrictCode: (typeof multipleDistrictOptions)[number];
   districtCode: string;
   startYear: number;
+  startMonth: number | "";
   endYear: number;
   isCurrent: boolean;
   visibility: ExperienceVisibility;
@@ -45,7 +47,8 @@ type MeResponse = {
 };
 
 const currentYear = new Date().getFullYear();
-const yearOptions = Array.from({ length: currentYear - 1949 }, (_, index) => currentYear - index);
+const currentLionYear = getCurrentLionYearStart();
+const yearOptions = Array.from({ length: currentYear - 1916 }, (_, index) => currentYear - index);
 
 const emptyDraft: ExperienceDraft = {
   kind: "position",
@@ -54,8 +57,9 @@ const emptyDraft: ExperienceDraft = {
   organizationName: "",
   multipleDistrictCode: "300A",
   districtCode: "300A-1",
-  startYear: currentYear,
-  endYear: currentYear,
+  startYear: currentLionYear,
+  startMonth: "",
+  endYear: currentLionYear,
   isCurrent: true,
   visibility: "members",
   note: "",
@@ -100,6 +104,7 @@ export default function ExperiencePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<ExperienceDraft>(emptyDraft);
+  const [multipleTerms, setMultipleTerms] = useState(false);
   const [useCustomOrganization, setUseCustomOrganization] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -152,7 +157,9 @@ export default function ExperiencePage() {
     () => [...experiences].sort((a, b) => b.startYear - a.startYear || Number(b.isCurrent) - Number(a.isCurrent)),
     [experiences]
   );
-  const lionYears = calculateLionYears(profile.joinYear);
+  const lionYears = calculateLionYears(profile.joinYear, profile.joinMonth);
+  const selectableYears = Array.from(new Set([...yearOptions, draft.startYear, draft.endYear])).sort((a, b) => b - a);
+  const joiningLionYear = getLionYearStart(draft.startYear, draft.startMonth === "" ? null : draft.startMonth);
   const verifiedCount = experiences.filter((experience) => experience.verificationStatus === "verified").length;
   const availablePositions = positionOptions.filter(
     (position) => position.level === draft.level && position.kind === draft.kind
@@ -174,10 +181,11 @@ export default function ExperiencePage() {
     setDraft({
       ...emptyDraft,
       organizationName: profileClubIsListed ? profile.chapter : directory?.clubs[0] ?? profile.chapter,
-      startYear: currentYear,
-      endYear: currentYear,
+      startYear: currentLionYear,
+      endYear: currentLionYear,
       districtCode: districtOptions[emptyDraft.multipleDistrictCode][0],
     });
+    setMultipleTerms(false);
     setUseCustomOrganization(!directory);
     setError("");
     setShowForm(true);
@@ -198,11 +206,13 @@ export default function ExperiencePage() {
       multipleDistrictCode: mdCode,
       districtCode: experience.districtCode ?? districtOptions[mdCode][0],
       startYear: experience.startYear,
+      startMonth: experience.startMonth ?? "",
       endYear: experience.endYear ?? experience.startYear,
       isCurrent: experience.isCurrent,
       visibility: experience.visibility,
       note: experience.note ?? "",
     });
+    setMultipleTerms(experience.endYear !== undefined && experience.endYear > experience.startYear);
     setUseCustomOrganization(
       experience.level === "club" &&
         !isClubInDistrictDirectory(experience.districtCode, experience.organizationName)
@@ -225,16 +235,22 @@ export default function ExperiencePage() {
       setDraft((previous) => ({
         ...previous,
         kind,
+        startYear: previous.kind === "membership" ? previous.startYear : currentYear,
+        startMonth: previous.kind === "membership" ? previous.startMonth : "",
+        endYear: previous.kind === "membership" ? previous.endYear : currentYear,
         level: "club",
         positionCode: "membership_joined",
         organizationName: profileClubIsListed ? profile.chapter : directory?.clubs[0] ?? profile.chapter,
       }));
+      setMultipleTerms(false);
       return;
     }
     const nextPosition = positionOptions.find((position) => position.kind === kind);
     setDraft((previous) => ({
       ...previous,
       kind,
+      startYear: previous.kind === "membership" ? currentLionYear : previous.startYear,
+      endYear: previous.kind === "membership" ? currentLionYear : previous.endYear,
       level: nextPosition?.level ?? "club",
       positionCode: nextPosition?.code ?? "special_role",
       organizationName: organizationNameFor(
@@ -307,8 +323,8 @@ export default function ExperiencePage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!draft.isCurrent && draft.endYear < draft.startYear) {
-      setError("結束年度不能早於開始年度");
+    if (draft.kind !== "membership" && multipleTerms && draft.endYear < draft.startYear) {
+      setError("最後任期年度不能早於第一任期年度");
       return;
     }
     if (draft.kind !== "membership" && !draft.positionCode) {
@@ -333,8 +349,9 @@ export default function ExperiencePage() {
       multipleDistrictCode: draft.multipleDistrictCode,
       districtCode: draft.districtCode,
       startYear: draft.startYear,
-      endYear: draft.kind === "membership" || draft.isCurrent ? undefined : draft.endYear,
-      datePrecision: draft.kind === "membership" ? "approximate" : "lions-year",
+      startMonth: draft.kind === "membership" && draft.startMonth !== "" ? draft.startMonth : null,
+      endYear: draft.kind === "membership" ? undefined : multipleTerms ? draft.endYear : draft.startYear,
+      datePrecision: draft.kind === "membership" ? draft.startMonth === "" ? "approximate" : "month" : "lions-year",
       isCurrent: draft.isCurrent,
       verificationStatus: "under-review",
       visibility: draft.visibility,
@@ -612,37 +629,70 @@ export default function ExperiencePage() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className={draft.kind === "membership" ? "grid grid-cols-2 gap-3" : "space-y-3"}>
               <div>
                 <label htmlFor="experience-start-year" className="text-xs text-lion-muted mb-1 block">
-                  {draft.kind === "membership" ? "加入年份" : "開始獅子年度"}
+                  {draft.kind === "membership" ? "加入年份" : multipleTerms ? "第一個任期年度" : "任期年度（一年）"}
                 </label>
                 <select
                   id="experience-start-year"
                   value={draft.startYear}
-                  onChange={(event) => setDraft((previous) => ({ ...previous, startYear: Number(event.target.value) }))}
+                  onChange={(event) => setDraft((previous) => ({
+                    ...previous,
+                    startYear: Number(event.target.value),
+                    endYear: multipleTerms ? Math.max(previous.endYear, Number(event.target.value)) : Number(event.target.value),
+                  }))}
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm outline-none focus:border-lion-gold"
                 >
-                  {yearOptions.map((year) => (
+                  {selectableYears.map((year) => (
                     <option key={year} value={year} className="bg-lion-card text-lion-cream">
-                      {draft.kind === "membership" ? year : `${year}–${year + 1}`}
+                      {draft.kind === "membership" ? year : `${formatLionYear(year)}（7/1–隔年 6/30）`}
                     </option>
                   ))}
                 </select>
               </div>
-              <div>
-                <label htmlFor="experience-end-year" className="text-xs text-lion-muted mb-1 block">結束獅子年度</label>
+              {draft.kind === "membership" ? <div>
+                <label htmlFor="experience-start-month" className="text-xs text-lion-muted mb-1 block">加入月份（可待補）</label>
+                <select
+                  id="experience-start-month"
+                  value={draft.startMonth}
+                  onChange={(event) => setDraft((previous) => ({ ...previous, startMonth: event.target.value === "" ? "" : Number(event.target.value) }))}
+                  className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm outline-none focus:border-lion-gold"
+                >
+                  <option value="" className="bg-lion-card text-lion-cream">月份未知／待補</option>
+                  {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => <option key={month} value={month} className="bg-lion-card text-lion-cream">{month} 月</option>)}
+                </select>
+              </div> : <label className="flex items-center gap-2 text-xs text-lion-muted">
+                <input
+                  type="checkbox"
+                  checked={multipleTerms}
+                  onChange={(event) => {
+                    setMultipleTerms(event.target.checked);
+                    if (!event.target.checked) setDraft((previous) => ({ ...previous, endYear: previous.startYear }));
+                  }}
+                  className="accent-[#C8A951]"
+                />
+                此紀錄包含連續多個年度任期
+              </label>}
+              {draft.kind !== "membership" && multipleTerms && <div>
+                <label htmlFor="experience-end-year" className="text-xs text-lion-muted mb-1 block">最後一個任期年度（起始年）</label>
                 <select
                   id="experience-end-year"
                   value={draft.endYear}
-                  disabled={draft.isCurrent || draft.kind === "membership"}
                   onChange={(event) => setDraft((previous) => ({ ...previous, endYear: Number(event.target.value) }))}
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm outline-none focus:border-lion-gold disabled:opacity-40"
                 >
-                  {yearOptions.map((year) => <option key={year} value={year} className="bg-lion-card text-lion-cream">{year}–{year + 1}</option>)}
+                  {selectableYears.filter((year) => year >= draft.startYear).map((year) => <option key={year} value={year} className="bg-lion-card text-lion-cream">{formatLionYear(year)}（7/1–隔年 6/30）</option>)}
                 </select>
-              </div>
+              </div>}
             </div>
+            <p className="text-[11px] text-lion-muted leading-relaxed">
+              {draft.kind === "membership"
+                ? joiningLionYear === null
+                  ? "會籍年度以每年 7 月 1 日分界；月份待補時，不推定所屬會籍年度。"
+                  : `${formatLionYear(joiningLionYear, true)} 會籍：${formatLionYearDateRange(joiningLionYear)}。每年 7 月 1 日起算新會籍年度。`
+                : `任期期間：${formatLionYearDateRange(draft.startYear, multipleTerms ? draft.endYear : draft.startYear)}；每個年度皆為 7 月 1 日至隔年 6 月 30 日。「現任」僅標記狀態，不自動延長年度。`}
+            </p>
 
             <label className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] px-3.5 py-3 text-sm">
               <input
@@ -717,6 +767,9 @@ export default function ExperiencePage() {
                       {formatLionsYear(experience)}
                     </p>
                     <h3 className="font-semibold">{experience.positionName}</h3>
+                    {experience.kind !== "membership" && <p className="text-[11px] text-lion-muted mt-1">
+                      {formatLionYearDateRange(experience.startYear, experience.endYear)}
+                    </p>}
                     <p className="text-xs text-lion-muted mt-1">{experience.organizationName}</p>
                     {experience.organizationIsUnlisted && (
                       <p className="text-[11px] text-amber-300/80 mt-1">組織待核 · 尚未命中目前分會名冊</p>

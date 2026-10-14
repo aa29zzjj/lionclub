@@ -1,4 +1,6 @@
 import { getPrisma } from "./prisma";
+import type { Prisma } from "@prisma/client";
+type Database = Awaited<ReturnType<typeof getPrisma>> | Prisma.TransactionClient;
 
 export const APPROVER_ROLES = [
   "CLUB_OFFICER",
@@ -11,20 +13,20 @@ export const APPROVER_ROLES = [
   "SUPER_ADMIN",
 ];
 
-async function getDescendantOrganizationIds(prisma: Awaited<ReturnType<typeof getPrisma>>, rootId: string) {
-  const ids = [rootId];
+async function getDescendantOrganizationIds(prisma: Database, rootId: string) {
+  const ids = new Set([rootId]);
   let frontier = [rootId];
   while (frontier.length > 0) {
     const children = await prisma.organization.findMany({
       where: { parentId: { in: frontier } },
       select: { id: true },
     });
-    const childIds = children.map((c) => c.id);
+    const childIds = children.map((c) => c.id).filter((id) => !ids.has(id));
     if (childIds.length === 0) break;
-    ids.push(...childIds);
+    childIds.forEach((id) => ids.add(id));
     frontier = childIds;
   }
-  return ids;
+  return [...ids];
 }
 
 /**
@@ -32,10 +34,10 @@ async function getDescendantOrganizationIds(prisma: Awaited<ReturnType<typeof ge
  * (their scope plus all descendant organizations), or `undefined` if they have global scope.
  */
 export async function getAdministeredOrganizationIds(
-  prisma: Awaited<ReturnType<typeof getPrisma>>,
+  prisma: Database,
   roles: { role: string; scopeId: string | null }[]
 ): Promise<string[] | undefined> {
-  const isGlobal = roles.some((r) => !r.scopeId || r.role === "SUPER_ADMIN");
+  const isGlobal = roles.some((r) => r.role === "SUPER_ADMIN");
   if (isGlobal) return undefined;
 
   const scopeIds = Array.from(new Set(roles.map((r) => r.scopeId).filter(Boolean))) as string[];

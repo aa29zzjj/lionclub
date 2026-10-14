@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -9,6 +9,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [resetRequired, setResetRequired] = useState(false);
+  useEffect(() => {
+    const reason = new URLSearchParams(window.location.search).get("reason");
+    if (reason === "account-deleted") setError("帳號已移除；共享活動保留匿名紀錄，圖片清理可能稍後完成。");
+    else if (reason === "sessions-revoked") setError("所有裝置的登入已撤銷，請重新登入。");
+    else if (reason) setError("登入已到期或安全設定已更新，請重新登入後繼續。");
+  }, []);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -18,6 +25,7 @@ export default function LoginPage() {
       return;
     }
     setError("");
+    setResetRequired(false);
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
@@ -27,6 +35,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        setResetRequired(data.code === "PASSWORD_RESET_REQUIRED");
         setError(data.error ?? "登入失敗，請再試一次");
         return;
       }
@@ -49,14 +58,17 @@ export default function LoginPage() {
           </div>
           <h1 className="text-2xl font-bold text-lion-cream tracking-wide">獅子會 App</h1>
           <p className="text-lion-cream/50 text-sm mt-1">LIONS CLUB MEMBER PORTAL</p>
-          <p className="text-lion-gold/70 text-xs mt-3">展示帳號：demo@lions.tw ／ 密碼：demo1234</p>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
-            <label className="text-xs text-lion-muted mb-1 block">會員信箱</label>
+            <label htmlFor="login-email" className="text-sm text-lion-muted mb-1 block">會員信箱</label>
             <input
               type="email"
+              id="login-email"
+              autoComplete="username"
+              autoCapitalize="none"
+              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@lions.tw"
@@ -64,9 +76,12 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="text-xs text-lion-muted mb-1 block">密碼</label>
+            <label htmlFor="login-password" className="text-sm text-lion-muted mb-1 block">密碼</label>
             <input
               type="password"
+              id="login-password"
+              autoComplete="current-password"
+              required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -74,10 +89,11 @@ export default function LoginPage() {
             />
           </div>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p role="alert" className="text-base text-lion-danger">{error}</p>}
+          {resetRequired && <Link href="/forgot-password" className="flex min-h-12 items-center justify-center rounded-xl border border-lion-border px-3 text-base font-semibold text-lion-gold">前往設定新密碼</Link>}
 
           <div className="flex justify-end">
-            <Link href="/forgot-password" className="text-xs text-lion-gold/80 hover:text-lion-gold">
+            <Link href="/forgot-password" className="touch-link text-sm text-lion-gold hover:text-lion-gold">
               忘記密碼？
             </Link>
           </div>

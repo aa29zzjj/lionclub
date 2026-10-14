@@ -3,19 +3,18 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { createSession } from "@/lib/session";
+import { productionLoginDenial } from "@/lib/auth-session";
 import { findUserByEmail } from "@/lib/user-email";
-import { getClientIp, isRateLimited } from "@/lib/rate-limit";
+import { getClientIp, consumeAuthLimits, rateLimitResponse } from "@/lib/rate-limit";
+import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 
 const bodySchema = z.object({
-  email: z.string().trim().email(),
-  password: z.string().min(1),
+  email: z.string().trim().email().max(254),
+  password: z.string().min(1).max(200),
 });
 
 export async function POST(req: NextRequest) {
-  if (await isRateLimited(`login:${getClientIp(req)}`, 20)) {
-    return NextResponse.json({ error: "嘗試次數過多，請稍後再試" }, { status: 429 });
-  }
-
+  if (!isTrustedBrowserMutation(req)) return NextResponse.json({ error: "請從網站操作登入" }, { status: 403 });
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "請輸入帳號與密碼" }, { status: 400 });
@@ -23,8 +22,12 @@ export async function POST(req: NextRequest) {
   const { email, password } = parsed.data;
 
   const prisma = await getPrisma();
+  const limited = await consumeAuthLimits(prisma, "login", getClientIp(req), email);
+  if (limited) return rateLimitResponse(limited);
+  const inputDenial = productionLoginDenial(email, password);
+  if (inputDenial) return NextResponse.json({ error: inputDenial.error, code: inputDenial.code }, { status: inputDenial.status });
   const user = await findUserByEmail(prisma, email);
-  if (!user) {
+  if (!user || productionLoginDenial(email, password, user)) {
     return NextResponse.json({ error: "帳號或密碼錯誤" }, { status: 401 });
   }
 
@@ -40,11 +43,15 @@ export async function POST(req: NextRequest) {
   if (user.member.status === "PENDING") {
     return NextResponse.json({ error: "您的入會申請尚待審核" }, { status: 403 });
   }
-  if (user.member.status === "SUSPENDED") {
+  if (user.member.status !== "ACTIVE") {
     return NextResponse.json({ error: "此帳號已被停權" }, { status: 403 });
   }
 
-  await createSession({ userId: user.id, memberId: user.member.id, email: user.email });
+  try {
+    await createSession({ userId: user.id, memberId: user.member.id, email: user.email, sessionVersion: user.sessionVersion });
+  } catch {
+    return NextResponse.json({ error: "登入狀態已更新，請重新登入" }, { status: 401 });
+  }
 
   return NextResponse.json({ ok: true, memberId: user.member.id });
 }

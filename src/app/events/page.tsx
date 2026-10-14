@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
-import { PinIcon, PlusIcon } from "@/components/icons";
+import { CalendarIcon, PinIcon, PlusIcon } from "@/components/icons";
+import { EVENT_TIME_ZONE, taipeiEventStartAt } from "@/lib/event-calendar";
 
 const eventGradients = [
   "from-lion-navyLight to-[#2E4A8A]",
@@ -29,9 +30,13 @@ type EventCard = {
 export default function EventsPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const requestRef = useRef<AbortController | null>(null);
+  const submitLock = useRef(false);
   const [events, setEvents] = useState<EventCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [toast, setToast] = useState("");
 
   const [title, setTitle] = useState("");
@@ -46,34 +51,51 @@ export default function EventsPage() {
 
   function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
       setError("請選擇 5 MB 內的 JPG、PNG 或 WebP 圖片");
       return;
     }
-    if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
+    setError("");
     setCoverFile(file);
     setCoverPreview(URL.createObjectURL(file));
   }
 
-  function loadEvents() {
-    return fetch("/api/events")
-      .then(async (res) => {
-        if (res.status === 401) {
-          router.push("/login");
-          return null;
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (data) setEvents(data.events ?? []);
-      });
-  }
+  const loadEvents = useCallback(async () => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setLoading(true);
+    setLoadError("");
+    try {
+      const res = await fetch("/api/events", { cache: "no-store", signal: controller.signal });
+      const data = await res.json().catch(() => ({}));
+      if (controller.signal.aborted) return;
+      if (res.status === 401) {
+        setEvents([]);
+        setLoadError("登入已過期，正在前往登入頁。");
+        router.replace("/login?reason=session-expired");
+        return;
+      }
+      if (!res.ok) throw new Error(data.error ?? "無法載入活動，請重試。");
+      if (!Array.isArray(data.events)) throw new Error("活動資料格式異常，請重新載入。");
+      setEvents(data.events);
+    } catch (caught) {
+      if (!controller.signal.aborted) setLoadError(caught instanceof Error && !(caught instanceof TypeError) ? caught.message : "網路連線中斷，請確認網路後重試。");
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
+  }, [router]);
 
   useEffect(() => {
-    loadEvents().finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void loadEvents();
+    return () => requestRef.current?.abort();
+  }, [loadEvents]);
+
+  useEffect(() => () => {
+    if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
+  }, [coverPreview]);
 
   function resetForm() {
     setTitle("");
@@ -82,7 +104,6 @@ export default function EventsPage() {
     setLocation("");
     setCapacity("");
     setDescription("");
-    if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
     setCoverFile(null);
     setCoverPreview(null);
     setError("");
@@ -91,61 +112,93 @@ export default function EventsPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title || !date || !location) {
+    if (submitLock.current) return;
+    if (!title.trim() || !date || !location.trim()) {
       setError("請填寫活動名稱、日期與地點");
       return;
     }
-
-    let coverPhotoUrl: string | undefined;
-    if (coverFile) {
-      const signResponse = await fetch("/api/events/cover-upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contentType: coverFile.type, size: coverFile.size }),
-      });
-      const signResult = await signResponse.json();
-      if (!signResponse.ok) {
-        setError(signResult.error ?? "無法準備封面照片上傳");
-        return;
-      }
-      const uploadResponse = await fetch(signResult.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": coverFile.type },
-        body: coverFile,
-      });
-      if (!uploadResponse.ok) {
-        setError("封面照片上傳失敗，請稍後再試");
-        return;
-      }
-      coverPhotoUrl = signResult.coverPhotoUrl;
-    }
-
-    const startAt = new Date(`${date}T${time || "00:00"}`).toISOString();
-    const res = await fetch("/api/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        startAt,
-        location,
-        description: description || undefined,
-        capacity: capacity ? Number(capacity) : undefined,
-        coverPhotoUrl,
-      }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "發布失敗，請再試一次");
+    const startAt = taipeiEventStartAt(date, time || "00:00");
+    if (!startAt) {
+      setError("請確認活動日期與時間是否正確（台灣時間）");
       return;
     }
-    setToast("活動已發布");
-    resetForm();
-    await loadEvents();
-    setTimeout(() => setToast(""), 2500);
+    if (capacity && (!Number.isInteger(Number(capacity)) || Number(capacity) < 1)) {
+      setError("名額請填寫大於 0 的整數，或留空不限制");
+      return;
+    }
+    submitLock.current = true;
+    setSubmitting(true);
+    setError("");
+    let publicationStarted = false;
+    try {
+      let coverPhotoUrl: string | undefined;
+      if (coverFile) {
+        const signResponse = await fetch("/api/events/cover-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contentType: coverFile.type, size: coverFile.size }),
+        });
+        const signResult = await signResponse.json().catch(() => ({}));
+        if (signResponse.status === 401) {
+          router.replace("/login?reason=session-expired");
+          setError("登入已過期，請重新登入後再發布。");
+          return;
+        }
+        if (!signResponse.ok) {
+          setError(signResult.error ?? "無法準備封面照片上傳");
+          return;
+        }
+        const uploadResponse = await fetch(signResult.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": coverFile.type },
+          body: coverFile,
+        });
+        if (!uploadResponse.ok) {
+          setError("封面照片上傳失敗，請稍後再試");
+          return;
+        }
+        coverPhotoUrl = signResult.coverPhotoUrl;
+      }
+
+      publicationStarted = true;
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          startAt,
+          location: location.trim(),
+          description: description.trim() || undefined,
+          capacity: capacity ? Number(capacity) : undefined,
+          coverPhotoUrl,
+        }),
+      });
+      if (res.status === 401) {
+        router.replace("/login?reason=session-expired");
+        setError("登入已過期，請重新登入後再發布。");
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "發布失敗，請再試一次");
+        return;
+      }
+      setToast("活動已發布");
+      resetForm();
+      await loadEvents();
+    } catch {
+      setError(publicationStarted
+        ? "發布時連線中斷，活動可能已送出。請先返回列表確認，避免重複發布。"
+        : "照片上傳時連線中斷，尚未發布活動，請稍後重試。");
+    } finally {
+      submitLock.current = false;
+      setSubmitting(false);
+    }
   }
 
   function formatDate(iso: string) {
     return new Date(iso).toLocaleString("zh-TW", {
+      timeZone: EVENT_TIME_ZONE,
       month: "2-digit",
       day: "2-digit",
       weekday: "short",
@@ -154,49 +207,47 @@ export default function EventsPage() {
     });
   }
 
-  if (loading) {
-    return (
-      <AppShell>
-        <div className="px-5 pt-6 pb-4">
-          <p className="text-sm text-lion-muted text-center py-12">載入中...</p>
-        </div>
-      </AppShell>
-    );
-  }
-
   return (
     <AppShell>
       <div className="px-5 pt-6 pb-4">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-bold">活動</h1>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <h1 className="text-2xl font-bold">活動</h1>
           <button
+            type="button"
             onClick={() => setCreating(true)}
-            className="flex items-center gap-1 text-xs font-medium bg-lion-action text-lion-navyDeep px-3 py-1.5 rounded-full"
+            disabled={submitting || creating}
+            className="flex min-h-12 items-center gap-1 text-base font-medium bg-lion-action text-lion-navyDeep px-4 py-2 rounded-xl disabled:opacity-50"
           >
-            <PlusIcon className="w-3.5 h-3.5" /> 發布活動
+            <PlusIcon className="w-5 h-5" /> 發布活動
           </button>
         </div>
 
+        <Link href="/events/calendar" className="mb-4 flex min-h-12 items-center justify-center gap-2 rounded-xl border border-lion-border bg-lion-card px-4 py-3 text-base font-semibold text-lion-gold">
+          <CalendarIcon className="h-5 w-5" /> 活動行事曆
+        </Link>
+
         {toast && (
-          <div className="mb-4 rounded-xl bg-lion-gold/15 border border-lion-gold/40 text-lion-gold text-xs px-3 py-2">
+          <div role="status" className="mb-4 rounded-xl bg-lion-soft border border-lion-border text-lion-cream text-base px-4 py-3">
             {toast}
           </div>
         )}
 
         {!creating && (
-          <div className="flex flex-col gap-4">
-            {events.length === 0 && <p className="text-sm text-lion-muted text-center py-8">目前沒有活動</p>}
-            {events.map((ev, i) => (
+          <div className="flex flex-col gap-4" aria-busy={loading}>
+            {loading && <p role="status" className="text-base text-lion-muted text-center py-8">正在載入活動…</p>}
+            {loadError && <div role="alert" className="rounded-xl border border-lion-danger/40 bg-lion-card p-4"><p className="text-base text-lion-danger">{loadError}</p><button type="button" onClick={() => void loadEvents()} disabled={loading} className="mt-3 min-h-12 rounded-xl bg-lion-action px-5 text-base font-semibold text-lion-navyDeep disabled:opacity-50">重新載入活動</button></div>}
+            {!loading && !loadError && events.length === 0 && <p className="text-base text-lion-muted text-center py-8">目前沒有活動，也可從行事曆查看不同月份。</p>}
+            {!loading && !loadError && events.map((ev, i) => (
               <Link
                 key={ev.id}
                 href={`/events/${ev.id}`}
-                className="block rounded-2xl bg-lion-card border border-white/[0.06] overflow-hidden"
+                className="block rounded-2xl bg-lion-card border border-lion-border overflow-hidden"
               >
                 <div className="p-3.5 pb-0 flex items-center gap-2.5">
                   <Avatar name={ev.hostChapter} color="#3D5A99" size={30} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{ev.title}</p>
-                    <p className="text-[11px] text-lion-muted">{formatDate(ev.startAt)}</p>
+                    <p className="text-lg font-semibold break-words">{ev.title}</p>
+                    <p className="text-sm text-lion-muted">{formatDate(ev.startAt)}（台灣時間）</p>
                   </div>
                 </div>
                 {ev.coverPhotoUrl ? (
@@ -205,14 +256,14 @@ export default function EventsPage() {
                 ) : (
                   <div className={`mx-3.5 mt-3 h-24 rounded-xl bg-gradient-to-br ${eventGradients[i % eventGradients.length]}`} />
                 )}
-                <div className="flex items-center justify-between px-3.5 py-3">
-                  <p className="text-[11px] text-lion-muted flex items-center gap-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-3">
+                  <p className="text-base text-lion-muted flex items-center gap-1">
                     <PinIcon className="w-3.5 h-3.5" /> {ev.location}
                   </p>
-                  <span className="text-xs text-lion-gold font-medium">查看詳情 →</span>
+                  <span className="text-base text-lion-gold font-medium">查看詳情 →</span>
                 </div>
                 {ev.capacity && (
-                  <div className="px-3.5 pb-3 text-[11px] text-lion-muted">
+                  <div className="px-3.5 pb-3 text-sm text-lion-muted">
                     已報名 {ev.registeredCount}／{ev.capacity} 人{ev.isFull ? " · 名額已滿" : ""}
                   </div>
                 )}
@@ -222,9 +273,11 @@ export default function EventsPage() {
         )}
 
         {creating && (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4" aria-busy={submitting}>
+            <p className="text-base text-lion-muted">日期與時間皆以台灣時間發布。</p>
+            <fieldset disabled={submitting} className="flex min-w-0 flex-col gap-4 disabled:opacity-70">
             <div>
-              <label className="text-xs text-lion-muted mb-1 block">封面照片（選填）</label>
+              <label htmlFor="event-cover" className="text-base text-lion-muted mb-1 block">封面照片（選填）</label>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -239,6 +292,7 @@ export default function EventsPage() {
               </button>
               <input
                 ref={fileInputRef}
+                id="event-cover"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 className="hidden"
@@ -246,8 +300,11 @@ export default function EventsPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-lion-muted mb-1 block">活動名稱</label>
+              <label htmlFor="event-title" className="text-base text-lion-muted mb-1 block">活動名稱（必填）</label>
               <input
+                id="event-title"
+                required
+                maxLength={160}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="例如：分會例會暨新舊任交接"
@@ -256,17 +313,20 @@ export default function EventsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-lion-muted mb-1 block">日期</label>
+                <label htmlFor="event-date" className="text-base text-lion-muted mb-1 block">日期（必填）</label>
                 <input
+                  id="event-date"
                   type="date"
+                  required
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-lion-gold"
                 />
               </div>
               <div>
-                <label className="text-xs text-lion-muted mb-1 block">時間</label>
+                <label htmlFor="event-time" className="text-base text-lion-muted mb-1 block">時間（台灣）</label>
                 <input
+                  id="event-time"
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
@@ -274,9 +334,13 @@ export default function EventsPage() {
                 />
               </div>
             </div>
+            <p className="text-sm text-lion-muted">未填時間時，活動會顯示為當日 00:00。</p>
             <div>
-              <label className="text-xs text-lion-muted mb-1 block">地點</label>
+              <label htmlFor="event-location" className="text-base text-lion-muted mb-1 block">地點（必填）</label>
               <input
+                id="event-location"
+                required
+                maxLength={240}
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="活動地點"
@@ -284,10 +348,12 @@ export default function EventsPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-lion-muted mb-1 block">名額（選填）</label>
+              <label htmlFor="event-capacity" className="text-base text-lion-muted mb-1 block">名額（選填）</label>
               <input
+                id="event-capacity"
                 type="number"
                 min={1}
+                step={1}
                 value={capacity}
                 onChange={(e) => setCapacity(e.target.value)}
                 placeholder="例如：50"
@@ -295,8 +361,10 @@ export default function EventsPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-lion-muted mb-1 block">活動說明（選填）</label>
+              <label htmlFor="event-description" className="text-base text-lion-muted mb-1 block">活動說明（選填）</label>
               <textarea
+                id="event-description"
+                maxLength={3000}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
@@ -305,23 +373,24 @@ export default function EventsPage() {
               />
             </div>
 
-            {error && <p className="text-sm text-red-400">{error}</p>}
+            {error && <p role="alert" className="text-base text-lion-danger">{error}</p>}
 
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={resetForm}
-                className="flex-1 rounded-xl bg-white/10 text-lion-cream/70 font-medium py-2.5 text-sm"
+                className="flex-1 min-h-12 rounded-xl bg-lion-soft text-lion-cream font-medium py-3 text-base"
               >
-                取消
+                返回列表
               </button>
               <button
                 type="submit"
-                className="flex-1 rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-2.5 text-sm"
+                className="flex-1 min-h-12 rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-3 text-base"
               >
-                發布活動
+                {submitting ? "發布中，請稍候…" : "發布活動"}
               </button>
             </div>
+            </fieldset>
           </form>
         )}
       </div>

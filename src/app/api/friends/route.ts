@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
+import { getBlockedMemberIds } from "@/lib/member-block";
 
 function toCard(member: { id: string; name: string; nickname: string | null; title: string | null; photoUrl: string | null; organization: { name: string } }) {
   return {
@@ -18,9 +19,14 @@ export async function GET() {
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
   const prisma = await getPrisma();
+  const blocked = await getBlockedMemberIds(prisma, me.id);
 
   const friendships = await prisma.friendship.findMany({
-    where: { OR: [{ requesterId: me.id }, { addresseeId: me.id }] },
+    where: {
+      OR: [{ requesterId: me.id }, { addresseeId: me.id }],
+      requesterId: { notIn: blocked }, addresseeId: { notIn: blocked },
+      requester: { status: "ACTIVE", deletedAt: null }, addressee: { status: "ACTIVE", deletedAt: null },
+    },
     include: {
       requester: { include: { organization: true } },
       addressee: { include: { organization: true } },
@@ -42,8 +48,9 @@ export async function GET() {
 
   const suggestionMembers = await prisma.member.findMany({
     where: {
-      id: { notIn: [me.id, ...connectedIds] },
+      id: { notIn: [me.id, ...connectedIds, ...blocked] },
       status: "ACTIVE",
+      deletedAt: null,
     },
     include: { organization: true },
     take: 10,

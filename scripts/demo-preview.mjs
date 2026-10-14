@@ -12,8 +12,11 @@ const pagePaths = new Set([
 ]);
 
 export function isDemoFrontendPath(pathname) {
+  // Next encodes [id] in dynamic-page chunk names. Permit only these bracket
+  // escapes, not arbitrary encoded paths, traversal or API forwarding.
+  const staticPath = pathname.replace(/%5b/gi, "[").replace(/%5d/gi, "]");
   return pagePaths.has(pathname) || /^\/(members|events)\/[a-zA-Z0-9_-]+$/.test(pathname)
-    || /^\/_next\/static\/[a-zA-Z0-9_.\/-]+$/.test(pathname)
+    || /^\/_next\/static\/[a-zA-Z0-9_.\/\[\]-]+$/.test(staticPath) && !staticPath.split("/").includes("..")
     || pathname === "/icon.svg" || pathname === "/favicon.ico" || pathname === "/lions-logo.svg";
 }
 

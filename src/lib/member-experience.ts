@@ -11,6 +11,7 @@ export const experienceInputSchema = z
     multipleDistrictCode: z.string().trim().max(20).optional(),
     districtCode: z.string().trim().max(30).optional(),
     startYear: z.number().int().min(1917).max(2200),
+    startMonth: z.number().int().min(1).max(12).nullable().optional(),
     endYear: z.number().int().min(1917).max(2200).optional(),
     datePrecision: z.enum(["month", "lions-year", "approximate"]),
     isCurrent: z.boolean(),
@@ -18,7 +19,7 @@ export const experienceInputSchema = z
     note: z.string().trim().max(1000).optional(),
   })
   .superRefine((value, context) => {
-    if (!value.isCurrent && value.endYear !== undefined && value.endYear < value.startYear) {
+    if (value.endYear !== undefined && value.endYear < value.startYear) {
       context.addIssue({ code: "custom", path: ["endYear"], message: "結束年度不能早於開始年度" });
     }
   });
@@ -33,6 +34,7 @@ type ExperienceRecord = {
   multipleDistrictCode: string | null;
   districtCode: string | null;
   startYear: number;
+  startMonth?: number | null;
   endYear: number | null;
   datePrecision: string;
   isCurrent: boolean;
@@ -50,6 +52,7 @@ export function serializeExperience(experience: ExperienceRecord) {
         : positionOptions.find((position) => position.code === experience.positionCode)?.label ?? experience.positionCode,
     multipleDistrictCode: experience.multipleDistrictCode ?? undefined,
     districtCode: experience.districtCode ?? undefined,
+    startMonth: experience.startMonth ?? null,
     endYear: experience.endYear ?? undefined,
     note: experience.note ?? undefined,
     datePrecision: experience.datePrecision.replaceAll("_", "-"),
@@ -59,7 +62,10 @@ export function serializeExperience(experience: ExperienceRecord) {
   };
 }
 
-export function experienceData(input: z.infer<typeof experienceInputSchema>) {
+export function experienceData(input: z.infer<typeof experienceInputSchema>, previousStartMonth?: number | null) {
+  const startMonth = input.kind === "membership"
+    ? input.startMonth === undefined ? previousStartMonth ?? null : input.startMonth
+    : null;
   return {
     kind: input.kind,
     level: input.kind === "membership" ? ("club" as const) : input.level,
@@ -69,8 +75,12 @@ export function experienceData(input: z.infer<typeof experienceInputSchema>) {
     multipleDistrictCode: input.multipleDistrictCode || null,
     districtCode: input.districtCode || null,
     startYear: input.startYear,
-    endYear: input.isCurrent ? null : input.endYear ?? null,
-    datePrecision: input.datePrecision.replaceAll("-", "_") as "month" | "lions_year" | "approximate",
+    startMonth,
+    // Current status does not change the explicit last starting year of a term.
+    endYear: input.kind === "membership" ? null : input.endYear ?? null,
+    datePrecision: input.kind === "membership"
+      ? startMonth === null ? "approximate" as const : "month" as const
+      : "lions_year" as const,
     isCurrent: input.isCurrent,
     verificationStatus: "under_review" as const,
     visibility: input.visibility.replaceAll("-", "_") as "public" | "members" | "only_me",

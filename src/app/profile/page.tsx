@@ -6,6 +6,7 @@ import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import ThemeSelector from "@/components/ThemeSelector";
+import ProfileSecurityTools from "@/components/ProfileSecurityTools";
 import { CalendarIcon, ChevronRightIcon, PeopleIcon, QrIcon, UserIcon } from "@/components/icons";
 import { memberTitleOptions, tagOptions } from "@/lib/mock-data";
 import { colorFromId } from "@/lib/avatar-color";
@@ -73,30 +74,36 @@ export default function ProfilePage() {
   const [deleteError, setDeleteError] = useState("");
 
   async function deleteAccount() {
-    if (!window.confirm("確定要永久刪除帳號嗎？此動作無法復原。")) return;
+    if (deleting || !window.confirm(`確定移除 ${me?.name ?? "您的"} 的帳號與個資嗎？活動及稽核保留匿名紀錄，圖片清理可能稍後完成；帳號無法復原。`)) return;
     setDeleting(true);
     setDeleteError("");
+    try {
     const res = await fetch("/api/me/account-deletion", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: deletePassword }),
     });
     if (res.ok) {
-      router.push("/login");
+      router.replace("/login?reason=account-deleted");
       router.refresh();
       return;
     }
     const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && data.error === "未登入") { router.replace("/login?reason=session-expired"); return; }
     setDeleteError(data.error ?? "刪除失敗，請稍後再試");
-    setDeleting(false);
+    } catch { setDeleteError("連線中斷，尚未確認刪除結果。請重新載入確認帳號狀態後再試。"); }
+    finally { setDeleting(false); }
   }
 
   async function resendVerification() {
     setResendingVerification(true);
+    try {
     const res = await fetch("/api/me/resend-verification", { method: "POST" });
     const data = await res.json().catch(() => ({}));
+    if (res.status === 401) { router.replace("/login?reason=session-expired"); return; }
     setToast(res.ok ? "驗證信已寄出，請至信箱查看" : data.error ?? "寄送失敗，請稍後再試");
-    setResendingVerification(false);
+    } catch { setToast("驗證信連線中斷，請稍後再試"); }
+    finally { setResendingVerification(false); }
   }
 
   function loadMe() {
@@ -104,7 +111,7 @@ export default function ProfilePage() {
     return fetch("/api/me")
       .then(async (res) => {
         if (res.status === 401) {
-          router.push("/login");
+          setMe(null); router.replace("/login?reason=session-expired");
           return null;
         }
         if (!res.ok) throw new Error("個人資料暫時無法載入，請稍後再試");
@@ -121,7 +128,7 @@ export default function ProfilePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const lionYears = me?.joinYear ? calculateLionYears(String(me.joinYear)) : null;
+  const lionYears = me?.joinYear ? calculateLionYears(String(me.joinYear), me.joinMonth) : null;
 
   useEffect(() => {
     if (editing && focusField) document.getElementById(`profile-${focusField}`)?.focus();
@@ -173,6 +180,7 @@ export default function ProfilePage() {
           body: JSON.stringify({ contentType: avatarFile.type, size: avatarFile.size }),
         });
         const signResult = await signResponse.json();
+        if (signResponse.status === 401) { setMe(null); router.replace("/login?reason=session-expired"); return; }
         if (!signResponse.ok) {
           setToast(signResult.error ?? "無法準備大頭貼上傳");
           return;
@@ -191,8 +199,9 @@ export default function ProfilePage() {
       const res = await fetch("/api/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, nickname, title, email, phone, bio, tags, photoUrl: photoUrl ?? "", birthday }),
+        body: JSON.stringify({ name, nickname, title, ...(email !== me?.email ? { email } : {}), phone, bio, tags, photoUrl: photoUrl ?? "", birthday }),
       });
+      if (res.status === 401) { setMe(null); router.replace("/login?reason=session-expired"); return; }
       if (!res.ok) {
         const result = await res.json().catch(() => ({}));
         setToast(result.error ?? "更新失敗，請再試一次");
@@ -381,6 +390,7 @@ export default function ProfilePage() {
             </Link>
 
             <ThemeSelector />
+            <ProfileSecurityTools />
 
             {me.tags.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -594,21 +604,25 @@ export default function ProfilePage() {
             {!showDeleteForm ? (
               <button
                 onClick={() => setShowDeleteForm(true)}
-                className="mt-2 w-full rounded-xl py-2.5 text-center text-xs text-red-300/70 hover:bg-red-500/10"
+                className="mt-2 w-full rounded-xl py-2.5 text-center text-sm text-lion-danger hover:bg-lion-soft"
               >
                 刪除帳號
               </button>
             ) : (
               <div className="mt-3 rounded-2xl border border-red-400/30 bg-red-500/5 p-4">
-                <p className="text-xs text-red-200">此動作會永久刪除您的帳號與所有資料，無法復原。請輸入密碼以確認。</p>
+                <p className="text-base leading-relaxed text-lion-danger">移除帳號與個資後，帳號無法復原。活動及稽核會保留匿名紀錄，圖片清理可能稍後完成。請輸入密碼確認。</p>
+                <label htmlFor="delete-account-password" className="mt-3 block text-sm font-medium">目前密碼</label>
                 <input
                   type="password"
+                  id="delete-account-password"
+                  autoComplete="current-password"
+                  disabled={deleting}
                   value={deletePassword}
                   onChange={(e) => setDeletePassword(e.target.value)}
                   placeholder="輸入密碼"
                   className="mt-3 w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-4 py-2.5 text-sm outline-none focus:border-red-400"
                 />
-                {deleteError && <p className="mt-2 text-xs text-red-300">{deleteError}</p>}
+                {deleteError && <p role="alert" className="mt-2 text-base text-lion-danger">{deleteError}</p>}
                 <div className="mt-3 flex gap-2">
                   <button
                     onClick={() => {
@@ -616,6 +630,7 @@ export default function ProfilePage() {
                       setDeletePassword("");
                       setDeleteError("");
                     }}
+                    disabled={deleting}
                     className="flex-1 rounded-xl bg-white/10 text-lion-cream/70 font-medium py-2 text-sm"
                   >
                     取消
@@ -623,7 +638,7 @@ export default function ProfilePage() {
                   <button
                     onClick={deleteAccount}
                     disabled={deleting || !deletePassword}
-                    className="flex-1 rounded-xl bg-red-500 text-white font-semibold py-2 text-sm disabled:opacity-50"
+                    className="button-danger flex-1 rounded-xl font-semibold py-3 text-base disabled:opacity-50"
                   >
                     {deleting ? "刪除中…" : "確認永久刪除"}
                   </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import QrCode from "./QrCode";
+import AccessibleDialog from "./AccessibleDialog";
 
 export default function QrModal({
   title,
@@ -14,17 +15,9 @@ export default function QrModal({
   onClose: () => void;
 }) {
   return (
-    <div
-      className="modal-safe fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-8"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-[320px] rounded-2xl bg-lion-card border border-white/10 p-6 flex flex-col items-center"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="font-semibold mb-1">{title}</p>
-        {subtitle && <p className="text-xs text-lion-muted mb-4 text-center">{subtitle}</p>}
-        <div className="w-48 h-48 rounded-xl overflow-hidden mb-4">
+    <AccessibleDialog open onClose={onClose} title={title} description={subtitle}>
+      <div className="flex flex-col items-center">
+        <div className="aspect-square w-full max-w-64 rounded-xl overflow-hidden mb-4">
           <QrCode value={value} />
         </div>
         <button
@@ -34,6 +27,6 @@ export default function QrModal({
           關閉
         </button>
       </div>
-    </div>
+    </AccessibleDialog>
   );
 }
