@@ -2,7 +2,7 @@
 
 核對日期：2026-10-14。這是原生發行準備，不是已上架或已提交審查的聲明。正式網站的 main 部署／migration，與 iOS／Android 發行包是不同交付物；網站部署成功不會自動產生 IPA、APK 或 AAB。
 
-目前正式 AWS／migration 與同版 API 部署交 Jerry 處理，本機文件、素材及 mock 可並行準備；正式順序必須先完成同版資料庫更新，再部署相容 API，之後才做原生真 API 實機驗收與送審。不能先部署依賴新 schema 的後端、再等待後補 migration。詳見 [部署依賴與發行輸入](RELEASE_INPUTS_2026-10-14.md#4-migration-可以後補嗎準備可並行上線必須-db-first)。
+R2 最終分工：正式 AWS 備份／migration／同版 API 部署與正式驗收全部由 Jerry 負責；Hao 不操作正式 AWS／RDS、不執行 migration，只接手機工程與上架，不需移交 AWS／DB 憑證。Jerry 以 [完成回報表](../JERRY_RETURN_FORM_MIGRATION_MOBILE_2026-10-14.md)交回結果；本機文件、素材及 mock 可並行準備。正式順序為同版資料庫更新 → 相容 API 部署／驗收 → 原生真機 → 送審，不能倒序後補 migration。詳見 [部署依賴與發行輸入](RELEASE_INPUTS_2026-10-14.md#4-migration-可以後補嗎準備可並行上線必須-db-first)。
 
 ## 現況：已有 Web 功能，原生建置仍有缺口
 

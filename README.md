@@ -6,6 +6,8 @@
 
 本分支 `codex/acceptance-fixes-2026-10-14` 保存功能修復與交接，並非正式站部署紀錄。最新 [進版紀錄](docs/RELEASE_2026-10-14.md)、[Jerry 接續交接](docs/JERRY_HANDOFF_RELEASE_2026-10-14.md)、[交接 PDF](output/pdf/lionclub_jerry_handoff_release_2026-10-14.pdf)。本機測試 150/150 與 production build 通過；正式備份／migration／main／Amplify 由 Jerry 接續，固定先 DB、再同版程式。App 準備可並行，不能先上依賴新 schema 的後端再補 migration。
 
+**R2 最終分工：Hao 不執行 migration、不操作正式 AWS／RDS；Jerry 完成正式後端與驗收後，Hao 接手機工程、真機與上架。** 同名交接 MD／PDF 已覆蓋上一版；舊接手資料表改為 [Jerry 完成回報表](docs/JERRY_RETURN_FORM_MIGRATION_MOBILE_2026-10-14.md)，不再要求移交 AWS／DB 憑證給 Hao。
+
 - **驗證與註冊**：Email／密碼登入、HttpOnly Cookie Session；本次新註冊改為只使用共同邀請 QR。
 - **好友系統**：好友、邀請、搜尋、推薦及 QR 掃描加好友均已串接 API。
 - **會員 QR**：首頁與好友頁顯示可實際掃描的標準 QR；掃描器支援手機後鏡頭及相簿圖片。

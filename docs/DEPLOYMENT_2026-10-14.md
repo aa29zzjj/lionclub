@@ -2,7 +2,9 @@
 
 ## 授權與實際狀態
 
-使用者先前已授權推 main 與正式 migration；2026-10-14 最新決策為：目前無法執行的 AWS／資料庫工作交給 Jerry，修改與 MD 先存 GitHub。因新版依賴新 schema，本輪改存發版分支、不觸發 main 部署；不是撤銷發版授權或再等待使用者登入。
+2026-10-14 R2 最終決策：**Jerry 負責全部正式 AWS 備份、migration、同版 main／Amplify 部署與正式驗收；Hao 不執行 migration，不接手 AWS／RDS 正式操作，負責手機版與上架。** 先前「Hao 接手 migration」的方案作廢，不再要求 AWS／DB 憑證移交給 Hao。Jerry 遇阻擋需回報，不默認轉交執行責任。
+
+本輪只更新文件並留存在發版分支，不觸發 main 部署。下列正式操作全部是給 Jerry 的接續清單；使用者先前的發版授權不代表 Codex 本輪應代跑正式 DB。
 
 目前已確認：
 

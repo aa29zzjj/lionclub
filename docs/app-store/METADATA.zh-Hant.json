@@ -59,6 +59,10 @@
   },
   "deploymentDependencies": {
     "status": "pending_jerry",
+    "decisionRevision": "2026-10-14-R2",
+    "productionAwsMigrationDeploymentOwner": "Jerry",
+    "nativeEngineeringAndStoreOwner": "Hao",
+    "haoRunsProductionMigration": false,
     "productionDatabaseMigrationVerified": false,
     "matchingProductionApiDeploymentVerified": false,
     "nativeLiveApiAcceptanceComplete": false,
@@ -68,7 +72,7 @@
       "原生客戶端接同版 API 完成實機端到端驗收",
       "簽章、商店資料與政策驗收通過後才提交審查"
     ],
-    "notes": "本次未取得可用正式 AWS 存取，migration 與正式 API 部署交 Jerry 執行及回報。可先準備文件、素材、mock 與原生設計；不可先把依賴新欄位的後端部署到舊 schema，再等待後補 migration。尚無原生工程、完整工具鏈或可發布產物；未提交商店。"
+    "notes": "R2 最終分工：Jerry 負責正式 AWS 備份、migration、同版後端部署及正式驗收；Hao 不操作正式 AWS/RDS、不執行 migration，負責手機工程與上架。不再移交 AWS/DB 憑證給 Hao，舊接手方案作廢。Jerry 交回版本、結果與未完成項目後，Hao 接正式 API/原生真機；文件、素材與 mock 可並行。不可先部署新版再補 schema。尚無原生工程、完整工具鏈或可發布產物，未提交商店。"
   },
   "review": {
     "demoAccountConfigured": false,
