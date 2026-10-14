@@ -10,6 +10,7 @@ import AccessibleDialog from "@/components/AccessibleDialog";
 import { PinIcon } from "@/components/icons";
 import { colorFromId } from "@/lib/avatar-color";
 import { EVENT_TIME_ZONE, taipeiEventStartAt } from "@/lib/event-calendar";
+import { EVENT_CATEGORIES, eventCategoryLabels, type EventCategory } from "@/lib/event-category";
 
 type EventDetail = {
   id: string;
@@ -17,6 +18,7 @@ type EventDetail = {
   description?: string;
   location: string;
   capacity?: number;
+  category: EventCategory;
   coverPhotoUrl?: string;
   hostChapter: string;
   startAt: string;
@@ -61,6 +63,7 @@ export default function EventDetailPage() {
   const [location, setLocation] = useState("");
   const [capacity, setCapacity] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState<EventCategory>("CLUB_OFFICIAL");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
@@ -136,6 +139,7 @@ export default function EventDetailPage() {
     setLocation(nextEvent.location);
     setCapacity(nextEvent.capacity ? String(nextEvent.capacity) : "");
     setDescription(nextEvent.description ?? "");
+    setCategory(nextEvent.category);
     setCoverFile(null);
     setCoverPreview(nextEvent.coverPhotoUrl ?? null);
   }
@@ -276,6 +280,7 @@ export default function EventDetailPage() {
         capacity: capacity ? Number(capacity) : null,
         description: description.trim() || null,
         coverPhotoUrl,
+        category,
       }),
     });
     const result = await response.json().catch(() => ({}));
@@ -296,6 +301,7 @@ export default function EventDetailPage() {
       capacity: capacity ? Number(capacity) : undefined,
       description: description.trim() || undefined,
       coverPhotoUrl: coverPhotoUrl ?? undefined,
+      category,
       isFull: Boolean(capacity && current.registeredCount >= Number(capacity)),
     } : current);
     setEditing(false);
@@ -393,6 +399,9 @@ export default function EventDetailPage() {
           <div className="h-36 rounded-2xl bg-gradient-to-br from-lion-navyLight to-[#2E4A8A] mb-4" />
         )}
 
+        <span className={`inline-block mb-2 rounded-full px-2.5 py-1 text-xs font-medium ${event.category === "PERSONAL" ? "bg-white/10 text-lion-muted" : "bg-lion-gold/15 text-lion-gold"}`}>
+          {eventCategoryLabels[event.category]}
+        </span>
         <div className="flex items-start justify-between gap-3 mb-2">
           <h1 className="text-xl font-bold">{event.title}</h1>
           {event.canManage && !editing && (
@@ -439,6 +448,22 @@ export default function EventDetailPage() {
             <input id="edit-event-capacity" type="number" min={event.registeredCount || 1} step={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className="min-h-12 rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2.5 text-base" placeholder="名額（留白為不限）" />
             <label htmlFor="edit-event-description" className="text-base">活動說明（選填）</label>
             <textarea id="edit-event-description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={3000} rows={3} className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2.5 text-base resize-none" placeholder="活動說明" />
+            <div>
+              <span className="text-base block mb-1">活動類型</span>
+              <div className="flex gap-2">
+                {EVENT_CATEGORIES.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setCategory(value)}
+                    aria-pressed={category === value}
+                    className={`min-h-12 rounded-xl border px-3 text-sm font-medium ${category === value ? "border-lion-gold bg-lion-gold/10 text-lion-gold" : "border-lion-border text-lion-muted"}`}
+                  >
+                    {eventCategoryLabels[value]}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex gap-2">
               <button type="button" disabled={saving || deleting} onClick={() => { loadForm(event); setEditing(false); setError(""); }} className="min-h-12 flex-1 rounded-xl bg-white/10 py-2 text-base disabled:opacity-50">取消</button>
               <button type="submit" disabled={saving || deleting} className="min-h-12 flex-1 rounded-xl bg-lion-action text-lion-navyDeep py-2 text-base font-semibold disabled:opacity-50">{saving ? "儲存中…" : "儲存"}</button>

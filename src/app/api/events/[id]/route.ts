@@ -5,6 +5,7 @@ import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-mem
 import type { Prisma } from "@prisma/client";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 import { EVENT_ATTENDANCE_ROLES } from "@/lib/event-attendance";
+import { EVENT_CATEGORIES } from "@/lib/event-category";
 
 const managementRoles = EVENT_ATTENDANCE_ROLES;
 
@@ -15,6 +16,7 @@ const updateSchema = z.object({
   capacity: z.number().int().positive().nullable().optional(),
   description: z.string().trim().max(3000).nullable().optional(),
   coverPhotoUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
+  category: z.enum(EVENT_CATEGORIES).optional(),
 });
 
 async function canManage(memberId: string, event: { createdById: string; hostOrganizationId: string }, database?: Prisma.TransactionClient) {
@@ -60,6 +62,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       description: event.description ?? undefined,
       location: event.location ?? "",
       capacity: event.capacity ?? undefined,
+      category: event.category,
       coverPhotoUrl: event.coverPhotoUrl ?? undefined,
       hostChapter: event.hostOrganization.name,
       startAt: event.startAt,
@@ -94,6 +97,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         title: parsed.data.title, startAt: new Date(parsed.data.startAt), location: parsed.data.location,
         capacity: parsed.data.capacity ?? null, description: parsed.data.description || null,
         ...(parsed.data.coverPhotoUrl !== undefined ? { coverPhotoUrl: parsed.data.coverPhotoUrl || null } : {}),
+        ...(parsed.data.category !== undefined ? { category: parsed.data.category } : {}),
       } });
     }, { isolationLevel: "Serializable" });
     return NextResponse.json({ ok: true });

@@ -374,6 +374,7 @@ model Event {
   startAt     DateTime
   capacity    Int?
   scope       String   @default("CLUB")
+  category    String   @default("CLUB_OFFICIAL")
   coverPhotoUrl String?
 
   hostOrganizationId String

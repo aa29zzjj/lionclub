@@ -7,6 +7,7 @@ import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { CalendarIcon, PinIcon, PlusIcon } from "@/components/icons";
 import { EVENT_TIME_ZONE, taipeiEventStartAt } from "@/lib/event-calendar";
+import { EVENT_CATEGORIES, eventCategoryLabels, type EventCategory } from "@/lib/event-category";
 
 const eventGradients = [
   "from-lion-navyLight to-[#2E4A8A]",
@@ -20,6 +21,7 @@ type EventCard = {
   location: string;
   description?: string;
   capacity?: number;
+  category: EventCategory;
   coverPhotoUrl?: string;
   registeredCount: number;
   isFull: boolean;
@@ -47,6 +49,8 @@ export default function EventsPage() {
   const [description, setDescription] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [category, setCategory] = useState<EventCategory>("CLUB_OFFICIAL");
+  const [filter, setFilter] = useState<EventCategory | "ALL">("ALL");
   const [error, setError] = useState("");
 
   function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -106,6 +110,7 @@ export default function EventsPage() {
     setDescription("");
     setCoverFile(null);
     setCoverPreview(null);
+    setCategory("CLUB_OFFICIAL");
     setError("");
     setCreating(false);
   }
@@ -171,6 +176,7 @@ export default function EventsPage() {
           description: description.trim() || undefined,
           capacity: capacity ? Number(capacity) : undefined,
           coverPhotoUrl,
+          category,
         }),
       });
       if (res.status === 401) {
@@ -234,10 +240,23 @@ export default function EventsPage() {
 
         {!creating && (
           <div className="flex flex-col gap-4" aria-busy={loading}>
+            <div className="flex gap-1 rounded-xl bg-lion-soft p-1" role="group" aria-label="活動分類篩選">
+              {(["ALL", ...EVENT_CATEGORIES] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFilter(value)}
+                  aria-pressed={filter === value}
+                  className={`flex-1 min-h-10 rounded-lg px-2 text-sm font-medium ${filter === value ? "bg-lion-action text-lion-navyDeep" : "text-lion-muted"}`}
+                >
+                  {value === "ALL" ? "全部" : eventCategoryLabels[value]}
+                </button>
+              ))}
+            </div>
             {loading && <p role="status" className="text-base text-lion-muted text-center py-8">正在載入活動…</p>}
             {loadError && <div role="alert" className="rounded-xl border border-lion-danger/40 bg-lion-card p-4"><p className="text-base text-lion-danger">{loadError}</p><button type="button" onClick={() => void loadEvents()} disabled={loading} className="mt-3 min-h-12 rounded-xl bg-lion-action px-5 text-base font-semibold text-lion-navyDeep disabled:opacity-50">重新載入活動</button></div>}
-            {!loading && !loadError && events.length === 0 && <p className="text-base text-lion-muted text-center py-8">目前沒有活動，也可從行事曆查看不同月份。</p>}
-            {!loading && !loadError && events.map((ev, i) => (
+            {!loading && !loadError && events.filter((ev) => filter === "ALL" || ev.category === filter).length === 0 && <p className="text-base text-lion-muted text-center py-8">目前沒有符合的活動，也可從行事曆查看不同月份。</p>}
+            {!loading && !loadError && events.filter((ev) => filter === "ALL" || ev.category === filter).map((ev, i) => (
               <Link
                 key={ev.id}
                 href={`/events/${ev.id}`}
@@ -249,6 +268,9 @@ export default function EventsPage() {
                     <p className="text-lg font-semibold break-words">{ev.title}</p>
                     <p className="text-sm text-lion-muted">{formatDate(ev.startAt)}（台灣時間）</p>
                   </div>
+                  <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${ev.category === "CLUB_OFFICIAL" ? "bg-lion-gold/15 text-lion-gold" : "bg-white/10 text-lion-muted"}`}>
+                    {eventCategoryLabels[ev.category]}
+                  </span>
                 </div>
                 {ev.coverPhotoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -276,6 +298,23 @@ export default function EventsPage() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-4" aria-busy={submitting}>
             <p className="text-base text-lion-muted">日期與時間皆以台灣時間發布。</p>
             <fieldset disabled={submitting} className="flex min-w-0 flex-col gap-4 disabled:opacity-70">
+            <div>
+              <span className="text-base text-lion-muted mb-1 block">活動分類</span>
+              <div className="grid grid-cols-2 gap-2">
+                {EVENT_CATEGORIES.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setCategory(value)}
+                    aria-pressed={category === value}
+                    className={`min-h-12 rounded-xl border px-3 text-sm font-medium ${category === value ? "border-lion-gold bg-lion-gold/10 text-lion-gold" : "border-lion-border text-lion-muted"}`}
+                  >
+                    {eventCategoryLabels[value]}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-lion-muted">獅子會活動會標示為分會正式活動；個人／工商活動是會員自己要宣傳的場合，不代表分會立場。</p>
+            </div>
             <div>
               <label htmlFor="event-cover" className="text-base text-lion-muted mb-1 block">封面照片（選填）</label>
               <button

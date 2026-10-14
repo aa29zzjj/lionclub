@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
+import { EVENT_CATEGORIES } from "@/lib/event-category";
 
 export async function GET() {
   const me = await getCurrentMember();
@@ -25,6 +26,7 @@ export async function GET() {
       description: ev.description ?? undefined,
       location: ev.location ?? "",
       capacity: ev.capacity ?? undefined,
+      category: ev.category,
       coverPhotoUrl: ev.coverPhotoUrl ?? undefined,
       hostChapter: ev.hostOrganization.name,
       startAt: ev.startAt,
@@ -42,6 +44,7 @@ const bodySchema = z.object({
   capacity: z.number().int().positive().optional(),
   description: z.string().trim().max(3000).optional(),
   coverPhotoUrl: z.union([z.string().url(), z.literal("")]).optional(),
+  category: z.enum(EVENT_CATEGORIES).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -53,7 +56,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "欄位格式錯誤" }, { status: 400 });
   }
-  const { title, startAt, location, capacity, description, coverPhotoUrl } = parsed.data;
+  const { title, startAt, location, capacity, description, coverPhotoUrl, category } = parsed.data;
 
   const prisma = await getPrisma();
   try {
@@ -68,6 +71,7 @@ export async function POST(req: NextRequest) {
       capacity,
       description,
       coverPhotoUrl: coverPhotoUrl || null,
+      category: category ?? "CLUB_OFFICIAL",
       hostOrganizationId: me.organizationId,
       createdById: me.id,
       } });
