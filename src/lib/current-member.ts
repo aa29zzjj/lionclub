@@ -1,6 +1,7 @@
 import { getPrisma } from "./prisma";
 import { getSession } from "./session";
 import type { Prisma } from "@prisma/client";
+import { activeAdminRoleWhere } from "./active-admin-role";
 
 export async function getCurrentMember() {
   const session = await getSession();
@@ -13,14 +14,14 @@ export async function getCurrentMember() {
     include: {
       organization: true,
       adminRoles: {
-        where: { validFrom: { lte: now }, OR: [{ validUntil: null }, { validUntil: { gt: now } }] },
+        where: activeAdminRoleWhere(now),
       },
       tags: true,
       user: { select: { id: true } },
     },
   });
 
-  if (!member || member.status !== "ACTIVE" || member.user?.id !== session.userId) return null;
+  if (!member || member.status !== "ACTIVE" || member.deletedAt || member.user?.id !== session.userId) return null;
   return member;
 }
 
@@ -38,15 +39,14 @@ export async function hasAdminRoleForOrganization(
     where: {
       memberId,
       role: { in: allowedRoles },
-      validFrom: { lte: now },
-      OR: [{ validUntil: null }, { validUntil: { gt: now } }],
+      ...activeAdminRoleWhere(now),
     },
   });
 
   if (roles.length === 0) return false;
 
-  // SUPER_ADMIN 或 scopeId 為 null（全域）一律通過
-  if (roles.some((r) => r.role === "SUPER_ADMIN" || !r.scopeId)) return true;
+  // Only SUPER_ADMIN is global. Missing legacy scope fails closed, never grants the world.
+  if (roles.some((r) => r.role === "SUPER_ADMIN")) return true;
 
   // 找出該會員所有管理角色涵蓋的組織 id，往上比對是否包含 organizationId
   const org = await prisma.organization.findUnique({

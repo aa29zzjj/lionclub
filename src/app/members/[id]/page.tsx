@@ -51,30 +51,43 @@ export default function MemberProfilePage() {
     const blocking = !member.blockedByMe;
     if (blocking && !window.confirm(`確定要封鎖 ${member.name} 嗎？封鎖後會自動解除好友關係。`)) return;
     setBusy(true);
+    setError("");
+    try {
     const res = await fetch(`/api/members/${member.id}/block`, { method: blocking ? "POST" : "DELETE" });
+    const result = await res.json().catch(() => ({}));
+    if (res.status === 401) { router.replace("/login?reason=session-expired"); return; }
+    if (!res.ok) throw new Error(result.error ?? "封鎖狀態更新失敗，請重試");
     if (res.ok) {
+      if (blocking) { setMember(null); router.replace("/profile"); return; }
       setMember((prev) => (prev ? { ...prev, blockedByMe: blocking } : prev));
       setToast(blocking ? "已封鎖" : "已取消封鎖");
       setTimeout(() => setToast(""), 2500);
     }
-    setBusy(false);
+    } catch (failure) { setError(failure instanceof Error && !(failure instanceof TypeError) ? failure.message : "連線中斷，請重新載入確認封鎖狀態後再試"); }
+    finally { setBusy(false); }
   }
 
   async function submitReport() {
     if (!member || !reportReason.trim()) return;
     setBusy(true);
+    setError("");
+    try {
     const res = await fetch(`/api/members/${member.id}/report`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason: reportReason.trim() }),
     });
+    const result = await res.json().catch(() => ({}));
+    if (res.status === 401) { router.replace("/login?reason=session-expired"); return; }
+    if (!res.ok) throw new Error(result.error ?? "檢舉未送出，請重試");
     if (res.ok) {
       setShowReportForm(false);
       setReportReason("");
       setToast("已送出檢舉，感謝您的回報");
       setTimeout(() => setToast(""), 2500);
     }
-    setBusy(false);
+    } catch (failure) { setError(failure instanceof Error && !(failure instanceof TypeError) ? failure.message : "連線中斷，檢舉送出結果尚未確認，請稍後再試"); }
+    finally { setBusy(false); }
   }
 
   useEffect(() => {
@@ -92,6 +105,7 @@ export default function MemberProfilePage() {
         return data.member as MemberProfile;
       })
       .then((data) => data && setMember(data))
+      .catch(() => setError("會員資料連線中斷，請重新整理後重試"))
       .finally(() => setLoading(false));
   }, [params.id, router]);
 
@@ -119,7 +133,7 @@ export default function MemberProfilePage() {
     );
   }
 
-  const lionYears = member.joinYear ? calculateLionYears(String(member.joinYear)) : null;
+  const lionYears = member.joinYear ? calculateLionYears(String(member.joinYear), member.joinMonth) : null;
 
   return (
     <AppShell showNav={false}>
@@ -131,6 +145,7 @@ export default function MemberProfilePage() {
             {toast}
           </div>
         )}
+        {error && <p role="alert" className="mb-4 text-base text-lion-danger">{error}</p>}
 
         <section className="theme-brand-panel mb-5 rounded-3xl border border-lion-gold/25 bg-gradient-to-br from-[#19264a] via-lion-navyLight to-[#10172b] p-5 text-center">
           <div className="mx-auto mb-3 w-fit">
@@ -172,8 +187,11 @@ export default function MemberProfilePage() {
 
         {showReportForm && (
           <div className="mb-5 rounded-2xl border border-white/[0.06] bg-lion-card p-4">
-            <label className="mb-1 block text-xs text-lion-muted">檢舉原因</label>
+            <label htmlFor="member-report-reason" className="mb-1 block text-sm text-lion-muted">檢舉原因</label>
             <textarea
+              id="member-report-reason"
+              disabled={busy}
+              maxLength={1000}
               value={reportReason}
               onChange={(e) => setReportReason(e.target.value)}
               rows={3}
@@ -183,6 +201,7 @@ export default function MemberProfilePage() {
             <div className="mt-2 flex gap-2">
               <button
                 onClick={() => setShowReportForm(false)}
+                disabled={busy}
                 className="flex-1 rounded-xl bg-white/10 text-lion-cream/70 font-medium py-2 text-xs"
               >
                 取消
@@ -190,7 +209,7 @@ export default function MemberProfilePage() {
               <button
                 onClick={submitReport}
                 disabled={busy || !reportReason.trim()}
-                className="flex-1 rounded-xl bg-lion-gold text-lion-navyDeep font-semibold py-2 text-xs disabled:opacity-50"
+                className="flex-1 rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-2 text-base disabled:opacity-50"
               >
                 送出檢舉
               </button>

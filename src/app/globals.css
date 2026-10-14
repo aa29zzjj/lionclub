@@ -132,7 +132,9 @@ textarea {
 
 :root[data-theme="light"] .text-red-300,
 :root[data-theme="light"] .text-red-400,
-:root[data-theme="light"] .text-red-300\/80 {
+:root[data-theme="light"] .text-red-300\/80,
+:root[data-theme="light"] .text-red-300\/70,
+:root[data-theme="light"] .text-red-200 {
   color: #B42318;
 }
 
@@ -158,6 +160,12 @@ textarea {
 
 @media (max-width: 480px), (pointer: coarse) {
   .app-frame button { min-height: 48px; min-width: 48px; }
+  .app-frame a[href^="tel:"], .app-frame a[href^="mailto:"], .touch-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 0.5rem;
+  }
   .app-frame :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
     font-size: max(1rem, 1em);
   }
@@ -166,10 +174,25 @@ textarea {
 /* iOS Safari renders type="date" with its own oversized intrinsic line-height
    that ignores padding, making it balloon taller than every other field. */
 .app-frame input[type="date"] {
-  height: 48px;
+  min-height: 48px;
+  height: auto;
   line-height: 1.2;
   -webkit-appearance: none;
 }
+
+/* Readable baseline for essential copy and status labels; honors browser text scaling. */
+.app-frame .text-xs, .dialog-panel .text-xs,
+.app-frame .text-\[10px\], .app-frame .text-\[11px\],
+.dialog-panel .text-\[10px\], .dialog-panel .text-\[11px\] {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.dialog-panel :is(button, input, select, textarea) { min-height: 48px; }
+.dialog-panel :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { font-size: 1rem; }
+.button-danger { background: #B42318; color: #FFFFFF; }
+.app-frame .text-sm, .dialog-panel .text-sm { font-size: 1rem; line-height: 1.5; }
+.app-frame a { min-height: 48px; }
+.app-frame a:not([class*="block"]):not([class*="flex"]) { display: inline-flex; align-items: center; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; }

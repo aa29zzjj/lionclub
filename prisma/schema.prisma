@@ -80,6 +80,7 @@ model Member {
 
   role   String @default("MEMBER")
   status String @default("PENDING")
+  deletedAt DateTime? // 已移除帳號與個資；匿名節點保留共享活動／稽核，不可再登入
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
@@ -105,6 +106,9 @@ model Member {
 
   eventRegistrations EventRegistration[]
   checkedInRegistrations EventRegistration[] @relation("EventCheckedInBy")
+  checkInHistory EventCheckInAudit[] @relation("CheckInMember")
+  checkInsPerformed EventCheckInAudit[] @relation("CheckInActor")
+  accountDeletionCleanup AccountDeletionCleanup?
   createdEvents       Event[]              @relation("EventCreatedBy")
 
   sentNotifications      EventNotification[]          @relation("NotificationSender")
@@ -152,6 +156,7 @@ model User {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String
+  sessionVersion Int @default(1)
   memberId     String?  @unique
   member       Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
@@ -165,6 +170,7 @@ model PasswordResetToken {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash String   @unique
+  email     String @default("") // 空字串僅供舊版 writer 切換；新版消費端必須拒絕
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime @default(now())
@@ -177,6 +183,7 @@ model EmailVerificationToken {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash String   @unique
+  email     String @default("") // 空字串僅供舊版 writer 切換；新版消費端必須拒絕
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime @default(now())
@@ -184,11 +191,32 @@ model EmailVerificationToken {
   @@index([userId, expiresAt])
 }
 
-// 以 (key) 為單位的固定時窗計數器；key 形如 "login:<ip>" 或 "register:<ip>"。
+// 時窗亦在 key 中，由資料庫 upsert 原子遞增，不以 read/reset 覆蓋併發計數。
 model RateLimitAttempt {
   key         String   @id
   windowStart DateTime
   count       Int      @default(0)
+
+  @@index([windowStart])
+}
+
+// 刪帳後可重試本人 avatar 清理，永不刪 events/ 共享資產。
+model AccountDeletionCleanup {
+  id           String @id @default(cuid())
+  memberId     String @unique
+  member       Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  avatarPrefix String
+  bucket       String?
+  region       String?
+  status       String @default("PENDING")
+  attemptCount Int @default(0)
+  processingStartedAt DateTime?
+  lastError    String?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status, createdAt])
 }
 
 model MemberBlock {
@@ -276,6 +304,7 @@ model MemberExperience {
   districtCode           String?
 
   startYear Int
+  startMonth Int? // membership calendar month; null means unknown, never infer July
   endYear   Int?
   datePrecision DatePrecision
   isCurrent     Boolean
@@ -351,9 +380,10 @@ model Event {
   hostOrganization   Organization @relation(fields: [hostOrganizationId], references: [id], onDelete: Cascade)
 
   createdById String
-  createdBy   Member @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  createdBy   Member @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 
   registrations EventRegistration[]
+  checkInHistory EventCheckInAudit[]
   notifications EventNotification[]
 
   createdAt DateTime @default(now())
@@ -370,8 +400,27 @@ model EventRegistration {
   checkedInAt  DateTime?
   checkedInById String?
   checkedInBy   Member?  @relation("EventCheckedInBy", fields: [checkedInById], references: [id], onDelete: SetNull)
+  checkInAudit EventCheckInAudit?
 
   @@unique([eventId, memberId])
+  @@index([eventId, status])
+}
+
+model EventCheckInAudit {
+  id             String @id @default(cuid())
+  eventId        String
+  event          Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registrationId String @unique
+  registration   EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  memberId       String
+  member         Member @relation("CheckInMember", fields: [memberId], references: [id], onDelete: Restrict)
+  actorId        String
+  actor          Member @relation("CheckInActor", fields: [actorId], references: [id], onDelete: Restrict)
+  method         String
+  reason         String?
+  checkedInAt    DateTime @default(now())
+
+  @@index([eventId, checkedInAt])
 }
 
 model EventNotification {
@@ -379,7 +428,7 @@ model EventNotification {
   eventId  String
   event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   senderId String
-  sender   Member   @relation("NotificationSender", fields: [senderId], references: [id], onDelete: Cascade)
+  sender   Member   @relation("NotificationSender", fields: [senderId], references: [id], onDelete: Restrict)
   message  String
   sentAt   DateTime @default(now())
 

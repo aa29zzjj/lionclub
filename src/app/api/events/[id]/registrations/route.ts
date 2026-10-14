@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-member";
 import { getPrisma } from "@/lib/prisma";
-
-const managementRoles = [
-  "CLUB_OFFICER",
-  "CLUB_PRESIDENT",
-  "ZONE_ADMIN",
-  "DISTRICT_ADMIN",
-  "MULTIDISTRICT_ADMIN",
-  "SUPER_ADMIN",
-];
+import { attendanceCounts, EVENT_ATTENDANCE_ROLES } from "@/lib/event-attendance";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentMember();
@@ -25,7 +17,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const canManage =
     event.createdById === me.id ||
-    (await hasAdminRoleForOrganization(me.id, event.hostOrganizationId, managementRoles));
+    (await hasAdminRoleForOrganization(me.id, event.hostOrganizationId, EVENT_ATTENDANCE_ROLES));
   if (!canManage) return NextResponse.json({ error: "沒有權限查看報名者資料" }, { status: 403 });
 
   const registrations = await prisma.eventRegistration.findMany({
@@ -35,6 +27,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       id: true,
       registeredAt: true,
       checkedInAt: true,
+      checkInAudit: { select: { method: true, reason: true, checkedInAt: true, actor: { select: { id: true, name: true } } } },
       member: {
         select: {
           id: true,
@@ -50,5 +43,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     },
   });
 
-  return NextResponse.json({ registrations });
+  const checkInAudits = await prisma.eventCheckInAudit.findMany({ where: { eventId: id }, select: { id: true, registrationId: true, method: true, reason: true, checkedInAt: true, actor: { select: { id: true, name: true } } }, orderBy: { checkedInAt: "asc" } });
+  return NextResponse.json({ registrations, checkInAudits, ...await attendanceCounts(prisma, id) }, { headers: { "Cache-Control": "no-store" } });
 }

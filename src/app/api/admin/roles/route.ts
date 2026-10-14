@@ -5,6 +5,7 @@ import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-mem
 import { getPrisma } from "@/lib/prisma";
 import { OnboardingError } from "@/lib/central-onboarding";
 import { onboardingErrorResponse } from "@/lib/onboarding-response";
+import { activeAdminRoleWhere } from "@/lib/active-admin-role";
 
 const managerRoles = ["CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
 const assignableRoles = ["CLUB_OFFICER", "CLUB_FINANCE", "CLUB_VICE_PRESIDENT", "CLUB_PRESIDENT"] as const;
@@ -16,7 +17,7 @@ async function getManageableClubs(memberId: string) {
     where: {
       memberId,
       role: { in: managerRoles },
-      OR: [{ validUntil: null }, { validUntil: { gt: now } }],
+      ...activeAdminRoleWhere(now),
     },
     select: { role: true, scopeId: true },
   });
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
       email: true,
       title: true,
       adminRoles: {
-        where: { validUntil: null, scopeId: organization.id, role: { in: [...assignableRoles] } },
+        where: { ...activeAdminRoleWhere(), scopeId: organization.id, role: { in: [...assignableRoles] } },
         select: { id: true, role: true, validFrom: true },
       },
     },

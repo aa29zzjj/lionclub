@@ -10,7 +10,12 @@
     "postinstall": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "app-store:check": "node scripts/check-app-store-readiness.mjs",
+    "native:check": "node scripts/check-native-environment.mjs",
+    "production:preflight": "node scripts/production-preflight.mjs",
     "test:onboarding": "node --import tsx --test tests/*.test.ts",
+    "test:simulation": "node --test tests/*.test.mjs",
+    "simulation:preview": "node scripts/simulation-preview.mjs",
+    "test:all": "node --import tsx --test tests/*.test.ts && node --test tests/*.test.mjs scripts/demo-*.test.mjs",
     "demo:preview": "node scripts/demo-preview.mjs",
     "test:demo": "node --test scripts/demo-*.test.mjs"
   },
@@ -35,6 +40,8 @@
     "zod": "^4.6.6"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.9",
+    "@electric-sql/pglite-socket": "0.2.12",
     "@types/node": "^20.16.10",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",

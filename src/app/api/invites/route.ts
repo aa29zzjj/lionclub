@@ -27,7 +27,7 @@ function qrInvite<T extends { pin: string }>(invite: T): Omit<T, "pin"> {
   return output;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const member = await getCurrentMember();
   if (!member) return NextResponse.json({ error: "未登入" }, { status: 401 });
   if (!(await hasAdminRoleForOrganization(member.id, member.organizationId, ALLOWED_ISSUER_ROLES))) {
@@ -41,7 +41,13 @@ export async function GET() {
     include: { organization: { select: { name: true } } },
   });
 
-  return NextResponse.json({ invites: invites.map(qrInvite) });
+  const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).origin;
+  return NextResponse.json({ invites: invites.map((invite) => {
+    const registerUrl = new URL("/register", origin);
+    registerUrl.searchParams.set("org", invite.organizationId);
+    registerUrl.searchParams.set("token", invite.token);
+    return { ...qrInvite(invite), registerUrl: registerUrl.toString() };
+  }) });
 }
 
 const bodySchema = z.object({

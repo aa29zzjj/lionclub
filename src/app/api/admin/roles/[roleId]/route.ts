@@ -12,7 +12,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const { roleId } = await params;
   const prisma = await getPrisma();
   const role = await prisma.adminRole.findFirst({
-    where: { id: roleId, validUntil: null, role: { in: revocableRoles } },
+    where: { id: roleId, OR: [{ validUntil: null }, { validUntil: { gt: new Date() } }], role: { in: revocableRoles } },
   });
   if (!role?.scopeId) return NextResponse.json({ error: "找不到可撤銷的權限" }, { status: 404 });
   if (!(await hasAdminRoleForOrganization(me.id, role.scopeId, managerRoles))) {
@@ -20,6 +20,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   }
   if (role.memberId === me.id) return NextResponse.json({ error: "不能在此撤銷自己的管理權限" }, { status: 409 });
 
-  await prisma.adminRole.delete({ where: { id: role.id } });
+  await prisma.adminRole.update({ where: { id: role.id }, data: { validUntil: new Date() } });
   return NextResponse.json({ ok: true });
 }

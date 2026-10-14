@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type Organization = { id: string; name: string; districtCode?: string | null };
 
@@ -53,9 +53,19 @@ export default function BulkAssignmentImport({
   const [committing, setCommitting] = useState(false);
   const [commitResults, setCommitResults] = useState<CommitResult[] | null>(null);
   const [error, setError] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [previewSnapshot, setPreviewSnapshot] = useState<string | null>(null);
+  const busyRef = useRef(false);
+  const requestRef = useRef(0);
+  const pending = previewing || committing;
 
   async function preview() {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    const requestId = ++requestRef.current;
+    const snapshot = csvText;
     setError("");
+    setPreviewRows(null); setPreviewSnapshot(null); setConfirmed(false);
     setCommitResults(null);
     const parsedRows = parseCsv(csvText, organizations);
     const validRows = parsedRows.filter((row): row is { email: string; organizationId: string } => !row.error);
@@ -63,6 +73,7 @@ export default function BulkAssignmentImport({
 
     if (validRows.length === 0) {
       setPreviewRows(invalidRows);
+      busyRef.current = false;
       return;
     }
 
@@ -74,22 +85,27 @@ export default function BulkAssignmentImport({
         body: JSON.stringify({ rows: validRows }),
       });
       const data = await res.json();
+      if (requestId !== requestRef.current) return;
       if (!res.ok) {
         setError(data.error ?? "預覽失敗");
         return;
       }
       setPreviewRows([...invalidRows, ...(data.rows as PreviewRow[])]);
+      setPreviewSnapshot(snapshot);
     } catch {
       setError("連線失敗，請稍後再試");
     } finally {
       setPreviewing(false);
+      busyRef.current = false;
     }
   }
 
   async function commit() {
-    if (!previewRows || !reason.trim()) return;
+    if (busyRef.current || !previewRows || reason.trim().length < 2 || !confirmed) return;
+    if (previewSnapshot !== csvText) { setError("名單已改變，請重新預覽後再確認"); setPreviewRows(null); return; }
     const okRows = previewRows.filter((row) => !row.error && row.memberId);
     if (okRows.length === 0) return;
+    busyRef.current = true;
     setCommitting(true);
     setError("");
     try {
@@ -108,21 +124,24 @@ export default function BulkAssignmentImport({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "送出失敗");
+        setError(`${data.error ?? "送出失敗"}，請重新預覽目前資料後再確認`);
+        setPreviewRows(null); setConfirmed(false);
         return;
       }
       setCommitResults(data.results as CommitResult[]);
       onCommitted();
     } catch {
-      setError("連線失敗，請稍後再試");
+      setError("連線中斷，部分資料可能已完成。請重新預覽確認目前分會後再送出，不要直接重送原批次。");
+      setPreviewRows(null); setConfirmed(false);
     } finally {
       setCommitting(false);
+      busyRef.current = false;
     }
   }
 
   return (
     <div className="mt-5 rounded-2xl border border-lion-border bg-lion-card p-4">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between text-sm font-semibold">
+      <button type="button" disabled={pending} onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex min-h-12 w-full items-center justify-between text-base font-semibold disabled:opacity-50">
         批次匯入名單（CSV）
         <span className="text-xs text-lion-muted">{open ? "收合" : "展開"}</span>
       </button>
@@ -132,12 +151,17 @@ export default function BulkAssignmentImport({
             每行一筆，格式為 <code>email,分會名稱或分會ID</code>，例如 <code>demo@lions.tw,AI臺科大獅子會</code>。
             送出前會先顯示差異預覽，確認無誤才會實際異動。
           </p>
+          <label htmlFor="bulk-assignment-csv" className="block text-sm font-medium">貼上待核對名單</label>
           <textarea
+            id="bulk-assignment-csv"
+            disabled={pending}
             value={csvText}
             onChange={(e) => {
               setCsvText(e.target.value);
+              requestRef.current += 1;
               setPreviewRows(null);
               setCommitResults(null);
+              setPreviewSnapshot(null); setConfirmed(false);
             }}
             rows={6}
             placeholder={"email,分會名稱\ndemo@lions.tw,AI臺科大獅子會"}
@@ -146,13 +170,13 @@ export default function BulkAssignmentImport({
           <button
             type="button"
             onClick={preview}
-            disabled={previewing || !csvText.trim()}
+            disabled={pending || !csvText.trim()}
             className="min-h-12 rounded-xl bg-white/10 px-4 text-sm font-medium disabled:opacity-50"
           >
             {previewing ? "預覽中…" : "預覽差異"}
           </button>
 
-          {error && <p className="text-xs text-lion-danger">{error}</p>}
+          {error && <p role="alert" className="text-base text-lion-danger">{error}</p>}
 
           {previewRows && (
             <div className="space-y-2">
@@ -187,20 +211,24 @@ export default function BulkAssignmentImport({
 
               {previewRows.some((r) => !r.error) && !commitResults && (
                 <>
-                  <label className="mb-1 mt-2 block text-xs text-lion-muted">分派／核對原因（必填，套用至本批次）</label>
+                  <p className="rounded-xl border border-lion-border bg-lion-soft p-3 text-sm leading-relaxed">跨分會會停用會員來源分會的幹部權限與其發出的邀請；新分會不自動授權。區級／全域獨立角色需另核對，歷史資歷、好友、活動及報名不搬移。</p>
+                  <label htmlFor="bulk-assignment-reason" className="mb-1 mt-2 block text-sm text-lion-muted">分派／核對原因（必填，套用至本批次）</label>
                   <textarea
+                    id="bulk-assignment-reason"
+                    disabled={pending}
                     value={reason}
-                    onChange={(e) => setReason(e.target.value)}
+                    onChange={(e) => { setReason(e.target.value); setConfirmed(false); }}
                     rows={2}
                     minLength={2}
                     maxLength={1000}
                     placeholder="請填寫名單來源或核對依據"
                     className="w-full rounded-xl border border-lion-border bg-lion-page px-3 py-2.5 text-sm outline-none focus:border-lion-gold"
                   />
+                  <label className="flex min-h-12 items-start gap-3 rounded-xl border border-lion-border p-3 text-sm leading-relaxed"><input type="checkbox" checked={confirmed} disabled={pending} onChange={(event) => setConfirmed(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0" /><span>我已逐筆核對這份預覽與正式名單，了解跨會將停用舊分會權限／邀請，確認只送出可異動項目。</span></label>
                   <button
                     type="button"
                     onClick={commit}
-                    disabled={committing || reason.trim().length < 2}
+                    disabled={pending || !confirmed || reason.trim().length < 2 || previewSnapshot !== csvText}
                     className="min-h-12 w-full rounded-xl bg-lion-action px-3 py-2.5 text-sm font-semibold text-lion-navyDeep disabled:opacity-50"
                   >
                     {committing ? "送出中…" : `確認送出 ${previewRows.filter((r) => !r.error).length} 筆`}

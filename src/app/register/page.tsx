@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useId, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { memberTitleOptions, tagOptions } from "@/lib/mock-data";
@@ -53,11 +53,13 @@ function RegisterForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [phone, setPhone] = useState("");
-  const [title, setTitle] = useState(memberTitleOptions[0] ?? "");
+  const [title, setTitle] = useState("");
   const [bio, setBio] = useState("");
   const [declaredOrganizationName, setDeclaredOrganizationName] = useState("");
   const [orgSuggestions, setOrgSuggestions] = useState<{ id: string; name: string; districtCode: string | null }[]>([]);
   const [orgSuggestionsOpen, setOrgSuggestionsOpen] = useState(false);
+  const [activeOrgIndex, setActiveOrgIndex] = useState(-1);
+  const orgListId = useId();
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [profileError, setProfileError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -162,6 +164,7 @@ function RegisterForm() {
         const data = await response.json().catch(() => null);
         if (controller.signal.aborted) return;
         setOrgSuggestions(Array.isArray(data?.organizations) ? data.organizations.slice(0, 20) : []);
+        setActiveOrgIndex(-1);
       } catch {
         // 搜尋分會清單失敗不影響手動輸入，保留原本文字即可。
       }
@@ -171,6 +174,10 @@ function RegisterForm() {
       controller.abort();
     };
   }, [declaredOrganizationName]);
+
+  useEffect(() => {
+    if (orgSuggestionsOpen && activeOrgIndex >= 0) document.getElementById(`${orgListId}-${activeOrgIndex}`)?.scrollIntoView({ block: "nearest" });
+  }, [activeOrgIndex, orgListId, orgSuggestionsOpen]);
 
   async function handleProfileSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -266,53 +273,80 @@ function RegisterForm() {
           <Link href="/login" className="flex min-h-12 items-center justify-center text-sm text-lion-muted">已經是會員？返回登入</Link>
         </form>}
         {configurationReady && onboarding && step === "profile" && <form onSubmit={handleProfileSubmit} className="flex flex-col gap-5" aria-busy={submitting}>
-          <fieldset disabled={submitting} className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2">
+          <p className="text-base font-medium">先填姓名、Email 與密碼即可開始使用；其他資料可稍後補上。</p>
+          <fieldset disabled={submitting} className="grid grid-cols-1 gap-4">
             <div className="min-[360px]:col-span-2">
               <label htmlFor="register-name" className="mb-1 block text-sm font-medium">姓名</label>
               <input id="register-name" name="name" autoComplete="name" required value={name} onChange={(event) => setName(event.target.value)} placeholder="王小明" className={inputClass} />
             </div>
             <div className="min-[360px]:col-span-2">
+              <label htmlFor="register-email" className="mb-1 block text-sm font-medium">Email</label>
+              <input id="register-email" name="email" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@lions.tw" className={inputClass} />
+            </div>
+            <div>
+              <label htmlFor="register-password" className="mb-1 block text-sm font-medium">設定密碼</label>
+              <input id="register-password" name="password" type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 個字元" className={inputClass} />
+            </div>
+            <div>
+              <label htmlFor="register-confirm-password" className="mb-1 block text-sm font-medium">確認密碼</label>
+              <input id="register-confirm-password" name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="再輸入一次密碼" className={inputClass} />
+            </div>
+          </fieldset>
+          <details className="rounded-2xl border border-lion-border bg-lion-card p-4">
+            <summary className="flex min-h-12 cursor-pointer items-center text-base font-semibold">補充資料（選填，可稍後補上）</summary>
+            <fieldset disabled={submitting} className="mt-4 grid grid-cols-1 gap-4">
+            <div>
               <label htmlFor="register-birthday" className="mb-1 block text-sm font-medium">生日（選填）</label>
               <input id="register-birthday" name="birthday" type="date" autoComplete="bday" value={birthday} onChange={(event) => setBirthday(event.target.value)} className={inputClass} />
             </div>
-            <div className="min-[360px]:col-span-2">
+            <div>
               <label htmlFor="register-title" className="mb-1 block text-sm font-medium">職稱／身分（選填）</label>
               <select id="register-title" name="title" autoComplete="organization-title" value={title} onChange={(event) => setTitle(event.target.value)} className={inputClass}>
                 <option value="">請選擇</option>
                 {memberTitleOptions.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
             </div>
-            <div className="min-[360px]:col-span-2">
-              <label htmlFor="register-email" className="mb-1 block text-sm font-medium">Email</label>
-              <input id="register-email" name="email" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@lions.tw" className={inputClass} />
-            </div>
-            <div className="min-[360px]:col-span-2">
+            <div>
               <label htmlFor="register-phone" className="mb-1 block text-sm font-medium">手機（選填）</label>
               <input id="register-phone" name="phone" type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="09xx-xxx-xxx" className={inputClass} />
             </div>
-            <div className="relative min-[360px]:col-span-2">
+            <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOrgSuggestionsOpen(false); }}>
               <label htmlFor="register-declared-organization" className="mb-1 block text-sm font-medium">原所屬分會（選填）</label>
               <input
                 id="register-declared-organization"
                 name="declaredOrganizationName"
                 value={declaredOrganizationName}
-                onChange={(event) => { setDeclaredOrganizationName(event.target.value); setOrgSuggestionsOpen(true); }}
+                onChange={(event) => { setDeclaredOrganizationName(event.target.value); setOrgSuggestionsOpen(true); setActiveOrgIndex(-1); }}
                 onFocus={() => setOrgSuggestionsOpen(true)}
-                onBlur={() => setTimeout(() => setOrgSuggestionsOpen(false), 150)}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={orgSuggestionsOpen && orgSuggestions.length > 0}
+                aria-controls={orgListId}
+                aria-activedescendant={orgSuggestionsOpen && activeOrgIndex >= 0 ? `${orgListId}-${activeOrgIndex}` : undefined}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") { setOrgSuggestionsOpen(false); setActiveOrgIndex(-1); }
+                  if (["ArrowDown", "ArrowUp"].includes(event.key) && orgSuggestions.length) {
+                    event.preventDefault(); setOrgSuggestionsOpen(true);
+                    setActiveOrgIndex((index) => event.key === "ArrowDown" ? (index + 1) % orgSuggestions.length : (index <= 0 ? orgSuggestions.length - 1 : index - 1));
+                  }
+                  if (event.key === "Enter" && orgSuggestionsOpen && activeOrgIndex >= 0) {
+                    event.preventDefault(); setDeclaredOrganizationName(orgSuggestions[activeOrgIndex].name); setOrgSuggestionsOpen(false); setActiveOrgIndex(-1);
+                  }
+                }}
                 placeholder="輸入分會名稱搜尋，或直接手動輸入"
                 autoComplete="off"
                 aria-describedby="register-declared-organization-help"
                 className={inputClass}
               />
               {orgSuggestionsOpen && orgSuggestions.length > 0 && (
-                <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-lion-border bg-lion-page shadow-lg">
-                  {orgSuggestions.map((org) => (
-                    <li key={org.id}>
+                <ul id={orgListId} role="listbox" aria-label="分會搜尋結果" className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-lion-border bg-lion-page shadow-lg">
+                  {orgSuggestions.map((org, index) => (
+                    <li key={org.id} id={`${orgListId}-${index}`} role="option" aria-selected={activeOrgIndex === index}>
                       <button
                         type="button"
                         onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => { setDeclaredOrganizationName(org.name); setOrgSuggestionsOpen(false); }}
-                        className="flex w-full flex-col items-start px-4 py-2.5 text-left text-sm hover:bg-lion-soft"
+                        onClick={() => { setDeclaredOrganizationName(org.name); setOrgSuggestionsOpen(false); setActiveOrgIndex(-1); document.getElementById("register-declared-organization")?.focus(); }}
+                        className={`flex min-h-12 w-full flex-col items-start px-4 py-2.5 text-left text-base hover:bg-lion-soft ${activeOrgIndex === index ? "bg-lion-soft" : ""}`}
                       >
                         <span>{org.name}</span>
                         {org.districtCode && <span className="text-xs text-lion-muted">{org.districtCode}</span>}
@@ -322,14 +356,6 @@ function RegisterForm() {
                 </ul>
               )}
               <p id="register-declared-organization-help" className="mt-2 text-xs leading-relaxed text-lion-muted">這是待核對的參考資料，不會直接更改加入分會或管理權限。可從清單選擇，或直接手動輸入分會名稱。</p>
-            </div>
-            <div className="min-[360px]:col-span-2">
-              <label htmlFor="register-password" className="mb-1 block text-sm font-medium">設定密碼</label>
-              <input id="register-password" name="password" type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 個字元" className={inputClass} />
-            </div>
-            <div className="min-[360px]:col-span-2">
-              <label htmlFor="register-confirm-password" className="mb-1 block text-sm font-medium">確認密碼</label>
-              <input id="register-confirm-password" name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="再輸入一次密碼" className={inputClass} />
             </div>
           </fieldset>
           <fieldset disabled={submitting}>
@@ -343,6 +369,7 @@ function RegisterForm() {
             <label htmlFor="register-bio" className="mb-1 block text-sm font-medium">簡介／經歷（選填）</label>
             <textarea id="register-bio" name="bio" autoComplete="off" disabled={submitting} value={bio} onChange={(event) => setBio(event.target.value)} rows={3} placeholder="簡單介紹自己的專業背景或獅子會經歷" className={`${inputClass} resize-y`} />
           </div>
+          </details>
           <p className="rounded-xl bg-lion-soft p-4 text-sm leading-relaxed text-lion-muted">頭像可以在註冊完成後，到「我的檔案」上傳。</p>
           {profileError && <p className="text-sm text-lion-danger" role="alert">{profileError}</p>}
           <div className="flex gap-3">

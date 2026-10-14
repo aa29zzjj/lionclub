@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/current-member";
 import { getPrisma } from "@/lib/prisma";
+import { activeAdminRoleWhere } from "@/lib/active-admin-role";
 
 async function isSuperAdmin(prisma: Awaited<ReturnType<typeof getPrisma>>, memberId: string) {
   const now = new Date();
   const role = await prisma.adminRole.findFirst({
-    where: { memberId, role: "SUPER_ADMIN", OR: [{ validUntil: null }, { validUntil: { gt: now } }] },
+    where: { memberId, role: "SUPER_ADMIN", ...activeAdminRoleWhere(now) },
     select: { id: true },
   });
   return Boolean(role);

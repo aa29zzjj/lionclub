@@ -1,50 +1,19 @@
-import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
+import { AttendanceError, toggleEventRegistration } from "@/lib/event-attendance";
+import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 
 // 切換目前會員的報名狀態：已報名就取消，未報名就報名
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!isTrustedBrowserMutation(request)) return NextResponse.json({ error: "請從網站操作報名" }, { status: 403 });
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
   const { id } = await params;
-  const prisma = await getPrisma();
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const result = await prisma.$transaction(
-        async (transaction) => {
-          const existing = await transaction.eventRegistration.findUnique({
-            where: { eventId_memberId: { eventId: id, memberId: me.id } },
-          });
-          if (existing) {
-            await transaction.eventRegistration.delete({ where: { id: existing.id } });
-            return { registered: false, full: false, found: true };
-          }
-
-          const event = await transaction.event.findUnique({
-            where: { id },
-            include: { _count: { select: { registrations: true } } },
-          });
-          if (!event) return { registered: false, full: false, found: false };
-          if (event.capacity !== null && event._count.registrations >= event.capacity) {
-            return { registered: false, full: true, found: true };
-          }
-
-          await transaction.eventRegistration.create({ data: { eventId: id, memberId: me.id } });
-          return { registered: true, full: false, found: true };
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
-      );
-      if (!result.found) return NextResponse.json({ error: "找不到此活動" }, { status: 404 });
-      if (result.full) return NextResponse.json({ error: "活動名額已滿" }, { status: 409 });
-      return NextResponse.json({ ok: true, registered: result.registered });
-    } catch (error) {
-      const shouldRetry = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
-      if (!shouldRetry || attempt === 2) throw error;
-    }
+  try { return NextResponse.json(await toggleEventRegistration(await getPrisma(), me.id, id)); }
+  catch (error) {
+    if (error instanceof AttendanceError) return NextResponse.json({ error: error.message }, { status: error.status });
+    throw error;
   }
-
-  return NextResponse.json({ error: "報名狀態更新失敗，請再試一次" }, { status: 503 });
 }

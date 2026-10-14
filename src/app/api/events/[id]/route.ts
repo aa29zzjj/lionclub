@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-member";
+import type { Prisma } from "@prisma/client";
+import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 
 const managementRoles = [
   "CLUB_OFFICER",
@@ -21,11 +23,23 @@ const updateSchema = z.object({
   coverPhotoUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
 });
 
-async function canManage(memberId: string, event: { createdById: string; hostOrganizationId: string }) {
+async function canManage(memberId: string, event: { createdById: string; hostOrganizationId: string }, database?: Prisma.TransactionClient) {
   return (
     event.createdById === memberId ||
-    hasAdminRoleForOrganization(memberId, event.hostOrganizationId, managementRoles)
+    hasAdminRoleForOrganization(memberId, event.hostOrganizationId, managementRoles, database)
   );
+}
+
+class EventMutationError extends Error {
+  constructor(public status: number, message: string) { super(message); }
+}
+
+function mutationErrorResponse(error: unknown) {
+  if (error instanceof EventMutationError) return NextResponse.json({ error: error.message }, { status: error.status });
+  if (error && typeof error === "object" && "code" in error && ["P2034", "P2003"].includes(String(error.code))) {
+    return NextResponse.json({ error: "活動、報名或報到資料同時更新，請重新載入確認後再操作。" }, { status: 409 });
+  }
+  throw error;
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -38,8 +52,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     where: { id },
     include: {
       hostOrganization: { select: { name: true } },
-      registrations: { where: { memberId: me.id }, select: { id: true } },
-      _count: { select: { registrations: true } },
+      registrations: { where: { memberId: me.id, status: "REGISTERED" }, select: { id: true, checkedInAt: true } },
+      _count: { select: { registrations: { where: { status: "REGISTERED" } } } },
     },
   });
 
@@ -56,6 +70,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       hostChapter: event.hostOrganization.name,
       startAt: event.startAt,
       isRegistered: event.registrations.length > 0,
+      isCheckedIn: event.registrations.some(registration => Boolean(registration.checkedInAt)),
       registeredCount: event._count.registrations,
       isFull: event.capacity !== null && event._count.registrations >= event.capacity,
       canManage: await canManage(me.id, event),
@@ -64,6 +79,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!isTrustedBrowserMutation(request)) return NextResponse.json({ error: "請從網站管理活動" }, { status: 403 });
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
@@ -72,37 +88,41 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const { id } = await params;
   const prisma = await getPrisma();
-  const event = await prisma.event.findUnique({ where: { id }, include: { _count: { select: { registrations: true } } } });
-  if (!event) return NextResponse.json({ error: "找不到此活動" }, { status: 404 });
-  if (!(await canManage(me.id, event))) return NextResponse.json({ error: "沒有活動管理權限" }, { status: 403 });
-  if (parsed.data.capacity !== null && parsed.data.capacity !== undefined && parsed.data.capacity < event._count.registrations) {
-    return NextResponse.json({ error: `名額不能低於目前已報名的 ${event._count.registrations} 人` }, { status: 409 });
-  }
-
-  await prisma.event.update({
-    where: { id },
-    data: {
-      title: parsed.data.title,
-      startAt: new Date(parsed.data.startAt),
-      location: parsed.data.location,
-      capacity: parsed.data.capacity ?? null,
-      description: parsed.data.description || null,
-      ...(parsed.data.coverPhotoUrl !== undefined ? { coverPhotoUrl: parsed.data.coverPhotoUrl || null } : {}),
-    },
-  });
-  return NextResponse.json({ ok: true });
+  try {
+    await prisma.$transaction(async tx => {
+      const actor = await tx.member.findFirst({ where: { id: me.id, status: "ACTIVE", deletedAt: null }, select: { id: true } });
+      if (!actor) throw new EventMutationError(409, "帳號已更新，請重新登入確認");
+      const event = await tx.event.findUnique({ where: { id }, include: { _count: { select: { registrations: { where: { status: "REGISTERED" } } } } } });
+      if (!event) throw new EventMutationError(404, "找不到此活動");
+      if (!(await canManage(me.id, event, tx))) throw new EventMutationError(403, "沒有活動管理權限");
+      if (parsed.data.capacity != null && parsed.data.capacity < event._count.registrations) throw new EventMutationError(409, `名額不能低於目前已報名的 ${event._count.registrations} 人`);
+      await tx.event.update({ where: { id }, data: {
+        title: parsed.data.title, startAt: new Date(parsed.data.startAt), location: parsed.data.location,
+        capacity: parsed.data.capacity ?? null, description: parsed.data.description || null,
+        ...(parsed.data.coverPhotoUrl !== undefined ? { coverPhotoUrl: parsed.data.coverPhotoUrl || null } : {}),
+      } });
+    }, { isolationLevel: "Serializable" });
+    return NextResponse.json({ ok: true });
+  } catch (error) { return mutationErrorResponse(error); }
 }
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!isTrustedBrowserMutation(_request)) return NextResponse.json({ error: "請從網站管理活動" }, { status: 403 });
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
   const { id } = await params;
   const prisma = await getPrisma();
-  const event = await prisma.event.findUnique({ where: { id } });
-  if (!event) return NextResponse.json({ error: "找不到此活動" }, { status: 404 });
-  if (!(await canManage(me.id, event))) return NextResponse.json({ error: "沒有活動管理權限" }, { status: 403 });
-
-  await prisma.event.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+  try {
+    await prisma.$transaction(async tx => {
+      const actor = await tx.member.findFirst({ where: { id: me.id, status: "ACTIVE", deletedAt: null }, select: { id: true } });
+      if (!actor) throw new EventMutationError(409, "帳號已更新，請重新登入確認");
+      const event = await tx.event.findUnique({ where: { id } });
+      if (!event) throw new EventMutationError(404, "找不到此活動");
+      if (!(await canManage(me.id, event, tx))) throw new EventMutationError(403, "沒有活動管理權限");
+      if (await tx.eventRegistration.count({ where: { eventId: id, checkedInAt: { not: null } } })) throw new EventMutationError(409, "活動已有簽到紀錄，請保留歷史；不可直接刪除活動。");
+      await tx.event.delete({ where: { id } });
+    }, { isolationLevel: "Serializable" });
+    return NextResponse.json({ ok: true });
+  } catch (error) { return mutationErrorResponse(error); }
 }

@@ -32,9 +32,10 @@ export default function AdminRolesPage() {
     setLoading(true);
     setError("");
     const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
+    try {
     const response = await fetch(`/api/admin/roles${query}`, { cache: "no-store" });
     if (response.status === 401) {
-      router.replace("/login");
+      setMembers([]); router.replace("/login?reason=session-expired");
       return;
     }
     const result = await response.json();
@@ -51,6 +52,8 @@ export default function AdminRolesPage() {
       ? current
       : result.members?.[0]?.id ?? "");
     setLoading(false);
+    } catch { setError("幹部名單連線中斷，請重新載入"); }
+    finally { setLoading(false); }
   }, [router]);
 
   useEffect(() => {
@@ -59,16 +62,18 @@ export default function AdminRolesPage() {
 
   async function grant(event: React.FormEvent) {
     event.preventDefault();
-    if (!organization) return;
+    if (!organization || saving) return;
     setSaving(true);
     setError("");
     setNotice("");
+    try {
     const response = await fetch("/api/admin/roles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ organizationId: organization.id, memberId, role }),
     });
     const result = await response.json();
+    if (response.status === 401) { setMembers([]); router.replace("/login?reason=session-expired"); return; }
     if (!response.ok) {
       setError(result.error ?? "授權失敗");
       setSaving(false);
@@ -77,20 +82,28 @@ export default function AdminRolesPage() {
     setNotice(`已授予${roleLabels[role]}權限`);
     await load(organization.id);
     setSaving(false);
+    } catch { setError("連線中斷，請重新載入確認授權結果後再試"); }
+    finally { setSaving(false); }
   }
 
   async function revoke(roleId: string) {
-    if (!organization || !window.confirm("確定撤銷這項系統管理權限嗎？")) return;
+    const target = members.find((member) => member.adminRoles.some((adminRole) => adminRole.id === roleId));
+    if (!organization || saving || !window.confirm(`確定撤銷 ${target?.name ?? "此會員"} 在 ${organization.name} 的這項系統管理權限嗎？`)) return;
+    setSaving(true);
     setError("");
     setNotice("");
+    try {
     const response = await fetch(`/api/admin/roles/${roleId}`, { method: "DELETE" });
     const result = await response.json();
+    if (response.status === 401) { setMembers([]); router.replace("/login?reason=session-expired"); return; }
     if (!response.ok) {
       setError(result.error ?? "撤銷失敗");
       return;
     }
     setNotice("權限已撤銷");
     await load(organization.id);
+    } catch { setError("連線中斷，請重新載入確認撤銷結果後再試"); }
+    finally { setSaving(false); }
   }
 
   const activeRoleCount = members.reduce((count, member) => count + member.adminRoles.length, 0);
@@ -108,7 +121,7 @@ export default function AdminRolesPage() {
               id="managed-organization"
               value={organization?.id ?? ""}
               onChange={(event) => void load(event.target.value)}
-              disabled={loading}
+              disabled={loading || saving}
               className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none focus:border-lion-gold disabled:opacity-50"
             >
               {organizations.map((item) => (
@@ -145,8 +158,8 @@ export default function AdminRolesPage() {
             </button>
           </form>
 
-          {notice && <p className="mt-3 rounded-xl border border-lion-gold/30 bg-lion-gold/10 px-3 py-2 text-sm text-lion-gold">{notice}</p>}
-          {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+          {notice && <p role="status" className="mt-3 rounded-xl border border-lion-border bg-lion-card px-3 py-3 text-base">{notice}</p>}
+          {error && <div className="mt-3"><p role="alert" className="text-base text-lion-danger">{error}</p><button type="button" disabled={saving} onClick={() => void load(organization?.id)} className="mt-2 min-h-12 rounded-xl border border-lion-border px-3 text-sm">重新載入權限</button></div>}
 
           <div className="mt-6 flex items-center justify-between">
             <h2 className="text-sm font-semibold">現有權限</h2>
@@ -159,7 +172,7 @@ export default function AdminRolesPage() {
                   <p className="text-sm font-medium">{member.name}</p>
                   <p className="text-xs text-lion-muted">{roleLabels[adminRole.role as AssignableRole] ?? adminRole.role}{member.title ? ` · ${member.title}` : ""}</p>
                 </div>
-                <button onClick={() => void revoke(adminRole.id)} className="shrink-0 rounded-lg border border-red-300/20 px-2.5 py-1.5 text-xs text-red-300">撤銷</button>
+                <button disabled={saving} onClick={() => void revoke(adminRole.id)} className="shrink-0 rounded-lg border border-lion-border px-2.5 py-1.5 text-sm text-lion-danger disabled:opacity-50">撤銷</button>
               </div>
             )))}
             {activeRoleCount === 0 && (
