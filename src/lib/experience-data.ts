@@ -172,6 +172,19 @@ export function formatLionsYear(experience: MemberExperience) {
   return `${formatLionYear(experience.startYear)} 至 ${formatLionYear(end)} 年度`;
 }
 
+const positionAbbreviations: Record<string, string> = {
+  club_vp1: "一副",
+  club_vp2: "二副",
+};
+
+export function shortPositionLabel(positionCode: string, fallbackLabel: string) {
+  return positionAbbreviations[positionCode] ?? fallbackLabel;
+}
+
+export function isOfficerPosition(level: OrganizationLevel, kind: ExperienceKind) {
+  return kind === "position" && level !== "foundation";
+}
+
 export function formatJoinDate(joinYear?: number | null, joinMonth?: number | null) {
   if (!joinYear) return null;
   const lionsYear = getLionYearStart(joinYear, joinMonth);

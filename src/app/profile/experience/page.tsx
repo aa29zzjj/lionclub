@@ -14,11 +14,13 @@ import {
   ExperienceVisibility,
   formatJoinDate,
   formatLionsYear,
+  isOfficerPosition,
   MemberExperience,
   multipleDistrictOptions,
   organizationLevelOptions,
   OrganizationLevel,
   positionOptions,
+  shortPositionLabel,
   verificationLabels,
   visibilityLabels,
 } from "@/lib/experience-data";
@@ -702,6 +704,12 @@ export default function ExperiencePage() {
                 className="accent-[#C8A951]"
               />
               {draft.kind === "membership" ? "目前仍保有此會籍" : "目前仍在任"}
+              {draft.isCurrent && isOfficerPosition(draft.level, draft.kind) && (
+                <span className="inline-flex items-center gap-1 ml-auto text-[11px] text-red-300">
+                  <span className="w-2 h-2 rounded-full bg-red-400" />
+                  現任幹部，待管理員核實
+                </span>
+              )}
             </label>
 
             <div>
@@ -766,7 +774,7 @@ export default function ExperiencePage() {
                     <p className="inline-flex rounded-lg bg-[#173d78] px-2.5 py-1 text-xs font-medium text-[#F3F1EA] mb-2">
                       {formatLionsYear(experience)}
                     </p>
-                    <h3 className="font-semibold">{experience.positionName}</h3>
+                    <h3 className="font-semibold">{shortPositionLabel(experience.positionCode, experience.positionName)}</h3>
                     {experience.kind !== "membership" && <p className="text-[11px] text-lion-muted mt-1">
                       {formatLionYearDateRange(experience.startYear, experience.endYear)}
                     </p>}

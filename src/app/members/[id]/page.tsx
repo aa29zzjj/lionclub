@@ -11,6 +11,7 @@ import {
   formatLionsYear,
   MemberExperience,
   positionOptions,
+  shortPositionLabel,
   verificationLabels,
 } from "@/lib/experience-data";
 
@@ -32,7 +33,8 @@ type MemberProfile = {
 
 function positionName(experience: MemberExperience) {
   if (experience.kind === "membership") return "加入獅子會";
-  return positionOptions.find((position) => position.code === experience.positionCode)?.label ?? "其他職務";
+  const label = positionOptions.find((position) => position.code === experience.positionCode)?.label ?? "其他職務";
+  return shortPositionLabel(experience.positionCode, label);
 }
 
 export default function MemberProfilePage() {
