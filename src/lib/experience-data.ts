@@ -139,6 +139,8 @@ export const positionOptions: PositionOption[] = [
   { code: "club_director", label: "理事", level: "club", kind: "position" },
   { code: "club_supervisor", label: "監事", level: "club", kind: "position" },
   { code: "club_honor_president", label: "榮譽會長", level: "club", kind: "honorary" },
+  { code: "club_founder", label: "創會人", level: "club", kind: "honorary" },
+  { code: "club_honor_founder", label: "榮譽創會人", level: "club", kind: "honorary" },
   { code: "club_guiding_lion", label: "導獅", level: "club", kind: "advisor" },
   { code: "club_service_chair", label: "服務主席／召集人", level: "club", kind: "position" },
   { code: "club_pr_chair", label: "公關行銷主席／召集人", level: "club", kind: "position" },
