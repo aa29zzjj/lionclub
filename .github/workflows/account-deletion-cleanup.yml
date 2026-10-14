@@ -1,0 +1,37 @@
+name: Account deletion avatar cleanup
+
+on:
+  schedule:
+    # Every 15 minutes. Jobs are only eligible 6 minutes after creation (see
+    # AVATAR_CLEANUP_DELAY_MS), so this still catches each job within ~20 minutes.
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm ci
+
+      - name: Run account deletion cleanup discoverer
+        env:
+          ACCOUNT_CLEANUP_DATABASE_URL: ${{ secrets.ACCOUNT_CLEANUP_DATABASE_URL }}
+          ACCOUNT_CLEANUP_ALLOW_STORAGE_DELETE: "YES_DELETE_MEMBER_AVATARS"
+          ACCOUNT_CLEANUP_CONFIRM_HOST: ${{ secrets.ACCOUNT_CLEANUP_CONFIRM_HOST }}
+          ACCOUNT_CLEANUP_CONFIRM_DATABASE: ${{ secrets.ACCOUNT_CLEANUP_CONFIRM_DATABASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.ACCOUNT_CLEANUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.ACCOUNT_CLEANUP_AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-2
+        run: |
+          node scripts/discover-account-deletion-jobs.mjs \
+            --environment production \
+            --confirm-host "$ACCOUNT_CLEANUP_CONFIRM_HOST" \
+            --confirm-database "$ACCOUNT_CLEANUP_CONFIRM_DATABASE" \
+            --execute

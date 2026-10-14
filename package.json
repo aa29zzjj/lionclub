@@ -12,6 +12,7 @@
     "app-store:check": "node scripts/check-app-store-readiness.mjs",
     "native:check": "node scripts/check-native-environment.mjs",
     "production:preflight": "node scripts/production-preflight.mjs",
+    "cleanup:account-deletion": "node scripts/discover-account-deletion-jobs.mjs",
     "test:onboarding": "node --import tsx --test tests/*.test.ts",
     "test:simulation": "node --test tests/*.test.mjs",
     "simulation:preview": "node scripts/simulation-preview.mjs",
