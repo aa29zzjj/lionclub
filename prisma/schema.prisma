@@ -363,7 +363,7 @@ model Tag {
 
 // ────────────────────────────────
 // 活動發布 ＋ 通知
-// scope: CLUB | ZONE | DISTRICT | MULTIDISTRICT
+// scope: CLUB | ZONE | REGION | DISTRICT — 發佈層級，CLUB_OFFICIAL 類活動發佈到分會以上範圍時須有對應管理角色
 // ────────────────────────────────
 
 model Event {
@@ -475,7 +475,7 @@ model ClubInvite {
 
 // ────────────────────────────────
 // 管理權限（與職稱／資歷完全分開）
-// role:      CLUB_OFFICER | CLUB_PRESIDENT | CLUB_FINANCE | ZONE_ADMIN | DISTRICT_ADMIN | MULTIDISTRICT_ADMIN | SUPER_ADMIN
+// role:      CLUB_OFFICER | CLUB_PRESIDENT | CLUB_FINANCE | ZONE_ADMIN | REGION_ADMIN | DISTRICT_ADMIN | MULTIDISTRICT_ADMIN | SUPER_ADMIN
 // scopeType: 同 OrganizationLevel，SUPER_ADMIN 用 GLOBAL（scopeId 為 null）
 // ────────────────────────────────
 

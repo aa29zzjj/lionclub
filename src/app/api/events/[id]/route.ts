@@ -6,6 +6,7 @@ import type { Prisma } from "@prisma/client";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 import { EVENT_ATTENDANCE_ROLES } from "@/lib/event-attendance";
 import { EVENT_CATEGORIES } from "@/lib/event-category";
+import { EVENT_SCOPES, EVENT_SCOPE_REQUIRED_ROLES, type EventScope } from "@/lib/event-scope";
 
 const managementRoles = EVENT_ATTENDANCE_ROLES;
 
@@ -17,6 +18,7 @@ const updateSchema = z.object({
   description: z.string().trim().max(3000).nullable().optional(),
   coverPhotoUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
   category: z.enum(EVENT_CATEGORIES).optional(),
+  scope: z.enum(EVENT_SCOPES).optional(),
 });
 
 async function canManage(memberId: string, event: { createdById: string; hostOrganizationId: string }, database?: Prisma.TransactionClient) {
@@ -55,7 +57,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   if (!event) return NextResponse.json({ error: "找不到此活動" }, { status: 404 });
 
+  const scopeChecks = await Promise.all(
+    EVENT_SCOPES.filter((scope) => scope !== "CLUB").map(async (scope) => ({
+      scope,
+      allowed: await hasAdminRoleForOrganization(me.id, event.hostOrganizationId, EVENT_SCOPE_REQUIRED_ROLES[scope]),
+    }))
+  );
+  const allowedScopes = ["CLUB", ...scopeChecks.filter((r) => r.allowed).map((r) => r.scope)];
+
   return NextResponse.json({
+    allowedScopes,
     event: {
       id: event.id,
       title: event.title,
@@ -63,6 +74,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       location: event.location ?? "",
       capacity: event.capacity ?? undefined,
       category: event.category,
+      scope: event.scope,
       coverPhotoUrl: event.coverPhotoUrl ?? undefined,
       hostChapter: event.hostOrganization.name,
       startAt: event.startAt,
@@ -93,11 +105,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (!event) throw new EventMutationError(404, "找不到此活動");
       if (!(await canManage(me.id, event, tx))) throw new EventMutationError(403, "沒有活動管理權限");
       if (parsed.data.capacity != null && parsed.data.capacity < event._count.registrations) throw new EventMutationError(409, `名額不能低於目前已報名的 ${event._count.registrations} 人`);
+      const nextCategory = parsed.data.category ?? event.category;
+      const nextScope = (nextCategory === "PERSONAL" ? "CLUB" : parsed.data.scope ?? event.scope) as EventScope;
+      if (nextScope !== "CLUB" && nextScope !== event.scope) {
+        const allowed = await hasAdminRoleForOrganization(me.id, event.hostOrganizationId, EVENT_SCOPE_REQUIRED_ROLES[nextScope], tx);
+        if (!allowed) throw new EventMutationError(403, "沒有發佈此範圍活動的管理權限");
+      }
       await tx.event.update({ where: { id }, data: {
         title: parsed.data.title, startAt: new Date(parsed.data.startAt), location: parsed.data.location,
         capacity: parsed.data.capacity ?? null, description: parsed.data.description || null,
         ...(parsed.data.coverPhotoUrl !== undefined ? { coverPhotoUrl: parsed.data.coverPhotoUrl || null } : {}),
-        ...(parsed.data.category !== undefined ? { category: parsed.data.category } : {}),
+        category: nextCategory,
+        scope: nextScope,
       } });
     }, { isolationLevel: "Serializable" });
     return NextResponse.json({ ok: true });

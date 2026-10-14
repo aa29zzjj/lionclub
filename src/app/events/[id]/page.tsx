@@ -11,6 +11,7 @@ import { PinIcon } from "@/components/icons";
 import { colorFromId } from "@/lib/avatar-color";
 import { EVENT_TIME_ZONE, taipeiEventStartAt } from "@/lib/event-calendar";
 import { EVENT_CATEGORIES, eventCategoryLabels, type EventCategory } from "@/lib/event-category";
+import { eventScopeLabels, type EventScope } from "@/lib/event-scope";
 
 type EventDetail = {
   id: string;
@@ -19,6 +20,7 @@ type EventDetail = {
   location: string;
   capacity?: number;
   category: EventCategory;
+  scope: EventScope;
   coverPhotoUrl?: string;
   hostChapter: string;
   startAt: string;
@@ -64,6 +66,8 @@ export default function EventDetailPage() {
   const [capacity, setCapacity] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<EventCategory>("CLUB_OFFICIAL");
+  const [scope, setScope] = useState<EventScope>("CLUB");
+  const [allowedScopes, setAllowedScopes] = useState<EventScope[]>(["CLUB"]);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
@@ -140,6 +144,7 @@ export default function EventDetailPage() {
     setCapacity(nextEvent.capacity ? String(nextEvent.capacity) : "");
     setDescription(nextEvent.description ?? "");
     setCategory(nextEvent.category);
+    setScope(nextEvent.scope);
     setCoverFile(null);
     setCoverPreview(nextEvent.coverPhotoUrl ?? null);
   }
@@ -180,6 +185,7 @@ export default function EventDetailPage() {
         }
         setEvent(data.event);
         loadForm(data.event);
+        if (Array.isArray(data.allowedScopes)) setAllowedScopes(data.allowedScopes);
       } catch (failure) {
         if (!controller.signal.aborted) setError(failure instanceof Error && !(failure instanceof TypeError) ? failure.message : "活動資料無法載入，請確認網路後重新整理。");
       } finally {
@@ -281,6 +287,7 @@ export default function EventDetailPage() {
         description: description.trim() || null,
         coverPhotoUrl,
         category,
+        scope: category === "CLUB_OFFICIAL" ? scope : undefined,
       }),
     });
     const result = await response.json().catch(() => ({}));
@@ -302,6 +309,7 @@ export default function EventDetailPage() {
       description: description.trim() || undefined,
       coverPhotoUrl: coverPhotoUrl ?? undefined,
       category,
+      scope: category === "CLUB_OFFICIAL" ? scope : "CLUB",
       isFull: Boolean(capacity && current.registeredCount >= Number(capacity)),
     } : current);
     setEditing(false);
@@ -399,9 +407,14 @@ export default function EventDetailPage() {
           <div className="h-36 rounded-2xl bg-gradient-to-br from-lion-navyLight to-[#2E4A8A] mb-4" />
         )}
 
-        <span className={`inline-block mb-2 rounded-full px-2.5 py-1 text-xs font-medium ${event.category === "PERSONAL" ? "bg-white/10 text-lion-muted" : "bg-lion-gold/15 text-lion-gold"}`}>
-          {eventCategoryLabels[event.category]}
-        </span>
+        <div className="flex gap-2 mb-2">
+          <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${event.category === "PERSONAL" ? "bg-white/10 text-lion-muted" : "bg-lion-gold/15 text-lion-gold"}`}>
+            {eventCategoryLabels[event.category]}
+          </span>
+          {event.scope !== "CLUB" && (
+            <span className="inline-block rounded-full bg-white/10 px-2.5 py-1 text-xs text-lion-muted">{eventScopeLabels[event.scope]}</span>
+          )}
+        </div>
         <div className="flex items-start justify-between gap-3 mb-2">
           <h1 className="text-xl font-bold">{event.title}</h1>
           {event.canManage && !editing && (
@@ -464,6 +477,24 @@ export default function EventDetailPage() {
                 ))}
               </div>
             </div>
+            {category === "CLUB_OFFICIAL" && allowedScopes.length > 1 && (
+              <div>
+                <span className="text-base block mb-1">發佈範圍</span>
+                <div className="flex gap-2">
+                  {allowedScopes.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setScope(value)}
+                      aria-pressed={scope === value}
+                      className={`min-h-12 rounded-xl border px-3 text-sm font-medium ${scope === value ? "border-lion-gold bg-lion-gold/10 text-lion-gold" : "border-lion-border text-lion-muted"}`}
+                    >
+                      {eventScopeLabels[value]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
               <button type="button" disabled={saving || deleting} onClick={() => { loadForm(event); setEditing(false); setError(""); }} className="min-h-12 flex-1 rounded-xl bg-white/10 py-2 text-base disabled:opacity-50">取消</button>
               <button type="submit" disabled={saving || deleting} className="min-h-12 flex-1 rounded-xl bg-lion-action text-lion-navyDeep py-2 text-base font-semibold disabled:opacity-50">{saving ? "儲存中…" : "儲存"}</button>

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
-import { getCurrentMember } from "@/lib/current-member";
+import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-member";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 import { EVENT_CATEGORIES } from "@/lib/event-category";
+import { EVENT_SCOPES, EVENT_SCOPE_REQUIRED_ROLES } from "@/lib/event-scope";
 
 export async function GET() {
   const me = await getCurrentMember();
@@ -19,7 +20,16 @@ export async function GET() {
     orderBy: { startAt: "asc" },
   });
 
+  const scopeChecks = await Promise.all(
+    EVENT_SCOPES.filter((scope) => scope !== "CLUB").map(async (scope) => ({
+      scope,
+      allowed: await hasAdminRoleForOrganization(me.id, me.organizationId, EVENT_SCOPE_REQUIRED_ROLES[scope]),
+    }))
+  );
+  const allowedScopes = ["CLUB", ...scopeChecks.filter((r) => r.allowed).map((r) => r.scope)];
+
   return NextResponse.json({
+    allowedScopes,
     events: events.map((ev) => ({
       id: ev.id,
       title: ev.title,
@@ -27,6 +37,7 @@ export async function GET() {
       location: ev.location ?? "",
       capacity: ev.capacity ?? undefined,
       category: ev.category,
+      scope: ev.scope,
       coverPhotoUrl: ev.coverPhotoUrl ?? undefined,
       hostChapter: ev.hostOrganization.name,
       startAt: ev.startAt,
@@ -45,6 +56,7 @@ const bodySchema = z.object({
   description: z.string().trim().max(3000).optional(),
   coverPhotoUrl: z.union([z.string().url(), z.literal("")]).optional(),
   category: z.enum(EVENT_CATEGORIES).optional(),
+  scope: z.enum(EVENT_SCOPES).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -57,6 +69,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "欄位格式錯誤" }, { status: 400 });
   }
   const { title, startAt, location, capacity, description, coverPhotoUrl, category } = parsed.data;
+  const effectiveCategory = category ?? "CLUB_OFFICIAL";
+  const effectiveScope = effectiveCategory === "PERSONAL" ? "CLUB" : parsed.data.scope ?? "CLUB";
+
+  if (effectiveScope !== "CLUB") {
+    const allowed = await hasAdminRoleForOrganization(me.id, me.organizationId, EVENT_SCOPE_REQUIRED_ROLES[effectiveScope]);
+    if (!allowed) return NextResponse.json({ error: "沒有發佈此範圍活動的管理權限" }, { status: 403 });
+  }
 
   const prisma = await getPrisma();
   try {
@@ -71,7 +90,8 @@ export async function POST(req: NextRequest) {
       capacity,
       description,
       coverPhotoUrl: coverPhotoUrl || null,
-      category: category ?? "CLUB_OFFICIAL",
+      category: effectiveCategory,
+      scope: effectiveScope,
       hostOrganizationId: me.organizationId,
       createdById: me.id,
       } });

@@ -8,6 +8,7 @@ import Avatar from "@/components/Avatar";
 import { CalendarIcon, PinIcon, PlusIcon } from "@/components/icons";
 import { EVENT_TIME_ZONE, taipeiEventStartAt } from "@/lib/event-calendar";
 import { EVENT_CATEGORIES, eventCategoryLabels, type EventCategory } from "@/lib/event-category";
+import { eventScopeLabels, type EventScope } from "@/lib/event-scope";
 
 const eventGradients = [
   "from-lion-navyLight to-[#2E4A8A]",
@@ -22,6 +23,7 @@ type EventCard = {
   description?: string;
   capacity?: number;
   category: EventCategory;
+  scope: EventScope;
   coverPhotoUrl?: string;
   registeredCount: number;
   isFull: boolean;
@@ -50,6 +52,8 @@ export default function EventsPage() {
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [category, setCategory] = useState<EventCategory>("CLUB_OFFICIAL");
+  const [scope, setScope] = useState<EventScope>("CLUB");
+  const [allowedScopes, setAllowedScopes] = useState<EventScope[]>(["CLUB"]);
   const [filter, setFilter] = useState<EventCategory | "ALL">("ALL");
   const [error, setError] = useState("");
 
@@ -85,6 +89,7 @@ export default function EventsPage() {
       if (!res.ok) throw new Error(data.error ?? "無法載入活動，請重試。");
       if (!Array.isArray(data.events)) throw new Error("活動資料格式異常，請重新載入。");
       setEvents(data.events);
+      if (Array.isArray(data.allowedScopes)) setAllowedScopes(data.allowedScopes);
     } catch (caught) {
       if (!controller.signal.aborted) setLoadError(caught instanceof Error && !(caught instanceof TypeError) ? caught.message : "網路連線中斷，請確認網路後重試。");
     } finally {
@@ -111,6 +116,7 @@ export default function EventsPage() {
     setCoverFile(null);
     setCoverPreview(null);
     setCategory("CLUB_OFFICIAL");
+    setScope("CLUB");
     setError("");
     setCreating(false);
   }
@@ -177,6 +183,7 @@ export default function EventsPage() {
           capacity: capacity ? Number(capacity) : undefined,
           coverPhotoUrl,
           category,
+          scope: category === "CLUB_OFFICIAL" ? scope : undefined,
         }),
       });
       if (res.status === 401) {
@@ -268,9 +275,14 @@ export default function EventsPage() {
                     <p className="text-lg font-semibold break-words">{ev.title}</p>
                     <p className="text-sm text-lion-muted">{formatDate(ev.startAt)}（台灣時間）</p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${ev.category === "CLUB_OFFICIAL" ? "bg-lion-gold/15 text-lion-gold" : "bg-white/10 text-lion-muted"}`}>
-                    {eventCategoryLabels[ev.category]}
-                  </span>
+                  <div className="shrink-0 flex flex-col items-end gap-1">
+                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${ev.category === "CLUB_OFFICIAL" ? "bg-lion-gold/15 text-lion-gold" : "bg-white/10 text-lion-muted"}`}>
+                      {eventCategoryLabels[ev.category]}
+                    </span>
+                    {ev.scope !== "CLUB" && (
+                      <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] text-lion-muted">{eventScopeLabels[ev.scope]}</span>
+                    )}
+                  </div>
                 </div>
                 {ev.coverPhotoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -315,6 +327,25 @@ export default function EventsPage() {
               </div>
               <p className="mt-1 text-xs text-lion-muted">獅子會活動會標示為分會正式活動；個人／工商活動是會員自己要宣傳的場合，不代表分會立場。</p>
             </div>
+            {category === "CLUB_OFFICIAL" && allowedScopes.length > 1 && (
+              <div>
+                <span className="text-base text-lion-muted mb-1 block">發佈範圍</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {allowedScopes.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setScope(value)}
+                      aria-pressed={scope === value}
+                      className={`min-h-12 rounded-xl border px-3 text-sm font-medium ${scope === value ? "border-lion-gold bg-lion-gold/10 text-lion-gold" : "border-lion-border text-lion-muted"}`}
+                    >
+                      {eventScopeLabels[value]}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-lion-muted">發佈範圍超過本分會時，僅對應管理角色可選擇；此選單只顯示您有權限發佈的範圍。</p>
+              </div>
+            )}
             <div>
               <label htmlFor="event-cover" className="text-base text-lion-muted mb-1 block">封面照片（選填）</label>
               <button
