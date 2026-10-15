@@ -1,0 +1,926 @@
+{
+  "schema": "lionclub-organization-roster-v1",
+  "yearStart": 2026,
+  "approvedOn": "2026-10-15",
+  "source": "使用者核定之2026-2027年度名冊，第1及51-62頁",
+  "notice": "只含組織隸屬，不含具名任職、照片、電話、Email或QR。候選鍵不是正式DB ID。",
+  "organizations": [
+    {
+      "key": "MD300A",
+      "level": "md",
+      "name": "300A複合區",
+      "parentKey": null,
+      "sourcePage": "1"
+    },
+    {
+      "key": "D300A1",
+      "level": "district",
+      "name": "300A1區",
+      "parentKey": "MD300A",
+      "sourcePage": "1"
+    },
+    {
+      "key": "R01",
+      "level": "region",
+      "name": "第1專區",
+      "parentKey": "D300A1",
+      "sourcePage": "51"
+    },
+    {
+      "key": "R01-Z01",
+      "level": "zone",
+      "name": "第1分區",
+      "parentKey": "R01",
+      "sourcePage": "51"
+    },
+    {
+      "key": "R01-Z02",
+      "level": "zone",
+      "name": "第2分區",
+      "parentKey": "R01",
+      "sourcePage": "51"
+    },
+    {
+      "key": "R02",
+      "level": "region",
+      "name": "第2專區",
+      "parentKey": "D300A1",
+      "sourcePage": "52"
+    },
+    {
+      "key": "R02-Z03",
+      "level": "zone",
+      "name": "第3分區",
+      "parentKey": "R02",
+      "sourcePage": "52"
+    },
+    {
+      "key": "R02-Z04",
+      "level": "zone",
+      "name": "第4分區",
+      "parentKey": "R02",
+      "sourcePage": "52"
+    },
+    {
+      "key": "R03",
+      "level": "region",
+      "name": "第3專區",
+      "parentKey": "D300A1",
+      "sourcePage": "53"
+    },
+    {
+      "key": "R03-Z05",
+      "level": "zone",
+      "name": "第5分區",
+      "parentKey": "R03",
+      "sourcePage": "53"
+    },
+    {
+      "key": "R03-Z06",
+      "level": "zone",
+      "name": "第6分區",
+      "parentKey": "R03",
+      "sourcePage": "53"
+    },
+    {
+      "key": "R04",
+      "level": "region",
+      "name": "第4專區",
+      "parentKey": "D300A1",
+      "sourcePage": "54"
+    },
+    {
+      "key": "R04-Z07",
+      "level": "zone",
+      "name": "第7分區",
+      "parentKey": "R04",
+      "sourcePage": "54"
+    },
+    {
+      "key": "R04-Z08",
+      "level": "zone",
+      "name": "第8分區",
+      "parentKey": "R04",
+      "sourcePage": "54"
+    },
+    {
+      "key": "R05",
+      "level": "region",
+      "name": "第5專區",
+      "parentKey": "D300A1",
+      "sourcePage": "55"
+    },
+    {
+      "key": "R05-Z09",
+      "level": "zone",
+      "name": "第9分區",
+      "parentKey": "R05",
+      "sourcePage": "55"
+    },
+    {
+      "key": "R05-Z10",
+      "level": "zone",
+      "name": "第10分區",
+      "parentKey": "R05",
+      "sourcePage": "55"
+    },
+    {
+      "key": "R06",
+      "level": "region",
+      "name": "第6專區",
+      "parentKey": "D300A1",
+      "sourcePage": "56"
+    },
+    {
+      "key": "R06-Z11",
+      "level": "zone",
+      "name": "第11分區",
+      "parentKey": "R06",
+      "sourcePage": "56"
+    },
+    {
+      "key": "R06-Z12",
+      "level": "zone",
+      "name": "第12分區",
+      "parentKey": "R06",
+      "sourcePage": "56"
+    },
+    {
+      "key": "R07",
+      "level": "region",
+      "name": "第7專區",
+      "parentKey": "D300A1",
+      "sourcePage": "57"
+    },
+    {
+      "key": "R07-Z13",
+      "level": "zone",
+      "name": "第13分區",
+      "parentKey": "R07",
+      "sourcePage": "57"
+    },
+    {
+      "key": "R07-Z14",
+      "level": "zone",
+      "name": "第14分區",
+      "parentKey": "R07",
+      "sourcePage": "57"
+    },
+    {
+      "key": "R08",
+      "level": "region",
+      "name": "第8專區",
+      "parentKey": "D300A1",
+      "sourcePage": "58"
+    },
+    {
+      "key": "R08-Z15",
+      "level": "zone",
+      "name": "第15分區",
+      "parentKey": "R08",
+      "sourcePage": "58"
+    },
+    {
+      "key": "R08-Z16",
+      "level": "zone",
+      "name": "第16分區",
+      "parentKey": "R08",
+      "sourcePage": "58"
+    },
+    {
+      "key": "R09",
+      "level": "region",
+      "name": "第9專區",
+      "parentKey": "D300A1",
+      "sourcePage": "59"
+    },
+    {
+      "key": "R09-Z17",
+      "level": "zone",
+      "name": "第17分區",
+      "parentKey": "R09",
+      "sourcePage": "59"
+    },
+    {
+      "key": "R09-Z18",
+      "level": "zone",
+      "name": "第18分區",
+      "parentKey": "R09",
+      "sourcePage": "59"
+    },
+    {
+      "key": "R10",
+      "level": "region",
+      "name": "第10專區",
+      "parentKey": "D300A1",
+      "sourcePage": "60"
+    },
+    {
+      "key": "R10-Z19",
+      "level": "zone",
+      "name": "第19分區",
+      "parentKey": "R10",
+      "sourcePage": "60"
+    },
+    {
+      "key": "R10-Z20",
+      "level": "zone",
+      "name": "第20分區",
+      "parentKey": "R10",
+      "sourcePage": "60"
+    },
+    {
+      "key": "R11",
+      "level": "region",
+      "name": "第11專區",
+      "parentKey": "D300A1",
+      "sourcePage": "61"
+    },
+    {
+      "key": "R11-Z21",
+      "level": "zone",
+      "name": "第21分區",
+      "parentKey": "R11",
+      "sourcePage": "61"
+    },
+    {
+      "key": "R11-Z22",
+      "level": "zone",
+      "name": "第22分區",
+      "parentKey": "R11",
+      "sourcePage": "61"
+    },
+    {
+      "key": "R12",
+      "level": "region",
+      "name": "第12專區",
+      "parentKey": "D300A1",
+      "sourcePage": "62"
+    },
+    {
+      "key": "R12-Z23",
+      "level": "zone",
+      "name": "第23分區",
+      "parentKey": "R12",
+      "sourcePage": "62"
+    },
+    {
+      "key": "R12-Z24",
+      "level": "zone",
+      "name": "第24分區",
+      "parentKey": "R12",
+      "sourcePage": "62"
+    },
+    {
+      "key": "R01-Z01-C001",
+      "level": "club",
+      "name": "中央",
+      "parentKey": "R01-Z01",
+      "sourcePage": "51"
+    },
+    {
+      "key": "R01-Z01-C002",
+      "level": "club",
+      "name": "加盟",
+      "parentKey": "R01-Z01",
+      "sourcePage": "51"
+    },
+    {
+      "key": "R01-Z01-C003",
+      "level": "club",
+      "name": "新復興",
+      "parentKey": "R01-Z01",
+      "sourcePage": "51"
+    },
+    {
+      "key": "R01-Z01-C004",
+      "level": "club",
+      "name": "新世代",
+      "parentKey": "R01-Z01",
+      "sourcePage": "51"
+    },
+    {
+      "key": "R01-Z02-C005",
+      "level": "club",
+      "name": "全球國際",
+      "parentKey": "R01-Z02",
+      "sourcePage": "51"
+    },
+    {
+      "key": "R01-Z02-C006",
+      "level": "club",
+      "name": "北投",
+      "parentKey": "R01-Z02",
+      "sourcePage": "51"
+    },
+    {
+      "key": "R01-Z02-C007",
+      "level": "club",
+      "name": "真愛",
+      "parentKey": "R01-Z02",
+      "sourcePage": "51"
+    },
+    {
+      "key": "R01-Z02-C008",
+      "level": "club",
+      "name": "七心",
+      "parentKey": "R01-Z02",
+      "sourcePage": "51"
+    },
+    {
+      "key": "R02-Z03-C009",
+      "level": "club",
+      "name": "金辰",
+      "parentKey": "R02-Z03",
+      "sourcePage": "52"
+    },
+    {
+      "key": "R02-Z03-C010",
+      "level": "club",
+      "name": "榮成",
+      "parentKey": "R02-Z03",
+      "sourcePage": "52"
+    },
+    {
+      "key": "R02-Z03-C011",
+      "level": "club",
+      "name": "大愛",
+      "parentKey": "R02-Z03",
+      "sourcePage": "52"
+    },
+    {
+      "key": "R02-Z03-C012",
+      "level": "club",
+      "name": "欣悅",
+      "parentKey": "R02-Z03",
+      "sourcePage": "52"
+    },
+    {
+      "key": "R02-Z04-C013",
+      "level": "club",
+      "name": "誠信",
+      "parentKey": "R02-Z04",
+      "sourcePage": "52"
+    },
+    {
+      "key": "R02-Z04-C014",
+      "level": "club",
+      "name": "精英",
+      "parentKey": "R02-Z04",
+      "sourcePage": "52"
+    },
+    {
+      "key": "R02-Z04-C015",
+      "level": "club",
+      "name": "大智",
+      "parentKey": "R02-Z04",
+      "sourcePage": "52"
+    },
+    {
+      "key": "R02-Z04-C016",
+      "level": "club",
+      "name": "幸福",
+      "parentKey": "R02-Z04",
+      "sourcePage": "52"
+    },
+    {
+      "key": "R03-Z05-C017",
+      "level": "club",
+      "name": "佰富",
+      "parentKey": "R03-Z05",
+      "sourcePage": "53"
+    },
+    {
+      "key": "R03-Z05-C018",
+      "level": "club",
+      "name": "西北",
+      "parentKey": "R03-Z05",
+      "sourcePage": "53"
+    },
+    {
+      "key": "R03-Z05-C019",
+      "level": "club",
+      "name": "同興",
+      "parentKey": "R03-Z05",
+      "sourcePage": "53"
+    },
+    {
+      "key": "R03-Z05-C020",
+      "level": "club",
+      "name": "大中華",
+      "parentKey": "R03-Z05",
+      "sourcePage": "53"
+    },
+    {
+      "key": "R03-Z06-C021",
+      "level": "club",
+      "name": "和平",
+      "parentKey": "R03-Z06",
+      "sourcePage": "53"
+    },
+    {
+      "key": "R03-Z06-C022",
+      "level": "club",
+      "name": "城市",
+      "parentKey": "R03-Z06",
+      "sourcePage": "53"
+    },
+    {
+      "key": "R03-Z06-C023",
+      "level": "club",
+      "name": "永瀚",
+      "parentKey": "R03-Z06",
+      "sourcePage": "53"
+    },
+    {
+      "key": "R03-Z06-C024",
+      "level": "club",
+      "name": "榮鈺",
+      "parentKey": "R03-Z06",
+      "sourcePage": "53"
+    },
+    {
+      "key": "R04-Z07-C025",
+      "level": "club",
+      "name": "國強",
+      "parentKey": "R04-Z07",
+      "sourcePage": "54"
+    },
+    {
+      "key": "R04-Z07-C026",
+      "level": "club",
+      "name": "西南",
+      "parentKey": "R04-Z07",
+      "sourcePage": "54"
+    },
+    {
+      "key": "R04-Z07-C027",
+      "level": "club",
+      "name": "群英",
+      "parentKey": "R04-Z07",
+      "sourcePage": "54"
+    },
+    {
+      "key": "R04-Z07-C028",
+      "level": "club",
+      "name": "大眾",
+      "parentKey": "R04-Z07",
+      "sourcePage": "54"
+    },
+    {
+      "key": "R04-Z08-C029",
+      "level": "club",
+      "name": "松山慈祐",
+      "parentKey": "R04-Z08",
+      "sourcePage": "54"
+    },
+    {
+      "key": "R04-Z08-C030",
+      "level": "club",
+      "name": "士林",
+      "parentKey": "R04-Z08",
+      "sourcePage": "54"
+    },
+    {
+      "key": "R04-Z08-C031",
+      "level": "club",
+      "name": "貫誠",
+      "parentKey": "R04-Z08",
+      "sourcePage": "54"
+    },
+    {
+      "key": "R04-Z08-C032",
+      "level": "club",
+      "name": "美得森",
+      "parentKey": "R04-Z08",
+      "sourcePage": "54"
+    },
+    {
+      "key": "R05-Z09-C033",
+      "level": "club",
+      "name": "和樂",
+      "parentKey": "R05-Z09",
+      "sourcePage": "55"
+    },
+    {
+      "key": "R05-Z09-C034",
+      "level": "club",
+      "name": "吉林",
+      "parentKey": "R05-Z09",
+      "sourcePage": "55"
+    },
+    {
+      "key": "R05-Z09-C035",
+      "level": "club",
+      "name": "聖迪",
+      "parentKey": "R05-Z09",
+      "sourcePage": "55"
+    },
+    {
+      "key": "R05-Z09-C036",
+      "level": "club",
+      "name": "AI臺科大",
+      "parentKey": "R05-Z09",
+      "sourcePage": "55"
+    },
+    {
+      "key": "R05-Z10-C037",
+      "level": "club",
+      "name": "天母",
+      "parentKey": "R05-Z10",
+      "sourcePage": "55"
+    },
+    {
+      "key": "R05-Z10-C038",
+      "level": "club",
+      "name": "台北科大",
+      "parentKey": "R05-Z10",
+      "sourcePage": "55"
+    },
+    {
+      "key": "R05-Z10-C039",
+      "level": "club",
+      "name": "宏源",
+      "parentKey": "R05-Z10",
+      "sourcePage": "55"
+    },
+    {
+      "key": "R05-Z10-C040",
+      "level": "club",
+      "name": "建合",
+      "parentKey": "R05-Z10",
+      "sourcePage": "55"
+    },
+    {
+      "key": "R06-Z11-C041",
+      "level": "club",
+      "name": "成功",
+      "parentKey": "R06-Z11",
+      "sourcePage": "56"
+    },
+    {
+      "key": "R06-Z11-C042",
+      "level": "club",
+      "name": "冠軍",
+      "parentKey": "R06-Z11",
+      "sourcePage": "56"
+    },
+    {
+      "key": "R06-Z11-C043",
+      "level": "club",
+      "name": "永康",
+      "parentKey": "R06-Z11",
+      "sourcePage": "56"
+    },
+    {
+      "key": "R06-Z11-C044",
+      "level": "club",
+      "name": "一郎義消",
+      "parentKey": "R06-Z11",
+      "sourcePage": "56"
+    },
+    {
+      "key": "R06-Z12-C045",
+      "level": "club",
+      "name": "真善美",
+      "parentKey": "R06-Z12",
+      "sourcePage": "56"
+    },
+    {
+      "key": "R06-Z12-C046",
+      "level": "club",
+      "name": "慶成",
+      "parentKey": "R06-Z12",
+      "sourcePage": "56"
+    },
+    {
+      "key": "R06-Z12-C047",
+      "level": "club",
+      "name": "康寧",
+      "parentKey": "R06-Z12",
+      "sourcePage": "56"
+    },
+    {
+      "key": "R06-Z12-C048",
+      "level": "club",
+      "name": "天美",
+      "parentKey": "R06-Z12",
+      "sourcePage": "56"
+    },
+    {
+      "key": "R07-Z13-C049",
+      "level": "club",
+      "name": "飛鷹",
+      "parentKey": "R07-Z13",
+      "sourcePage": "57"
+    },
+    {
+      "key": "R07-Z13-C050",
+      "level": "club",
+      "name": "山而",
+      "parentKey": "R07-Z13",
+      "sourcePage": "57"
+    },
+    {
+      "key": "R07-Z13-C051",
+      "level": "club",
+      "name": "華夏",
+      "parentKey": "R07-Z13",
+      "sourcePage": "57"
+    },
+    {
+      "key": "R07-Z13-C052",
+      "level": "club",
+      "name": "金嶺",
+      "parentKey": "R07-Z13",
+      "sourcePage": "57"
+    },
+    {
+      "key": "R07-Z14-C053",
+      "level": "club",
+      "name": "星宇",
+      "parentKey": "R07-Z14",
+      "sourcePage": "57"
+    },
+    {
+      "key": "R07-Z14-C054",
+      "level": "club",
+      "name": "榮皇",
+      "parentKey": "R07-Z14",
+      "sourcePage": "57"
+    },
+    {
+      "key": "R07-Z14-C055",
+      "level": "club",
+      "name": "台北市",
+      "parentKey": "R07-Z14",
+      "sourcePage": "57"
+    },
+    {
+      "key": "R07-Z14-C056",
+      "level": "club",
+      "name": "僑商",
+      "parentKey": "R07-Z14",
+      "sourcePage": "57"
+    },
+    {
+      "key": "R08-Z15-C057",
+      "level": "club",
+      "name": "隆欣",
+      "parentKey": "R08-Z15",
+      "sourcePage": "58"
+    },
+    {
+      "key": "R08-Z15-C058",
+      "level": "club",
+      "name": "麗晶",
+      "parentKey": "R08-Z15",
+      "sourcePage": "58"
+    },
+    {
+      "key": "R08-Z15-C059",
+      "level": "club",
+      "name": "中山",
+      "parentKey": "R08-Z15",
+      "sourcePage": "58"
+    },
+    {
+      "key": "R08-Z15-C060",
+      "level": "club",
+      "name": "東南科大",
+      "parentKey": "R08-Z15",
+      "sourcePage": "58"
+    },
+    {
+      "key": "R08-Z16-C061",
+      "level": "club",
+      "name": "松山",
+      "parentKey": "R08-Z16",
+      "sourcePage": "58"
+    },
+    {
+      "key": "R08-Z16-C062",
+      "level": "club",
+      "name": "明德",
+      "parentKey": "R08-Z16",
+      "sourcePage": "58"
+    },
+    {
+      "key": "R08-Z16-C063",
+      "level": "club",
+      "name": "光明",
+      "parentKey": "R08-Z16",
+      "sourcePage": "58"
+    },
+    {
+      "key": "R08-Z16-C064",
+      "level": "club",
+      "name": "長白山",
+      "parentKey": "R08-Z16",
+      "sourcePage": "58"
+    },
+    {
+      "key": "R09-Z17-C065",
+      "level": "club",
+      "name": "東億",
+      "parentKey": "R09-Z17",
+      "sourcePage": "59"
+    },
+    {
+      "key": "R09-Z17-C066",
+      "level": "club",
+      "name": "中興",
+      "parentKey": "R09-Z17",
+      "sourcePage": "59"
+    },
+    {
+      "key": "R09-Z17-C067",
+      "level": "club",
+      "name": "凡宇",
+      "parentKey": "R09-Z17",
+      "sourcePage": "59"
+    },
+    {
+      "key": "R09-Z17-C068",
+      "level": "club",
+      "name": "圓心",
+      "parentKey": "R09-Z17",
+      "sourcePage": "59"
+    },
+    {
+      "key": "R09-Z18-C069",
+      "level": "club",
+      "name": "亮點",
+      "parentKey": "R09-Z18",
+      "sourcePage": "59"
+    },
+    {
+      "key": "R09-Z18-C070",
+      "level": "club",
+      "name": "大稻江",
+      "parentKey": "R09-Z18",
+      "sourcePage": "59"
+    },
+    {
+      "key": "R09-Z18-C071",
+      "level": "club",
+      "name": "純德",
+      "parentKey": "R09-Z18",
+      "sourcePage": "59"
+    },
+    {
+      "key": "R09-Z18-C072",
+      "level": "club",
+      "name": "新動",
+      "parentKey": "R09-Z18",
+      "sourcePage": "59"
+    },
+    {
+      "key": "R10-Z19-C073",
+      "level": "club",
+      "name": "聖心",
+      "parentKey": "R10-Z19",
+      "sourcePage": "60"
+    },
+    {
+      "key": "R10-Z19-C074",
+      "level": "club",
+      "name": "文華",
+      "parentKey": "R10-Z19",
+      "sourcePage": "60"
+    },
+    {
+      "key": "R10-Z19-C075",
+      "level": "club",
+      "name": "紳德",
+      "parentKey": "R10-Z19",
+      "sourcePage": "60"
+    },
+    {
+      "key": "R10-Z20-C076",
+      "level": "club",
+      "name": "內湖",
+      "parentKey": "R10-Z20",
+      "sourcePage": "60"
+    },
+    {
+      "key": "R10-Z20-C077",
+      "level": "club",
+      "name": "經緯",
+      "parentKey": "R10-Z20",
+      "sourcePage": "60"
+    },
+    {
+      "key": "R10-Z20-C078",
+      "level": "club",
+      "name": "齊佳",
+      "parentKey": "R10-Z20",
+      "sourcePage": "60"
+    },
+    {
+      "key": "R11-Z21-C079",
+      "level": "club",
+      "name": "儷緻",
+      "parentKey": "R11-Z21",
+      "sourcePage": "61"
+    },
+    {
+      "key": "R11-Z21-C080",
+      "level": "club",
+      "name": "慈惠",
+      "parentKey": "R11-Z21",
+      "sourcePage": "61"
+    },
+    {
+      "key": "R11-Z21-C081",
+      "level": "club",
+      "name": "嘉聯",
+      "parentKey": "R11-Z21",
+      "sourcePage": "61"
+    },
+    {
+      "key": "R11-Z21-C082",
+      "level": "club",
+      "name": "松友",
+      "parentKey": "R11-Z21",
+      "sourcePage": "61"
+    },
+    {
+      "key": "R11-Z22-C083",
+      "level": "club",
+      "name": "陽明山",
+      "parentKey": "R11-Z22",
+      "sourcePage": "61"
+    },
+    {
+      "key": "R11-Z22-C084",
+      "level": "club",
+      "name": "華僑",
+      "parentKey": "R11-Z22",
+      "sourcePage": "61"
+    },
+    {
+      "key": "R11-Z22-C085",
+      "level": "club",
+      "name": "中和",
+      "parentKey": "R11-Z22",
+      "sourcePage": "61"
+    },
+    {
+      "key": "R12-Z23-C086",
+      "level": "club",
+      "name": "民生",
+      "parentKey": "R12-Z23",
+      "sourcePage": "62"
+    },
+    {
+      "key": "R12-Z23-C087",
+      "level": "club",
+      "name": "新象山",
+      "parentKey": "R12-Z23",
+      "sourcePage": "62"
+    },
+    {
+      "key": "R12-Z23-C088",
+      "level": "club",
+      "name": "功殿",
+      "parentKey": "R12-Z23",
+      "sourcePage": "62"
+    },
+    {
+      "key": "R12-Z23-C089",
+      "level": "club",
+      "name": "龍昇",
+      "parentKey": "R12-Z23",
+      "sourcePage": "62"
+    },
+    {
+      "key": "R12-Z24-C090",
+      "level": "club",
+      "name": "石牌",
+      "parentKey": "R12-Z24",
+      "sourcePage": "62"
+    },
+    {
+      "key": "R12-Z24-C091",
+      "level": "club",
+      "name": "蓬萊",
+      "parentKey": "R12-Z24",
+      "sourcePage": "62"
+    },
+    {
+      "key": "R12-Z24-C092",
+      "level": "club",
+      "name": "四維",
+      "parentKey": "R12-Z24",
+      "sourcePage": "62"
+    },
+    {
+      "key": "R12-Z24-C093",
+      "level": "club",
+      "name": "愛心",
+      "parentKey": "R12-Z24",
+      "sourcePage": "62"
+    }
+  ]
+}

@@ -47,6 +47,7 @@ model Organization {
   hostedEvents        Event[]
   clubInvites         ClubInvite[]
   memberExperiences   MemberExperience[]
+  annualAppointments  AnnualAppointment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -100,6 +101,7 @@ model Member {
 
   experiences         MemberExperience[]       @relation("MemberExperiences")
   verifiedExperiences MemberExperience[]       @relation("ExperienceVerifiedBy")
+  experienceReviewsMade ExperienceReviewAudit[] @relation("ExperienceReviewActor")
 
   friendRequestsSent     Friendship[] @relation("FriendshipRequester")
   friendRequestsReceived Friendship[] @relation("FriendshipAddressee")
@@ -317,12 +319,67 @@ model MemberExperience {
   verifiedBy   Member?   @relation("ExperienceVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
   verifiedAt   DateTime?
   rejectedReason String?
+  auditReviews ExperienceReviewAudit[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([memberId])
   @@index([organizationId])
+}
+
+// 核實資歷的稽核紀錄，不代表 AdminRole。刪帳後 actor 斷鏈，不保留姓名快照。
+model ExperienceReviewAudit {
+  id String @id @default(cuid())
+  experienceId String?
+  experience MemberExperience? @relation(fields: [experienceId], references: [id], onDelete: SetNull)
+  actorId String?
+  actor Member? @relation("ExperienceReviewActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action String
+  reviewRole String
+  scopeId String?
+  reason String?
+  experienceUpdatedAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([experienceId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+// 年度名冊與登入會員／自填資歷分離。沒有 Email／MemberID 也能保存核定任職。
+// 本表不建立 Member、User、MemberExperience 或 AdminRole，也不以姓名自動連結。
+model RosterImportBatch {
+  id String @id
+  sourceDigest String @unique
+  yearStart Int
+  approvedBy String
+  approvedAt DateTime
+  appliedAt DateTime @default(now())
+  organizationCount Int
+  appointmentCount Int
+  appointments AnnualAppointment[]
+}
+
+model AnnualAppointment {
+  id String @id
+  batchId String
+  batch RosterImportBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  sourceKey String
+  yearStart Int
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  positionName String
+  personName String
+  homeClubSourceName String?
+  listingNature String
+  sourcePage String
+  approvedBy String
+  approvedAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([batchId, sourceKey])
+  @@unique([yearStart, organizationId, sourceKey])
+  @@index([organizationId, yearStart])
 }
 
 // ────────────────────────────────

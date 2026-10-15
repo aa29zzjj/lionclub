@@ -1,5 +1,7 @@
 "use client";
 
+import { organizationDisplayName } from "@/lib/organization-label";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -285,7 +287,7 @@ export default function MemberAssignmentPage() {
           <div><label htmlFor="assignment-organization" className="mb-1 block text-xs text-lion-muted">正式分會</label><select id="assignment-organization" value={organizationId} disabled={saving || detailLoading} onChange={(event) => { setOrganizationId(event.target.value); setConfirmed(false); }} required className="min-h-12 w-full rounded-xl border border-lion-border bg-lion-page px-3 py-2.5 text-sm">
             <option value="" className="bg-lion-card text-lion-cream">請選擇正式分會</option>
             {organizationId && !targetOrganization && <option value={organizationId} disabled className="bg-lion-card text-lion-cream">目前選擇不在可管理範圍內，請重新選擇</option>}
-            {organizations.map((organization) => <option key={organization.id} value={organization.id} className="bg-lion-card text-lion-cream">{organization.districtCode ? `${organization.districtCode} · ` : ""}{organization.name}</option>)}
+            {organizations.map((organization) => <option key={organization.id} value={organization.id} className="bg-lion-card text-lion-cream">{organization.districtCode && !organization.name.includes(organization.districtCode) ? `${organization.districtCode} · ` : ""}{organizationDisplayName(organization)}</option>)}
           </select></div>
           <div><label htmlFor="assignment-reason" className="mb-1 block text-xs text-lion-muted">分派／核對原因（必填）</label><textarea id="assignment-reason" value={reason} onChange={(event) => { setReason(event.target.value); setConfirmed(false); }} disabled={saving || detailLoading} required minLength={2} maxLength={1000} rows={3} placeholder="請填寫會員名單來源或分會核對依據" className="w-full rounded-xl border border-lion-border bg-lion-page px-3 py-2.5 text-sm placeholder:text-lion-muted" /><p className="mt-1 text-right text-[11px] text-lion-muted">{reason.trim().length} / 1000 字，至少 2 字</p></div>
           <div className="rounded-xl border border-lion-border bg-lion-soft p-3 text-xs leading-relaxed">

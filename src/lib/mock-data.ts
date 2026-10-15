@@ -111,11 +111,11 @@ export const upcomingEvents: EventItem[] = [
   },
 ];
 
-// 組織階層：複合區 → 專區 → 分區 → 分會（對照後台 Club/Zone/District/MultiDistrict）
+// 組織階層：複合區 → 區 → 專區 → 分區 → 分會；此區僅為合成展示資料。
 export type ClubOption = {
   id: string;
   name: string;
-  path: string; // 複合區／專區／分區
+  path: string; // 複合區／區／專區／分區
 };
 
 export const clubOptions: ClubOption[] = [

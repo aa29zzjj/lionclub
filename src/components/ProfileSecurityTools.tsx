@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Avatar from "./Avatar";
 import AccessibleDialog from "./AccessibleDialog";
 import { colorFromId } from "@/lib/avatar-color";
@@ -62,6 +63,8 @@ export default function ProfileSecurityTools() {
   return <section className="rounded-2xl border border-lion-border bg-lion-card p-4">
     <h2 className="text-base font-semibold">隱私與登入安全</h2>
     <div className="mt-3 grid gap-2"><button type="button" className="min-h-12 rounded-xl border border-lion-border px-3 text-left text-base" onClick={() => { setOpen(open === "blocks" ? null : "blocks"); setError(""); setNotice(""); if (open !== "blocks") void loadBlocks(); }}>封鎖名單{open === "blocks" ? " · 收合" : " →"}</button><button type="button" className="min-h-12 rounded-xl border border-lion-border px-3 text-left text-base" onClick={() => { setOpen(open === "sessions" ? null : "sessions"); setPassword(""); setError(""); setNotice(""); }}>登出其他裝置{open === "sessions" ? " · 收合" : " →"}</button></div>
+    <Link href="/account/delete" className="mt-3 flex min-h-12 items-center justify-between gap-3 rounded-xl border border-lion-danger/40 px-3 py-3 text-base text-lion-danger"><span><span className="block font-semibold">刪除我的帳號</span><span className="mt-1 block text-sm text-lion-muted">查看資料範圍，再以本人密碼確認</span></span><span aria-hidden="true">→</span></Link>
+    <nav aria-label="隱私與協助" className="mt-3 flex flex-wrap gap-x-4 text-base"><Link href="/privacy" className="touch-link text-lion-gold underline">隱私權政策</Link><Link href="/support" className="touch-link text-lion-gold underline">客服與協助</Link></nav>
     {notice && <p role="status" className="mt-3 text-base leading-relaxed">{notice}</p>}
     {open === "blocks" && <div className="mt-4" aria-busy={loading}>
       <p className="mb-3 text-sm text-lion-muted">解除封鎖不會自動恢復好友；需要時請重新送出邀請。</p>

@@ -1,4 +1,4 @@
-import { formatLionYear, getLionYearStart } from "./lion-year";
+import { formatLionYear, getCurrentLionYearStart, getLionYearStart } from "./lion-year";
 export { calculateLionYears } from "./lion-year";
 
 export type ExperienceKind = "membership" | "position" | "honorary" | "advisor" | "other";
@@ -121,14 +121,26 @@ export const positionOptions: PositionOption[] = [
   { code: "dist_vdg1", label: "第一副總監", level: "district", kind: "position" },
   { code: "dist_vdg2", label: "第二副總監", level: "district", kind: "position" },
   { code: "dist_secretary", label: "內閣秘書長", level: "district", kind: "position" },
+  { code: "dist_deputy_secretary", label: "內閣副秘書長", level: "district", kind: "position" },
   { code: "dist_treasurer", label: "內閣財務長", level: "district", kind: "position" },
+  { code: "dist_deputy_treasurer", label: "內閣副財務長", level: "district", kind: "position" },
+  { code: "dist_general_affairs", label: "內閣總務長", level: "district", kind: "position" },
+  { code: "dist_pr_chair", label: "區公關長", level: "district", kind: "position" },
+  { code: "dist_information", label: "區資訊長", level: "district", kind: "position" },
+  { code: "dist_gmt_coordinator", label: "GMT 會員發展協調長", level: "district", kind: "position" },
+  { code: "dist_glt_coordinator", label: "GLT 領導培訓協調長", level: "district", kind: "position" },
+  { code: "dist_gst_coordinator", label: "GST 服務協調長", level: "district", kind: "position" },
   { code: "dist_special_advisor", label: "駐區總監特別顧問", level: "district", kind: "advisor" },
   { code: "dist_honor_governor", label: "榮譽總監", level: "district", kind: "honorary" },
+  { code: "dist_honor_vdg", label: "榮譽副總監", level: "district", kind: "honorary" },
   { code: "region_chair", label: "專區主席", level: "region", kind: "position" },
+  { code: "region_vice_chair", label: "專區副主席", level: "region", kind: "position" },
   { code: "region_secretary", label: "專區秘書", level: "region", kind: "position" },
+  { code: "region_treasurer", label: "專區財務", level: "region", kind: "position" },
   { code: "region_advisor", label: "專區顧問", level: "region", kind: "advisor" },
   { code: "zone_chair", label: "分區主席", level: "zone", kind: "position" },
   { code: "zone_secretary", label: "分區秘書", level: "zone", kind: "position" },
+  { code: "zone_treasurer", label: "分區財務", level: "zone", kind: "position" },
   { code: "zone_advisory", label: "分區顧問會議成員", level: "zone", kind: "advisor" },
   { code: "club_president", label: "會長", level: "club", kind: "position" },
   { code: "club_founder_president", label: "首屆會長（創會會長）", level: "club", kind: "position" },
@@ -140,8 +152,10 @@ export const positionOptions: PositionOption[] = [
   { code: "club_supervisor", label: "監事", level: "club", kind: "position" },
   { code: "club_honor_president", label: "榮譽會長", level: "club", kind: "honorary" },
   { code: "club_founder", label: "創會人", level: "club", kind: "honorary" },
+  { code: "club_charter_member", label: "創會員", level: "club", kind: "honorary" },
   { code: "club_honor_founder", label: "榮譽創會人", level: "club", kind: "honorary" },
   { code: "club_guiding_lion", label: "導獅", level: "club", kind: "advisor" },
+  { code: "club_mentor", label: "導師", level: "club", kind: "advisor" },
   { code: "club_service_chair", label: "服務主席／召集人", level: "club", kind: "position" },
   { code: "club_pr_chair", label: "公關行銷主席／召集人", level: "club", kind: "position" },
   { code: "club_activity_director", label: "活動長／活動召集人", level: "club", kind: "position" },
@@ -183,6 +197,24 @@ export function shortPositionLabel(positionCode: string, fallbackLabel: string) 
 
 export function isOfficerPosition(level: OrganizationLevel, kind: ExperienceKind) {
   return kind === "position" && level !== "foundation";
+}
+
+/** A self-declared current checkbox is never a verified-year badge or authority. */
+export function isVerifiedCurrentPosition(experience: MemberExperience, now = new Date()) {
+  const year = getCurrentLionYearStart(now);
+  const lastYear = experience.endYear ?? experience.startYear;
+  return experience.verificationStatus === "verified" && experience.kind === "position" &&
+    experience.datePrecision === "lions-year" && Number.isInteger(experience.startYear) &&
+    Number.isInteger(lastYear) && experience.startYear <= year && year <= lastYear &&
+    positionOptions.some(position => position.code === experience.positionCode && position.kind === experience.kind && position.level === experience.level);
+}
+
+export function currentExperienceLabel(experience: MemberExperience, now = new Date()): string | null {
+  if (isVerifiedCurrentPosition(experience, now)) return "本年度已核實職務";
+  if (!experience.isCurrent) return null;
+  if (experience.kind === "membership") return "本人標示仍具會籍";
+  if (experience.verificationStatus === "verified" && experience.kind === "position") return "本人標示現任（年度待確認）";
+  return experience.verificationStatus === "verified" ? "本人標示現任（資歷已核實）" : "本人標示現任（未核實）";
 }
 
 export function formatJoinDate(joinYear?: number | null, joinMonth?: number | null) {

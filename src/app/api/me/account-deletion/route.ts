@@ -6,6 +6,7 @@ import { getCurrentMember } from "@/lib/current-member";
 import { getSession, destroySession } from "@/lib/session";
 import { AccountDeletionError, anonymizeAccount } from "@/lib/account-deletion";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
+import { consumeRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 const bodySchema = z.object({ password: z.string().min(1) });
 
@@ -14,13 +15,18 @@ export async function POST(request: NextRequest) {
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "請輸入密碼確認" }, { status: 400 });
-
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
   const prisma = await getPrisma();
+  // Authenticated actor, not shared Wi-Fi: wrong passwords and malformed attempts
+  // also consume the five-attempt/10-minute window before bcrypt or any deletion.
+  const limit = await consumeRateLimit(prisma, `account-deletion:actor:${session.userId}`, 5);
+  if (limit.limited) return rateLimitResponse(limit);
+
+  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "請輸入密碼確認" }, { status: 400 });
+
   const user = await prisma.user.findUnique({ where: { id: session.userId } });
   if (!user) return NextResponse.json({ error: "找不到帳號" }, { status: 404 });
 

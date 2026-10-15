@@ -65,7 +65,7 @@ try {
 }
 
 if (metadata) {
-  record(metadata.status === "ready", "metadata status", `${metadata.status ?? "未提供"}；完成準備與驗收後才設 ready`);
+  record(metadata.status === "ready" && metadata.ready === true && metadata.release?.submissionReady === true, "metadata status", `${metadata.status ?? "未提供"}；ready 與 submissionReady 都需實際完成驗收，檔案存在不代表可送審`);
   for (const key of [
     "app.name", "app.bundleId", "app.androidApplicationId", "app.appleTeamId", "app.legalEntityName", "app.copyright",
     "contacts.supportEmail", "contacts.privacyEmail", "contacts.reviewContactName", "contacts.reviewContactEmail", "contacts.reviewContactPhone",
@@ -84,11 +84,18 @@ if (metadata) {
   record(readField(metadata, "listing.price") != null, "listing.price", "需確認定價");
   for (const key of ["assets.appIcon1024", "assets.googlePlayIcon512", "assets.googlePlayFeatureGraphic"]) checkAsset(metadata, key);
   for (const key of ["assets.iphoneScreenshots", "assets.androidScreenshots"]) checkAsset(metadata, key, true);
+  const realEmail = (value) => typeof value === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  record(typeof metadata.app?.legalEntityName === "string" && Boolean(metadata.app.legalEntityName.trim()) && realEmail(metadata.contacts?.supportEmail) && realEmail(metadata.contacts?.privacyEmail),
+    "公開政策／客服營運資料已補齊", "需持有人提供法定名稱、真實客服與隱私信箱；公開說明頁或假聯絡方式不能取代");
+  record(metadata.deploymentDependencies?.productionDatabaseMigrationVerified === true && metadata.deploymentDependencies?.matchingProductionApiDeploymentVerified === true,
+    "同版 DB／API 正式驗收紀錄", "只看已填驗收旗標，不連正式環境；先 migration、相容 API，再做原生真機驗收");
+  record(metadata.release?.googlePlayAccountCreated === true, "Google Play 發行帳號", "只影響 Play 發行，不是本機開發／安裝測試 APK 的前提");
 }
 
 checkAnyFile("公開隱私政策實作", ["src/app/privacy/page.tsx", "src/app/privacy-policy/page.tsx"]);
 checkAnyFile("公開客服頁實作", ["src/app/support/page.tsx"]);
 checkAnyFile("外部帳號刪除頁實作", ["src/app/account/delete/page.tsx"]);
+checkAnyFile("本人再驗證刪帳介面", ["src/components/AccountDeletionPanel.tsx"]);
 checkAnyFile("帳號刪除 API 實作", ["src/app/api/me/account-deletion/route.ts"]);
 checkAnyFile("內容檢舉 API 實作", ["src/app/api/reports/route.ts", "src/app/api/members/[memberId]/report/route.ts"]);
 checkAnyFile("專用會員封鎖 API 實作", ["src/app/api/members/[id]/block/route.ts", "src/app/api/members/[memberId]/block/route.ts"]);

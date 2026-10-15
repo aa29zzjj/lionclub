@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { getClubDirectory, isClubInDistrictDirectory } from "@/lib/club-directory";
+import { organizationDisplayName } from "@/lib/organization-label";
 import { formatLionYear, formatLionYearDateRange, getCurrentLionYearStart, getLionYearStart } from "@/lib/lion-year";
 import {
   calculateLionYears,
+  currentExperienceLabel,
   districtOptions,
   experienceKindOptions,
   ExperienceKind,
@@ -15,6 +17,7 @@ import {
   formatJoinDate,
   formatLionsYear,
   isOfficerPosition,
+  isVerifiedCurrentPosition,
   MemberExperience,
   multipleDistrictOptions,
   organizationLevelOptions,
@@ -82,7 +85,7 @@ function organizationNameFor(
   memberClub: string
 ) {
   if (level === "international") return "國際獅子會";
-  if (level === "md") return `MD${multipleDistrictCode}`;
+  if (level === "md") return `${multipleDistrictCode} 複合區`;
   if (level === "district") return `${districtCode} 區`;
   if (level === "region") return `${districtCode} 專區（編號待核）`;
   if (level === "zone") return `${districtCode} 分區（編號待核）`;
@@ -423,10 +426,10 @@ export default function ExperiencePage() {
             <Avatar name={profile.name} color={profile.avatarColor} imageUrl={profile.avatarUrl} size={60} />
             <div className="min-w-0">
               <h1 className="text-xl font-bold truncate">{profile.name}</h1>
-              <p className="text-xs text-lion-muted mt-0.5 truncate">{profile.chapter}</p>
+              <p className="text-xs text-lion-muted mt-0.5 truncate">{organizationDisplayName({ name: profile.chapter })}</p>
               {profile.districtCode && (
                 <p className="text-[10px] text-lion-gold/80 mt-1 truncate">
-                  MD{profile.multipleDistrictCode} · {profile.districtCode} 區
+                  {profile.multipleDistrictCode} 複合區 · {profile.districtCode} 區
                   {profile.regionName ? ` · ${profile.regionName}` : ""}
                   {profile.zoneName ? ` · ${profile.zoneName}` : ""}
                 </p>
@@ -441,15 +444,16 @@ export default function ExperiencePage() {
             </div>
             <div className="rounded-xl bg-black/20 px-2 py-2.5 text-center">
               <p className="text-lg font-bold text-lion-gold">
-                {experiences.filter((experience) => experience.isCurrent && experience.kind !== "membership").length}
+                {experiences.filter((experience) => isVerifiedCurrentPosition(experience)).length}
               </p>
-              <p className="text-[10px] text-lion-muted">現任職務</p>
+              <p className="text-[10px] text-lion-muted">本年度核實職務</p>
             </div>
             <div className="rounded-xl bg-black/20 px-2 py-2.5 text-center">
               <p className="text-lg font-bold text-lion-gold">{verifiedCount}</p>
-              <p className="text-[10px] text-lion-muted">已核實</p>
+              <p className="text-[10px] text-lion-muted">資歷已核實</p>
             </div>
           </div>
+          <p className="mt-3 text-xs text-lion-muted">本人標示現任 {experiences.filter(experience => experience.isCurrent && experience.kind !== "membership").length} 筆；自填現任不等於本年度核實，也不產生管理權限。</p>
         </div>
 
         <div className="rounded-xl border border-sky-400/20 bg-sky-400/10 px-3.5 py-3 text-xs text-sky-200/90 leading-relaxed mb-5">
@@ -707,7 +711,7 @@ export default function ExperiencePage() {
               {draft.isCurrent && isOfficerPosition(draft.level, draft.kind) && (
                 <span className="inline-flex items-center gap-1 ml-auto text-[11px] text-red-300">
                   <span className="w-2 h-2 rounded-full bg-red-400" />
-                  現任幹部，待管理員核實
+                  本人標示現任，待上一級核實
                 </span>
               )}
             </label>
@@ -778,7 +782,7 @@ export default function ExperiencePage() {
                     {experience.kind !== "membership" && <p className="text-[11px] text-lion-muted mt-1">
                       {formatLionYearDateRange(experience.startYear, experience.endYear)}
                     </p>}
-                    <p className="text-xs text-lion-muted mt-1">{experience.organizationName}</p>
+                    <p className="text-xs text-lion-muted mt-1">{organizationDisplayName({ name: experience.organizationName, level: experience.level })}</p>
                     {experience.organizationIsUnlisted && (
                       <p className="text-[11px] text-amber-300/80 mt-1">組織待核 · 尚未命中目前分會名冊</p>
                     )}
@@ -786,8 +790,8 @@ export default function ExperiencePage() {
                       {kindLabel(experience.kind)} · {levelLabel(experience.level)} · {visibilityLabels[experience.visibility]}
                     </p>
                   </div>
-                  {experience.isCurrent && (
-                    <span className="shrink-0 rounded-full bg-lion-action text-lion-navyDeep px-2 py-1 text-[10px] font-semibold">現任</span>
+                  {currentExperienceLabel(experience) && (
+                    <span className={`max-w-32 shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${isVerifiedCurrentPosition(experience) ? "bg-lion-action text-lion-navyDeep" : "border border-lion-border text-lion-muted"}`}>{currentExperienceLabel(experience)}</span>
                   )}
                 </div>
 

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-member";
+import { getCurrentMember } from "@/lib/current-member";
 import { getPrisma } from "@/lib/prisma";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
-import { AttendanceError, checkInInputSchema, checkInMember, EVENT_ATTENDANCE_ROLES } from "@/lib/event-attendance";
+import { AttendanceError, checkInInputSchema, checkInMember } from "@/lib/event-attendance";
+import { canManageEvent } from "@/lib/event-scope";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!isTrustedBrowserMutation(request)) return NextResponse.json({ error: "請從網站操作報到" }, { status: 403 });
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { id } = await params;
   try {
     return NextResponse.json(await checkInMember(await getPrisma(), me.id, id, parsed.data,
-      (tx, actorId, organizationId) => hasAdminRoleForOrganization(actorId, organizationId, EVENT_ATTENDANCE_ROLES, tx)));
+      (tx, actorId, _organizationId, event) => canManageEvent(tx, actorId, event)));
   } catch (error) {
     if (error instanceof AttendanceError) return NextResponse.json({ error: error.message }, { status: error.status });
     throw error;

@@ -6,7 +6,7 @@ import { clubDirectoryByDistrict } from "../src/lib/club-directory";
 const prisma = new PrismaClient();
 
 async function main() {
-  // ── 組織架構：300A 複合區 → 四個專區 → 官方分會名單 ──
+  // ── 組織架構：300A 複合區 → 四個區 → 官方分會名單 ──
   const md = await prisma.organization.upsert({
     where: { id: "seed-md-300a" },
     update: {},
@@ -31,7 +31,7 @@ async function main() {
         id: `seed-district-${districtCode}`,
         level: "district",
         code: districtCode,
-        name: `${districtCode} 專區`,
+        name: `${districtCode} 區`,
         parentId: md.id,
         districtCode,
         isActive: true,
@@ -121,7 +121,7 @@ async function main() {
   });
 
   console.log("Seed 完成：");
-  console.log(`- 組織資料已匯入（複合區/專區/分會）`);
+  console.log(`- 組織資料已匯入（複合區/區/分會；專區與分區由核定名冊另行匯入）`);
   console.log(`- Demo 帳號：demo@lions.tw / demo1234（${demoClubId} 的會長）`);
   console.log(`- Demo 邀請 PIN：248613`);
 }

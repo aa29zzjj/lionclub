@@ -11,7 +11,7 @@ import { PinIcon } from "@/components/icons";
 import { colorFromId } from "@/lib/avatar-color";
 import { EVENT_TIME_ZONE, taipeiEventStartAt } from "@/lib/event-calendar";
 import { EVENT_CATEGORIES, eventCategoryLabels, type EventCategory } from "@/lib/event-category";
-import { eventScopeLabels, type EventScope } from "@/lib/event-scope";
+import { eventScopeLabels, type EventScope, type EventPublishingOption } from "@/lib/event-scope";
 
 type EventDetail = {
   id: string;
@@ -23,12 +23,14 @@ type EventDetail = {
   scope: EventScope;
   coverPhotoUrl?: string;
   hostChapter: string;
+  hostOrganizationId?: string;
   startAt: string;
   isRegistered: boolean;
   isCheckedIn?: boolean;
   registeredCount: number;
   isFull: boolean;
   canManage: boolean;
+  canConvertToPersonal?: boolean;
 };
 
 type Registration = {
@@ -67,7 +69,8 @@ export default function EventDetailPage() {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<EventCategory>("CLUB_OFFICIAL");
   const [scope, setScope] = useState<EventScope>("CLUB");
-  const [allowedScopes, setAllowedScopes] = useState<EventScope[]>(["CLUB"]);
+  const [allowedScopes, setAllowedScopes] = useState<EventScope[]>([]);
+  const [officialHosts, setOfficialHosts] = useState<EventPublishingOption[]>([]);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
@@ -185,7 +188,8 @@ export default function EventDetailPage() {
         }
         setEvent(data.event);
         loadForm(data.event);
-        if (Array.isArray(data.allowedScopes)) setAllowedScopes(data.allowedScopes);
+        setAllowedScopes(Array.isArray(data.allowedScopes) ? data.allowedScopes : []);
+        setOfficialHosts(Array.isArray(data.officialHosts) ? data.officialHosts : []);
       } catch (failure) {
         if (!controller.signal.aborted) setError(failure instanceof Error && !(failure instanceof TypeError) ? failure.message : "活動資料無法載入，請確認網路後重新整理。");
       } finally {
@@ -230,6 +234,10 @@ export default function EventDetailPage() {
   async function saveEvent(formEvent: React.FormEvent) {
     formEvent.preventDefault();
     if (!event || saving || deleting || mutationBusyRef.current || togglingRef.current || checkInBusyRef.current) return;
+    if (category === "CLUB_OFFICIAL" && !officialHosts.some((option) => option.scope === scope)) {
+      setError("您目前沒有此層級的官方發布權限，請重新載入確認。");
+      return;
+    }
     const [date, time] = startAt.split("T");
     const nextStartAt = taipeiEventStartAt(date, time);
     if (!title.trim() || !location.trim() || !nextStartAt) {
@@ -288,6 +296,7 @@ export default function EventDetailPage() {
         coverPhotoUrl,
         category,
         scope: category === "CLUB_OFFICIAL" ? scope : undefined,
+        hostOrganizationId: category === "CLUB_OFFICIAL" ? officialHosts.find((option) => option.scope === scope)?.hostOrganizationId : undefined,
       }),
     });
     const result = await response.json().catch(() => ({}));
@@ -308,8 +317,10 @@ export default function EventDetailPage() {
       capacity: capacity ? Number(capacity) : undefined,
       description: description.trim() || undefined,
       coverPhotoUrl: coverPhotoUrl ?? undefined,
-      category,
-      scope: category === "CLUB_OFFICIAL" ? scope : "CLUB",
+      category: result.category ?? category,
+      scope: result.scope ?? (category === "CLUB_OFFICIAL" ? scope : "CLUB"),
+      hostChapter: result.hostChapter ?? current.hostChapter,
+      hostOrganizationId: result.hostOrganizationId ?? current.hostOrganizationId,
       isFull: Boolean(capacity && current.registeredCount >= Number(capacity)),
     } : current);
     setEditing(false);
@@ -468,19 +479,20 @@ export default function EventDetailPage() {
                   <button
                     key={value}
                     type="button"
-                    onClick={() => setCategory(value)}
+                    onClick={() => { setCategory(value); setScope(value === "PERSONAL" ? "CLUB" : allowedScopes.includes(scope) ? scope : allowedScopes[0] ?? "CLUB"); }}
+                    disabled={(value === "CLUB_OFFICIAL" && officialHosts.length === 0) || (value === "PERSONAL" && event.category === "CLUB_OFFICIAL" && !event.canConvertToPersonal)}
                     aria-pressed={category === value}
-                    className={`min-h-12 rounded-xl border px-3 text-sm font-medium ${category === value ? "border-lion-gold bg-lion-gold/10 text-lion-gold" : "border-lion-border text-lion-muted"}`}
+                    className={`min-h-12 rounded-xl border px-3 text-sm font-medium disabled:opacity-50 ${category === value ? "border-lion-gold bg-lion-gold/10 text-lion-gold" : "border-lion-border text-lion-muted"}`}
                   >
                     {eventCategoryLabels[value]}
                   </button>
                 ))}
               </div>
             </div>
-            {category === "CLUB_OFFICIAL" && allowedScopes.length > 1 && (
+            {category === "CLUB_OFFICIAL" && allowedScopes.length > 0 && (
               <div>
-                <span className="text-base block mb-1">發佈範圍</span>
-                <div className="flex gap-2">
+                <span className="text-base block mb-1">官方主辦層級</span>
+                <div className="grid grid-cols-2 gap-2">
                   {allowedScopes.map((value) => (
                     <button
                       key={value}
@@ -493,6 +505,8 @@ export default function EventDetailPage() {
                     </button>
                   ))}
                 </div>
+                <p className="mt-2 text-base text-lion-muted">主辦組織：{officialHosts.find((option) => option.scope === scope)?.hostOrganizationName ?? "請重新選擇層級"}</p>
+                <p className="mt-1 text-sm text-lion-muted">層級僅代表主辦授權；活動仍全平台可查看與報名。轉為個人活動僅原發布人可操作。</p>
               </div>
             )}
             <div className="flex gap-2">
