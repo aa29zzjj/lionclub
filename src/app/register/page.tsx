@@ -4,6 +4,7 @@ import { Suspense, useEffect, useId, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { memberTitleOptions, tagOptions } from "@/lib/mock-data";
+import PasswordInput from "@/components/PasswordInput";
 
 type Step = "invite" | "profile" | "done";
 type Onboarding = {
@@ -285,11 +286,11 @@ function RegisterForm() {
             </div>
             <div>
               <label htmlFor="register-password" className="mb-1 block text-sm font-medium">設定密碼</label>
-              <input id="register-password" name="password" type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 個字元" className={inputClass} />
+              <PasswordInput id="register-password" name="password" autoComplete="new-password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 個字元" className={inputClass} />
             </div>
             <div>
               <label htmlFor="register-confirm-password" className="mb-1 block text-sm font-medium">確認密碼</label>
-              <input id="register-confirm-password" name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="再輸入一次密碼" className={inputClass} />
+              <PasswordInput id="register-confirm-password" name="confirmPassword" autoComplete="new-password" required minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="再輸入一次密碼" className={inputClass} />
             </div>
           </fieldset>
           <details className="rounded-2xl border border-lion-border bg-lion-card p-4">

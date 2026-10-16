@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -77,8 +78,7 @@ export default function LoginPage() {
           </div>
           <div>
             <label htmlFor="login-password" className="text-sm text-lion-muted mb-1 block">密碼</label>
-            <input
-              type="password"
+            <PasswordInput
               id="login-password"
               autoComplete="current-password"
               required
