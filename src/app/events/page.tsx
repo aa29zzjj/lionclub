@@ -8,7 +8,7 @@ import Avatar from "@/components/Avatar";
 import { CalendarIcon, PinIcon, PlusIcon } from "@/components/icons";
 import { EVENT_TIME_ZONE, taipeiEventStartAt } from "@/lib/event-calendar";
 import { EVENT_CATEGORIES, eventCategoryLabels, type EventCategory } from "@/lib/event-category";
-import { eventScopeLabels, type EventScope } from "@/lib/event-scope";
+import { eventScopeLabels, type EventScope, type EventPublishingOption } from "@/lib/event-scope";
 
 const eventGradients = [
   "from-lion-navyLight to-[#2E4A8A]",
@@ -51,9 +51,10 @@ export default function EventsPage() {
   const [description, setDescription] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
-  const [category, setCategory] = useState<EventCategory>("CLUB_OFFICIAL");
+  const [category, setCategory] = useState<EventCategory>("PERSONAL");
   const [scope, setScope] = useState<EventScope>("CLUB");
-  const [allowedScopes, setAllowedScopes] = useState<EventScope[]>(["CLUB"]);
+  const [allowedScopes, setAllowedScopes] = useState<EventScope[]>([]);
+  const [officialHosts, setOfficialHosts] = useState<EventPublishingOption[]>([]);
   const [filter, setFilter] = useState<EventCategory | "ALL">("ALL");
   const [error, setError] = useState("");
 
@@ -89,7 +90,8 @@ export default function EventsPage() {
       if (!res.ok) throw new Error(data.error ?? "無法載入活動，請重試。");
       if (!Array.isArray(data.events)) throw new Error("活動資料格式異常，請重新載入。");
       setEvents(data.events);
-      if (Array.isArray(data.allowedScopes)) setAllowedScopes(data.allowedScopes);
+      setAllowedScopes(Array.isArray(data.allowedScopes) ? data.allowedScopes : []);
+      setOfficialHosts(Array.isArray(data.officialHosts) ? data.officialHosts : []);
     } catch (caught) {
       if (!controller.signal.aborted) setLoadError(caught instanceof Error && !(caught instanceof TypeError) ? caught.message : "網路連線中斷，請確認網路後重試。");
     } finally {
@@ -115,7 +117,7 @@ export default function EventsPage() {
     setDescription("");
     setCoverFile(null);
     setCoverPreview(null);
-    setCategory("CLUB_OFFICIAL");
+    setCategory("PERSONAL");
     setScope("CLUB");
     setError("");
     setCreating(false);
@@ -124,6 +126,10 @@ export default function EventsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitLock.current) return;
+    if (category === "CLUB_OFFICIAL" && !officialHosts.some((option) => option.scope === scope)) {
+      setError("您目前沒有此層級的官方活動發布權限；一般會員請選擇個人／工商活動。");
+      return;
+    }
     if (!title.trim() || !date || !location.trim()) {
       setError("請填寫活動名稱、日期與地點");
       return;
@@ -184,6 +190,7 @@ export default function EventsPage() {
           coverPhotoUrl,
           category,
           scope: category === "CLUB_OFFICIAL" ? scope : undefined,
+          hostOrganizationId: category === "CLUB_OFFICIAL" ? officialHosts.find((option) => option.scope === scope)?.hostOrganizationId : undefined,
         }),
       });
       if (res.status === 401) {
@@ -317,19 +324,21 @@ export default function EventsPage() {
                   <button
                     key={value}
                     type="button"
-                    onClick={() => setCategory(value)}
+                    onClick={() => { setCategory(value); setScope(value === "PERSONAL" ? "CLUB" : allowedScopes[0] ?? "CLUB"); }}
+                    disabled={value === "CLUB_OFFICIAL" && officialHosts.length === 0}
                     aria-pressed={category === value}
-                    className={`min-h-12 rounded-xl border px-3 text-sm font-medium ${category === value ? "border-lion-gold bg-lion-gold/10 text-lion-gold" : "border-lion-border text-lion-muted"}`}
+                    className={`min-h-12 rounded-xl border px-3 text-sm font-medium disabled:opacity-50 ${category === value ? "border-lion-gold bg-lion-gold/10 text-lion-gold" : "border-lion-border text-lion-muted"}`}
                   >
                     {eventCategoryLabels[value]}
                   </button>
                 ))}
               </div>
-              <p className="mt-1 text-xs text-lion-muted">獅子會活動會標示為分會正式活動；個人／工商活動是會員自己要宣傳的場合，不代表分會立場。</p>
+              <p className="mt-1 text-sm text-lion-muted">官方獅子會活動須持有效且對應範圍的管理角色；個人／工商活動不代表分會立場。活動皆維持全平台可查看與報名。</p>
+              {officialHosts.length === 0 && <p className="mt-2 text-sm text-lion-muted">您目前可發布個人／工商活動；資料職稱與區級資歷查核角色不等於官方發布權限。</p>}
             </div>
-            {category === "CLUB_OFFICIAL" && allowedScopes.length > 1 && (
+            {category === "CLUB_OFFICIAL" && allowedScopes.length > 0 && (
               <div>
-                <span className="text-base text-lion-muted mb-1 block">發佈範圍</span>
+                <span className="text-base text-lion-muted mb-1 block">官方主辦層級</span>
                 <div className="grid grid-cols-2 gap-2">
                   {allowedScopes.map((value) => (
                     <button
@@ -343,7 +352,8 @@ export default function EventsPage() {
                     </button>
                   ))}
                 </div>
-                <p className="mt-1 text-xs text-lion-muted">發佈範圍超過本分會時，僅對應管理角色可選擇；此選單只顯示您有權限發佈的範圍。</p>
+                <p className="mt-2 text-base text-lion-muted">主辦組織：{officialHosts.find((option) => option.scope === scope)?.hostOrganizationName ?? "請重新選擇層級"}</p>
+                <p className="mt-1 text-sm text-lion-muted">只列出有效管理角色可代表的主辦層級，不限制全平台查看或報名。</p>
               </div>
             )}
             <div>

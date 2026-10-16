@@ -21,3 +21,8 @@ backups/
 *.tsbuildinfo
 next-env.d.ts
 tmp/
+# Real-person roster inputs and operator mapping/approval files never belong in Git.
+private-data/
+*.private.json
+*.private.csv
+*.private.xlsx

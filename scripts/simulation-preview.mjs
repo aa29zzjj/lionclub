@@ -21,7 +21,7 @@ export async function createSimulationPreview({ port = 3196, frontendPort = 3195
     { memberId: data.chair.id, kind: "position", level: "club", positionCode: "club_president", organizationName: data.ai.name, startYear: 2026, endYear: 2026, datePrecision: "lions_year", isCurrent: true },
   ] });
   const deletion = await seedScenario(sim, "delete-preview");
-  await sim.prisma.adminRole.create({ data: { memberId: data.friend.id, role: "SUPER_ADMIN", scopeType: "global" } });
+  await sim.prisma.adminRole.create({ data: { memberId: data.friend.id, role: "SUPER_ADMIN", scopeType: "GLOBAL" } });
   const pending = await sim.prisma.member.create({ data: { name: "模擬待審核會員", email: "pending-preview@example.test", status: "PENDING", organizationId: data.ai.id } });
   await sim.prisma.memberReport.create({ data: { reporterId: data.member.id, targetId: pending.id, reason: "模擬測試檢舉" } });
   await sim.prisma.eventRegistration.create({ data: { eventId: data.event.id, memberId: data.member.id } });
@@ -65,7 +65,7 @@ export async function createSimulationPreview({ port = 3196, frontendPort = 3195
         if (result.headers?.get("Retry-After")) response.setHeader("Retry-After", result.headers.get("Retry-After"));
         return send(response, result.status, JSON.stringify(result.data).replaceAll(sim.origin, origin));
       }
-      const extra = new Set(["/login", "/verify-email", "/forgot-password", "/reset-password", "/admin/reports", "/events/calendar"]);
+      const extra = new Set(["/login", "/verify-email", "/forgot-password", "/reset-password", "/admin/reports", "/events/calendar", "/account/delete", "/privacy", "/support"]);
       if (!["GET", "HEAD"].includes(request.method) || !isDemoFrontendPath(url.pathname) && !extra.has(url.pathname)) return send(response, 404, { error: "Not in local preview" });
       const headers = { host: `127.0.0.1:${frontendPort}`, "accept-encoding": "identity" };
       for (const key of ["accept", "accept-language", "user-agent", "rsc", "next-router-state-tree", "next-router-prefetch"]) if (request.headers[key]) headers[key] = request.headers[key];

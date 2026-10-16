@@ -1,5 +1,7 @@
 "use client";
 
+import { organizationDisplayName } from "@/lib/organization-label";
+
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
@@ -126,7 +128,7 @@ export default function AdminRolesPage() {
             >
               {organizations.map((item) => (
                 <option key={item.id} value={item.id} className="bg-lion-card text-lion-cream">
-                  {item.districtCode ? `${item.districtCode} · ` : ""}{item.name}
+                  {item.districtCode && !item.name.includes(item.districtCode) ? `${item.districtCode} · ` : ""}{organizationDisplayName(item)}
                 </option>
               ))}
             </select>
@@ -135,7 +137,7 @@ export default function AdminRolesPage() {
 
         {organization && organizations.length <= 1 && (
           <p className="mt-4 rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-xs text-lion-muted">
-            {organization.districtCode ? `${organization.districtCode} · ` : ""}{organization.name}
+            {organization.districtCode && !organization.name.includes(organization.districtCode) ? `${organization.districtCode} · ` : ""}{organizationDisplayName(organization)}
           </p>
         )}
 

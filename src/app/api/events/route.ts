@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
-import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-member";
+import { getCurrentMember } from "@/lib/current-member";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 import { EVENT_CATEGORIES } from "@/lib/event-category";
-import { EVENT_SCOPES, EVENT_SCOPE_REQUIRED_ROLES } from "@/lib/event-scope";
+import { EVENT_SCOPES, EventScopeError, getEventPublishingOptions, resolveEventPublication } from "@/lib/event-scope";
 
 export async function GET() {
   const me = await getCurrentMember();
@@ -20,16 +20,12 @@ export async function GET() {
     orderBy: { startAt: "asc" },
   });
 
-  const scopeChecks = await Promise.all(
-    EVENT_SCOPES.filter((scope) => scope !== "CLUB").map(async (scope) => ({
-      scope,
-      allowed: await hasAdminRoleForOrganization(me.id, me.organizationId, EVENT_SCOPE_REQUIRED_ROLES[scope]),
-    }))
-  );
-  const allowedScopes = ["CLUB", ...scopeChecks.filter((r) => r.allowed).map((r) => r.scope)];
+  const officialHosts = await getEventPublishingOptions(prisma, me.id, me.organizationId);
+  const allowedScopes = officialHosts.map((option) => option.scope);
 
   return NextResponse.json({
     allowedScopes,
+    officialHosts,
     events: events.map((ev) => ({
       id: ev.id,
       title: ev.title,
@@ -57,6 +53,7 @@ const bodySchema = z.object({
   coverPhotoUrl: z.union([z.string().url(), z.literal("")]).optional(),
   category: z.enum(EVENT_CATEGORIES).optional(),
   scope: z.enum(EVENT_SCOPES).optional(),
+  hostOrganizationId: z.string().trim().min(1).max(200).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -69,20 +66,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "欄位格式錯誤" }, { status: 400 });
   }
   const { title, startAt, location, capacity, description, coverPhotoUrl, category } = parsed.data;
-  const effectiveCategory = category ?? "CLUB_OFFICIAL";
-  const effectiveScope = effectiveCategory === "PERSONAL" ? "CLUB" : parsed.data.scope ?? "CLUB";
-
-  if (effectiveScope !== "CLUB") {
-    const allowed = await hasAdminRoleForOrganization(me.id, me.organizationId, EVENT_SCOPE_REQUIRED_ROLES[effectiveScope]);
-    if (!allowed) return NextResponse.json({ error: "沒有發佈此範圍活動的管理權限" }, { status: 403 });
-  }
+  const effectiveCategory = category ?? "PERSONAL";
+  const effectiveScope = parsed.data.scope ?? "CLUB";
 
   const prisma = await getPrisma();
   try {
     const event = await prisma.$transaction(async tx => {
-      const actor = await tx.member.findFirst({ where: { id: me.id, status: "ACTIVE", deletedAt: null, organizationId: me.organizationId }, select: { id: true } });
-      const club = await tx.organization.findFirst({ where: { id: me.organizationId, isActive: true }, select: { id: true } });
-      if (!actor || !club) throw new Error("EVENT_IDENTITY_CHANGED");
+      const publication = await resolveEventPublication(tx, me.id, me.organizationId, {
+        category: effectiveCategory, scope: effectiveScope, hostOrganizationId: parsed.data.hostOrganizationId,
+      });
       return tx.event.create({ data: {
       title,
       startAt: new Date(startAt),
@@ -90,16 +82,14 @@ export async function POST(req: NextRequest) {
       capacity,
       description,
       coverPhotoUrl: coverPhotoUrl || null,
-      category: effectiveCategory,
-      scope: effectiveScope,
-      hostOrganizationId: me.organizationId,
+      ...publication,
       createdById: me.id,
       } });
     }, { isolationLevel: "Serializable" });
 
     return NextResponse.json({ ok: true, eventId: event.id });
   } catch (error) {
-    if (error instanceof Error && error.message === "EVENT_IDENTITY_CHANGED") return NextResponse.json({ error: "會籍或帳號已更新，請重新登入確認" }, { status: 409 });
+    if (error instanceof EventScopeError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error && typeof error === "object" && "code" in error && error.code === "P2034") return NextResponse.json({ error: "帳號或活動同時更新，請重新載入後再試" }, { status: 409 });
     throw error;
   }

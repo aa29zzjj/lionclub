@@ -5,8 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { colorFromId } from "@/lib/avatar-color";
+import { organizationDisplayName } from "@/lib/organization-label";
 import {
   calculateLionYears,
+  currentExperienceLabel,
   formatJoinDate,
   formatLionsYear,
   MemberExperience,
@@ -155,7 +157,8 @@ export default function MemberProfilePage() {
           </div>
           <h1 className="text-xl font-bold">{member.nickname || member.name}</h1>
           {member.nickname && <p className="mt-0.5 text-xs text-lion-muted">{member.name}</p>}
-          <p className="mt-1 text-sm text-lion-muted">{member.organization.name} · {member.title ?? "會員"}</p>
+          <p className="mt-1 text-sm text-lion-muted">{organizationDisplayName(member.organization)} · 會員</p>
+          {member.title && <p className="mt-1 text-xs text-lion-muted">自填職稱：{member.title}（不代表管理授權）</p>}
           {member.organization.districtCode && (
             <p className="mt-1 text-xs text-lion-gold">{member.organization.districtCode} 區</p>
           )}
@@ -254,14 +257,14 @@ export default function MemberProfilePage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold">{positionName(experience)}</p>
-                      <p className="mt-1 text-xs text-lion-muted">{experience.organizationName}</p>
+                      <p className="mt-1 text-xs text-lion-muted">{organizationDisplayName({ name: experience.organizationName, level: experience.level })}</p>
                     </div>
                     <span className="shrink-0 rounded-full bg-white/5 px-2 py-1 text-[10px] text-lion-muted">
                       {verificationLabels[experience.verificationStatus]}
                     </span>
                   </div>
                   <p className="mt-3 text-xs text-lion-gold">
-                    {formatLionsYear(experience)}{experience.isCurrent ? " · 現任" : ""}
+                    {formatLionsYear(experience)}{currentExperienceLabel(experience) ? ` · ${currentExperienceLabel(experience)}` : ""}
                   </p>
                 </article>
               ))}

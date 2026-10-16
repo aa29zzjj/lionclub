@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-member";
+import { getCurrentMember } from "@/lib/current-member";
 import { getPrisma } from "@/lib/prisma";
-import { attendanceCounts, EVENT_ATTENDANCE_ROLES } from "@/lib/event-attendance";
+import { attendanceCounts } from "@/lib/event-attendance";
+import { canManageEvent } from "@/lib/event-scope";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentMember();
@@ -11,13 +12,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const prisma = await getPrisma();
   const event = await prisma.event.findUnique({
     where: { id },
-    select: { createdById: true, hostOrganizationId: true },
+    select: { createdById: true, hostOrganizationId: true, category: true, scope: true },
   });
   if (!event) return NextResponse.json({ error: "找不到此活動" }, { status: 404 });
 
-  const canManage =
-    event.createdById === me.id ||
-    (await hasAdminRoleForOrganization(me.id, event.hostOrganizationId, EVENT_ATTENDANCE_ROLES));
+  const canManage = await canManageEvent(prisma, me.id, event);
   if (!canManage) return NextResponse.json({ error: "沒有權限查看報名者資料" }, { status: 403 });
 
   const registrations = await prisma.eventRegistration.findMany({

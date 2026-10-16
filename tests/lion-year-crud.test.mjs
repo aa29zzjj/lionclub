@@ -23,13 +23,13 @@ test("experience API CRUD preserves known/unknown month and inclusive annual ter
     const unknown = check(await sim.call(path, "PATCH", { ...body, startMonth: null }, jar), 200).experience;
     assert.equal(unknown.startMonth, null); assert.equal(unknown.datePrecision, "approximate");
     check(await sim.call(path, "PATCH", { ...body, startMonth: 13 }, jar), 400);
-    const term = check(await sim.call("/api/me/experiences", "POST", { ...body, kind: "position", positionCode: "club_president", startYear: 2024, endYear: 2026, datePrecision: "lions-year" }, jar), 201).experience;
+    const term = check(await sim.call("/api/me/experiences", "POST", { ...body, kind: "position", positionCode: "club_secretary", startYear: 2024, endYear: 2026, datePrecision: "lions-year" }, jar), 201).experience;
     assert.equal(term.startMonth, null); assert.equal(term.endYear, 2026); assert.equal(term.isCurrent, true);
     const chair = sim.jar(); check(await sim.call("/api/auth/login", "POST", { email: s.chair.email, password: s.password }, chair), 200);
     const reviewPath = `/api/admin/pending-experiences/${term.id}`;
     check(await sim.call(reviewPath, "POST", { action: "verify", expectedUpdatedAt: "2000-01-01T00:00:00.000Z" }, chair), 409);
     check(await sim.call(reviewPath, "POST", { action: "verify", expectedUpdatedAt: term.updatedAt }, chair), 200);
-    check(await sim.call(reviewPath, "POST", { action: "reject" }, chair), 404);
+    check(await sim.call(reviewPath, "POST", { action: "reject", expectedUpdatedAt: term.updatedAt, reviewReason: "重複操作" }, chair), 404);
     check(await sim.call(`/api/me/experiences/${term.id}`, "PATCH", body, jar), 409);
     check(await sim.call(`/api/me/experiences/${term.id}`, "DELETE", undefined, jar), 409);
     check(await sim.call(path, "PATCH", body, chair), 404);

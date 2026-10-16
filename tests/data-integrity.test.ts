@@ -18,7 +18,7 @@ function fake() {
     user: [{ id: "user", memberId: "guest", passwordHash: "test-hash" }],
     organization: [{ id: "club-a", name: "A", level: "club", isActive: true, parentId: null }, { id: "club-b", name: "B", level: "club", isActive: true, parentId: null }],
     adminRole: [{ id: "global", memberId: "actor", role: "SUPER_ADMIN", scopeId: null, validFrom: PAST, validUntil: null }],
-    event: [{ id: "event", createdById: "actor", hostOrganizationId: "club-a", startAt: PAST, capacity: 2 }],
+    event: [{ id: "event", createdById: "actor", hostOrganizationId: "club-a", category: "PERSONAL", scope: "CLUB", startAt: PAST, capacity: 2 }],
     eventRegistration: [{ id: "registration", eventId: "event", memberId: "guest", status: "REGISTERED", checkedInAt: null, checkedInById: null, registeredAt: PAST }],
     eventCheckInAudit: [], accountDeletionCleanup: [], memberExperience: [], friendship: [], memberBlock: [], eventNotification: [], eventNotificationRecipient: [], clubInvite: [], memberOrganizationAssignment: [],
   });

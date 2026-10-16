@@ -1,8 +1,9 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { parseFriendQrPayload } from "./friend-qr";
+import type { EventManagementTarget } from "./event-scope";
 
-export const EVENT_ATTENDANCE_ROLES = ["CLUB_OFFICER", "CLUB_VICE_PRESIDENT", "CLUB_PRESIDENT", "CLUB_FINANCE", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
+export const EVENT_ATTENDANCE_ROLES = ["CLUB_OFFICER", "CLUB_VICE_PRESIDENT", "CLUB_PRESIDENT", "CLUB_FINANCE", "ZONE_ADMIN", "REGION_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
 export class AttendanceError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
@@ -11,7 +12,7 @@ export const checkInInputSchema = z.union([
   z.object({ memberId: z.string().trim().min(1).max(200), method: z.literal("manual"), reason: z.string().trim().min(2, "補登原因至少 2 字").max(1000) }).strict(),
 ]);
 type Transaction = Prisma.TransactionClient;
-type EventPermission = (tx: Transaction, actorId: string, organizationId: string) => Promise<boolean>;
+type EventPermission = (tx: Transaction, actorId: string, organizationId: string, event: EventManagementTarget) => Promise<boolean>;
 
 async function transactionRetry<T>(prisma: PrismaClient, callback: (tx: Transaction) => Promise<T>): Promise<T> {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -67,9 +68,10 @@ export async function checkInMember(prisma: PrismaClient, actorId: string, event
   return transactionRetry(prisma, async tx => {
     const actor = await tx.member.findFirst({ where: { id: actorId, status: "ACTIVE", deletedAt: null }, select: { id: true } });
     if (!actor) throw new AttendanceError(403, "帳號未啟用，無法辦理報到");
-    const event = await tx.event.findUnique({ where: { id: eventId }, select: { id: true, createdById: true, hostOrganizationId: true } });
+    const event = await tx.event.findUnique({ where: { id: eventId }, select: { id: true, createdById: true, hostOrganizationId: true, category: true, scope: true } });
     if (!event) throw new AttendanceError(404, "找不到此活動");
-    if (event.createdById !== actorId && !(await hasScope(tx, actorId, event.hostOrganizationId))) throw new AttendanceError(403, "沒有權限為此活動報到");
+    const personalOwner = event.category === "PERSONAL" && event.scope === "CLUB" && event.createdById === actorId;
+    if (!personalOwner && !(await hasScope(tx, actorId, event.hostOrganizationId, event))) throw new AttendanceError(403, "沒有權限為此活動報到");
     const lookup = { where: { eventId_memberId: { eventId, memberId } }, include: { member: { select: { id: true, name: true, nickname: true, photoUrl: true, status: true, deletedAt: true } } } } as const;
     let registration = await tx.eventRegistration.findUnique(lookup);
     if (!registration || registration.status !== "REGISTERED") throw new AttendanceError(404, "此會員尚未報名或已取消報名");

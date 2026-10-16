@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
-import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-member";
-import type { Prisma } from "@prisma/client";
+import { getCurrentMember } from "@/lib/current-member";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
-import { EVENT_ATTENDANCE_ROLES } from "@/lib/event-attendance";
 import { EVENT_CATEGORIES } from "@/lib/event-category";
-import { EVENT_SCOPES, EVENT_SCOPE_REQUIRED_ROLES, type EventScope } from "@/lib/event-scope";
-
-const managementRoles = EVENT_ATTENDANCE_ROLES;
+import { EVENT_SCOPES, EventScopeError, canManageEvent, getEventPublishingOptions, resolveEventPublication } from "@/lib/event-scope";
 
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(160),
@@ -19,21 +15,15 @@ const updateSchema = z.object({
   coverPhotoUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
   category: z.enum(EVENT_CATEGORIES).optional(),
   scope: z.enum(EVENT_SCOPES).optional(),
+  hostOrganizationId: z.string().trim().min(1).max(200).optional(),
 });
-
-async function canManage(memberId: string, event: { createdById: string; hostOrganizationId: string }, database?: Prisma.TransactionClient) {
-  return (
-    event.createdById === memberId ||
-    hasAdminRoleForOrganization(memberId, event.hostOrganizationId, managementRoles, database)
-  );
-}
 
 class EventMutationError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
 function mutationErrorResponse(error: unknown) {
-  if (error instanceof EventMutationError) return NextResponse.json({ error: error.message }, { status: error.status });
+  if (error instanceof EventMutationError || error instanceof EventScopeError) return NextResponse.json({ error: error.message }, { status: error.status });
   if (error && typeof error === "object" && "code" in error && ["P2034", "P2003"].includes(String(error.code))) {
     return NextResponse.json({ error: "活動、報名或報到資料同時更新，請重新載入確認後再操作。" }, { status: 409 });
   }
@@ -57,16 +47,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   if (!event) return NextResponse.json({ error: "找不到此活動" }, { status: 404 });
 
-  const scopeChecks = await Promise.all(
-    EVENT_SCOPES.filter((scope) => scope !== "CLUB").map(async (scope) => ({
-      scope,
-      allowed: await hasAdminRoleForOrganization(me.id, event.hostOrganizationId, EVENT_SCOPE_REQUIRED_ROLES[scope]),
-    }))
-  );
-  const allowedScopes = ["CLUB", ...scopeChecks.filter((r) => r.allowed).map((r) => r.scope)];
+  const officialHosts = await getEventPublishingOptions(prisma, me.id, me.organizationId, event.hostOrganizationId);
+  const allowedScopes = officialHosts.map((option) => option.scope);
 
   return NextResponse.json({
     allowedScopes,
+    officialHosts,
     event: {
       id: event.id,
       title: event.title,
@@ -77,12 +63,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       scope: event.scope,
       coverPhotoUrl: event.coverPhotoUrl ?? undefined,
       hostChapter: event.hostOrganization.name,
+      hostOrganizationId: event.hostOrganizationId,
       startAt: event.startAt,
       isRegistered: event.registrations.length > 0,
       isCheckedIn: event.registrations.some(registration => Boolean(registration.checkedInAt)),
       registeredCount: event._count.registrations,
       isFull: event.capacity !== null && event._count.registrations >= event.capacity,
-      canManage: await canManage(me.id, event),
+      canManage: await canManageEvent(prisma, me.id, event),
+      canConvertToPersonal: event.createdById === me.id,
     },
   });
 }
@@ -98,28 +86,30 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const { id } = await params;
   const prisma = await getPrisma();
   try {
-    await prisma.$transaction(async tx => {
+    const publication = await prisma.$transaction(async tx => {
       const actor = await tx.member.findFirst({ where: { id: me.id, status: "ACTIVE", deletedAt: null }, select: { id: true } });
       if (!actor) throw new EventMutationError(409, "帳號已更新，請重新登入確認");
       const event = await tx.event.findUnique({ where: { id }, include: { _count: { select: { registrations: { where: { status: "REGISTERED" } } } } } });
       if (!event) throw new EventMutationError(404, "找不到此活動");
-      if (!(await canManage(me.id, event, tx))) throw new EventMutationError(403, "沒有活動管理權限");
+      if (!(await canManageEvent(tx, me.id, event))) throw new EventMutationError(403, "沒有活動管理權限，官方活動須持有有效且對應範圍的管理角色");
       if (parsed.data.capacity != null && parsed.data.capacity < event._count.registrations) throw new EventMutationError(409, `名額不能低於目前已報名的 ${event._count.registrations} 人`);
       const nextCategory = parsed.data.category ?? event.category;
-      const nextScope = (nextCategory === "PERSONAL" ? "CLUB" : parsed.data.scope ?? event.scope) as EventScope;
-      if (nextScope !== "CLUB" && nextScope !== event.scope) {
-        const allowed = await hasAdminRoleForOrganization(me.id, event.hostOrganizationId, EVENT_SCOPE_REQUIRED_ROLES[nextScope], tx);
-        if (!allowed) throw new EventMutationError(403, "沒有發佈此範圍活動的管理權限");
-      }
+      const nextScope = parsed.data.scope ?? (nextCategory === "PERSONAL" ? "CLUB" : event.scope);
+      if (nextCategory === "PERSONAL" && nextCategory !== event.category && event.createdById !== me.id) throw new EventMutationError(403, "僅原發布人可將官方活動改為其個人活動");
+      const publication = await resolveEventPublication(tx, me.id, me.organizationId, {
+        category: nextCategory, scope: nextScope,
+        hostOrganizationId: parsed.data.hostOrganizationId ?? (nextCategory === "CLUB_OFFICIAL" && nextScope === event.scope ? event.hostOrganizationId : undefined),
+      });
       await tx.event.update({ where: { id }, data: {
         title: parsed.data.title, startAt: new Date(parsed.data.startAt), location: parsed.data.location,
         capacity: parsed.data.capacity ?? null, description: parsed.data.description || null,
         ...(parsed.data.coverPhotoUrl !== undefined ? { coverPhotoUrl: parsed.data.coverPhotoUrl || null } : {}),
-        category: nextCategory,
-        scope: nextScope,
+        ...publication,
       } });
+      const host = await tx.organization.findUnique({ where: { id: publication.hostOrganizationId }, select: { name: true } });
+      return { ...publication, hostChapter: host?.name ?? "" };
     }, { isolationLevel: "Serializable" });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, ...publication });
   } catch (error) { return mutationErrorResponse(error); }
 }
 
@@ -136,7 +126,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
       if (!actor) throw new EventMutationError(409, "帳號已更新，請重新登入確認");
       const event = await tx.event.findUnique({ where: { id } });
       if (!event) throw new EventMutationError(404, "找不到此活動");
-      if (!(await canManage(me.id, event, tx))) throw new EventMutationError(403, "沒有活動管理權限");
+      if (!(await canManageEvent(tx, me.id, event))) throw new EventMutationError(403, "沒有活動管理權限");
       if (await tx.eventRegistration.count({ where: { eventId: id, checkedInAt: { not: null } } })) throw new EventMutationError(409, "活動已有簽到紀錄，請保留歷史；不可直接刪除活動。");
       await tx.event.delete({ where: { id } });
     }, { isolationLevel: "Serializable" });

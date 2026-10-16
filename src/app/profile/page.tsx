@@ -11,6 +11,7 @@ import { CalendarIcon, ChevronRightIcon, PeopleIcon, QrIcon, UserIcon } from "@/
 import { memberTitleOptions, tagOptions } from "@/lib/mock-data";
 import { colorFromId } from "@/lib/avatar-color";
 import { calculateLionYears, formatJoinDate } from "@/lib/experience-data";
+import { profileCapabilities } from "@/lib/profile-capabilities";
 
 type Me = {
   id: string;
@@ -32,19 +33,6 @@ type Me = {
   tags: { name: string }[];
   adminRoles: { role: string }[];
 };
-
-const adminToolRoles = [
-  "CLUB_OFFICER",
-  "CLUB_VICE_PRESIDENT",
-  "CLUB_PRESIDENT",
-  "CLUB_FINANCE",
-  "ZONE_ADMIN",
-  "DISTRICT_ADMIN",
-  "MULTIDISTRICT_ADMIN",
-  "SUPER_ADMIN",
-];
-
-const roleManagerRoles = ["CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -211,10 +199,7 @@ export default function ProfilePage() {
     );
   }
 
-  const roleNames = new Set(me.adminRoles.map((adminRole) => adminRole.role));
-  const hasAdminTools = adminToolRoles.some((roleName) => roleNames.has(roleName));
-  const canManageRoles = roleManagerRoles.some((roleName) => roleNames.has(roleName));
-  const isSuperAdmin = roleNames.has("SUPER_ADMIN");
+  const capabilities = profileCapabilities(me.adminRoles);
   const joinDate = formatJoinDate(me.joinYear, me.joinMonth);
   const adminTools = [
     {
@@ -222,42 +207,42 @@ export default function ProfilePage() {
       title: "入會邀請",
       description: "產生共同入會 QR，設定註冊有效期",
       Icon: QrIcon,
-      visible: hasAdminTools,
+      visible: capabilities.issueInvites,
     },
     {
       href: "/admin/pending-members",
       title: "審核新會員",
       description: "核准或拒絕待審核的會員申請",
       Icon: UserIcon,
-      visible: hasAdminTools,
+      visible: capabilities.reviewMembers,
     },
     {
       href: "/admin/pending-experiences",
       title: "審核會員資歷",
       description: "核實會員自行填寫的任職紀錄",
       Icon: CalendarIcon,
-      visible: hasAdminTools,
+      visible: capabilities.reviewExperiences,
     },
     {
       href: "/admin/roles",
       title: "管理系統權限",
       description: "授予或撤銷分會幹部權限",
       Icon: PeopleIcon,
-      visible: canManageRoles,
+      visible: capabilities.manageRoles,
     },
     {
       href: "/admin/member-assignment",
       title: "會員分會分派",
       description: "核對會員名單、確認正式分會與分派歷史",
       Icon: PeopleIcon,
-      visible: canManageRoles,
+      visible: capabilities.assignMembers,
     },
     {
       href: "/admin/reports",
       title: "檢舉管理",
       description: "查看並處理會員檢舉",
       Icon: UserIcon,
-      visible: isSuperAdmin,
+      visible: capabilities.reviewReports,
     },
   ].filter((tool) => tool.visible);
 
@@ -387,7 +372,8 @@ export default function ProfilePage() {
               <section className="overflow-hidden rounded-2xl border border-lion-border bg-lion-card">
                 <div className="border-b border-lion-border px-4 py-3">
                   <p className="text-[11px] font-medium tracking-[0.14em] text-lion-gold">ADMIN TOOLS</p>
-                  <h2 className="mt-0.5 text-sm font-semibold">幹部工具</h2>
+                  <h2 className="mt-0.5 text-base font-semibold">幹部與資歷工具</h2>
+                  <p className="mt-1 text-sm text-lion-muted">依有效授權顯示；資歷審核權限不等於行政管理權限。</p>
                 </div>
                 <div className="divide-y divide-white/[0.06]">
                   {adminTools.map(({ href, title, description, Icon }) => (
@@ -396,8 +382,8 @@ export default function ProfilePage() {
                         <Icon className="h-5 w-5" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium">{title}</span>
-                        <span className="mt-0.5 block text-xs text-lion-muted">{description}</span>
+                        <span className="block text-base font-medium">{title}</span>
+                        <span className="mt-0.5 block text-sm text-lion-muted">{description}</span>
                       </span>
                       <ChevronRightIcon className="h-4 w-4 shrink-0 text-lion-muted" />
                     </Link>

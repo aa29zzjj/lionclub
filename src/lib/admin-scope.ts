@@ -15,8 +15,9 @@ export const APPROVER_ROLES = [
 ];
 
 /**
- * 區層級審核職務（總監／秘書長／區內閣）：僅能查核會員資歷，不具分會管理／會員異動等行政權力，
- * 因此只加進資歷審核用的角色清單，不加入 APPROVER_ROLES（該清單同時也用於新會員申請審核等行政流程）。
+ * 資歷審核入口的粗篩名單，不是完整授權判斷。最終須由 experience-review
+ * 依職位、直接上下級、有效授權及精確scope判斷；DISTRICT_CABINET只核實同區GMT/GLT/GST。
+ * 三種區職務不加入 APPROVER_ROLES，避免順帶產生會員異動等行政權力。
  */
 export const EXPERIENCE_REVIEW_ROLES = [
   ...APPROVER_ROLES,
@@ -44,6 +45,8 @@ async function getDescendantOrganizationIds(prisma: Database, rootId: string) {
 /**
  * Given a member's active admin roles, returns the organization ids they may administer
  * (their scope plus all descendant organizations), or `undefined` if they have global scope.
+ * Administrative flows only. Experience verification uses the direct-tier matrix,
+ * not this descendant expansion.
  */
 export async function getAdministeredOrganizationIds(
   prisma: Database,

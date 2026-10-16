@@ -1,59 +1,18 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import PublicServicePage, { ServiceContactDetails } from "@/components/PublicServicePage";
 
-const CONTACT_EMAIL = "jaijai0830@gmail.com";
-const APP_NAME = "獅子會 App";
-
-export const metadata = { title: `客服／聯絡我們 - ${APP_NAME}` };
+export const metadata: Metadata = { title: "客服與操作協助｜獅子會 App" };
 
 export default function SupportPage() {
-  return (
-    <div className="app-canvas w-full bg-lion-canvas flex justify-center">
-      <div className="app-frame w-full max-w-[640px] bg-lion-page text-lion-cream px-6 py-10">
-        <Link href="/login" className="text-sm text-lion-gold">← 返回登入</Link>
-        <h1 className="text-2xl font-bold mt-4 mb-1">客服／聯絡我們</h1>
-        <p className="text-xs text-lion-muted mb-8">使用上遇到問題，或想申請刪除資料，都可以聯絡我們</p>
-
-        <div className="flex flex-col gap-6 text-sm leading-relaxed text-lion-cream/90">
-          <section>
-            <h2 className="font-semibold text-base mb-2">聯絡信箱</h2>
-            <p>
-              <a href={`mailto:${CONTACT_EMAIL}`} className="text-lion-gold">{CONTACT_EMAIL}</a>
-            </p>
-            <p className="text-xs text-lion-muted mt-1">我們會盡快回覆，一般約 3 個工作天內處理。</p>
-          </section>
-
-          <section>
-            <h2 className="font-semibold text-base mb-2">常見問題</h2>
-            <div className="flex flex-col gap-4">
-              <div>
-                <p className="font-medium">忘記密碼怎麼辦？</p>
-                <p className="text-lion-cream/70">在登入頁點選「忘記密碼？」，輸入註冊 Email 後會收到重設連結，連結 30 分鐘內有效。</p>
-              </div>
-              <div>
-                <p className="font-medium">沒收到邀請 QR Code 或驗證信？</p>
-                <p className="text-lion-cream/70">請先檢查垃圾信件匣；若還是找不到，可向分會幹部索取新的邀請 QR，或在個人檔案重新寄送驗證信。</p>
-              </div>
-              <div>
-                <p className="font-medium">想刪除帳號跟個人資料？</p>
-                <p className="text-lion-cream/70">
-                  可在「我的檔案」最下方自行申請刪除帳號。若您目前持有幹部權限或有尚未開始的活動，需要先請其他幹部協助處理後才能刪除；如遇到無法自行處理的狀況，請來信聯絡我們協助。
-                </p>
-              </div>
-              <div>
-                <p className="font-medium">分會資訊或分派結果有誤？</p>
-                <p className="text-lion-cream/70">請聯繫您所屬分會的幹部，由幹部於「會員分會分派」後台核對並調整；若找不到可協助的幹部，請來信聯絡我們。</p>
-              </div>
-            </div>
-          </section>
-
-          <section>
-            <h2 className="font-semibold text-base mb-2">其他連結</h2>
-            <p>
-              <Link href="/privacy" className="text-lion-gold">隱私權政策</Link>
-            </p>
-          </section>
-        </div>
-      </div>
-    </div>
-  );
+  return <PublicServicePage title="客服與操作協助">
+    <section className="rounded-2xl border border-lion-border bg-lion-card p-4"><h2 className="mb-3 text-lg font-semibold">服務聯絡與待確認事項</h2><ServiceContactDetails /><p className="mt-3 text-sm text-lion-muted">角色或活動交接亦可透過您原先的分會聯絡方式找授權管理者協調；本頁沒有會送進客服系統的留言表，也不假稱已受理案件或承諾處理時間。</p></section>
+    <section><h2 className="text-lg font-semibold">可以直接在網站完成的操作</h2><div className="mt-3 grid gap-3">
+      <Link href="/account/delete" className="flex min-h-12 items-center rounded-xl border border-lion-border bg-lion-card px-4 py-3 font-semibold">刪除本人帳號與資料 →</Link>
+      <Link href="/forgot-password" className="flex min-h-12 items-center rounded-xl border border-lion-border bg-lion-card px-4 py-3">忘記密碼／重新設定密碼 →</Link>
+      <Link href="/profile" className="flex min-h-12 items-center rounded-xl border border-lion-border bg-lion-card px-4 py-3">個人檔案、封鎖名單與其他裝置登出 →</Link>
+    </div></section>
+    <section><h2 className="text-lg font-semibold">分會、角色與刪帳交接</h2><p className="mt-3">正式分會由授權管理者依名單核對分派；自填職稱不會授權。資歷審核人員不一定具有邀請、會員管理或角色管理權限。</p><p className="mt-3">刪帳若因幹部權限或未來主辦活動被拒絕，表示尚未完成，也沒有建立待辦申請。請先由另一位有權管理者完成角色撤銷／活動交接，再回刪帳頁操作。交接中申請與營運處理時限仍待服務持有人制定。</p></section>
+    <section><h2 className="text-lg font-semibold">反映問題時請保護資料</h2><p className="mt-3">可記錄發生時間、所在頁面、錯誤文字及去個資截圖；不要提供密碼、驗證碼、完整邀請連結、Cookie、會員名單或他人的個人資料。先確認網路並重試，不要在不明網頁重新輸入帳密。</p></section>
+  </PublicServicePage>;
 }
