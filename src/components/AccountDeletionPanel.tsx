@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { deleteOwnAccount, loginForDeletion, readDeletionIdentity, type DeletionIdentity, type DeletionResult } from "@/app/account/delete/client";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function AccountDeletionPanel() {
   const [phase, setPhase] = useState<"checking" | "signed-out" | "signed-in" | "unavailable" | "deleted">("checking");
@@ -105,7 +106,7 @@ export default function AccountDeletionPanel() {
       <label htmlFor="deletion-login-email" className="block text-base font-medium">會員信箱</label>
       <input id="deletion-login-email" type="email" autoComplete="username" autoCapitalize="none" required maxLength={254} disabled={busy} value={loginEmail} onChange={event => setLoginEmail(event.target.value)} className={inputClass} />
       <label htmlFor="deletion-login-password" className="block text-base font-medium">登入密碼</label>
-      <input id="deletion-login-password" type="password" autoComplete="current-password" required maxLength={200} disabled={busy} value={loginPassword} onChange={event => setLoginPassword(event.target.value)} className={inputClass} />
+      <PasswordInput id="deletion-login-password" autoComplete="current-password" required maxLength={200} disabled={busy} value={loginPassword} onChange={event => setLoginPassword(event.target.value)} className={inputClass} />
       <button type="submit" disabled={busy || !loginEmail || !loginPassword} className="min-h-12 w-full rounded-xl bg-lion-action px-4 text-base font-semibold text-lion-navyDeep disabled:opacity-50">{busy ? "確認登入中…" : "登入並繼續（不會立即刪除）"}</button>
       <Link className="touch-link inline-flex text-lion-gold underline" href="/forgot-password">忘記密碼／需要設定新密碼</Link>
     </form>}
@@ -117,7 +118,7 @@ export default function AccountDeletionPanel() {
         <p>此操作不可復原。會移除登入帳號、私有檔案、好友關係與本人資歷；共享活動、報到及受限稽核不會整批永久刪除。</p>
         <label className="flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border border-lion-border p-3" htmlFor="deletion-understood"><input id="deletion-understood" type="checkbox" required disabled={busy} checked={understood} onChange={event => setUnderstood(event.target.checked)} className="mt-1 h-5 w-5 shrink-0" /><span>我已閱讀刪除與保留範圍，了解此操作無法復原。</span></label>
         <label htmlFor="deletion-confirm-password" className="block text-base font-medium">再次輸入目前密碼確認</label>
-        <input id="deletion-confirm-password" type="password" autoComplete="current-password" required maxLength={200} disabled={busy} value={password} onChange={event => setPassword(event.target.value)} className={inputClass} />
+        <PasswordInput id="deletion-confirm-password" autoComplete="current-password" required maxLength={200} disabled={busy} value={password} onChange={event => setPassword(event.target.value)} className={inputClass} />
         <button type="submit" disabled={busy || !password || !understood} className="min-h-12 w-full rounded-xl bg-lion-danger px-4 text-base font-bold text-white disabled:opacity-50">{busy ? "刪除處理中，請勿重複操作…" : "確認刪除我的帳號"}</button>
         <p className="text-sm text-lion-muted">僅明確收到伺服器成功回覆才會顯示完成；發生連線中斷不會自動重送。尚有交接事項時，伺服器會拒絕刪除。</p>
       </form>}
