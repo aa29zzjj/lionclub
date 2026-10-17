@@ -28,7 +28,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "獅子會 App",
+  title: "LionClubs",
   description: "獅子會會員服務 App",
 };
 

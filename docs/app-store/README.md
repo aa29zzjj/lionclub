@@ -1,8 +1,10 @@
 # App Store／Google Play 上架準備
 
-核對日期：2026-10-14。這是原生發行準備，不是已上架或已提交審查的聲明。正式網站的 main 部署／migration，與 iOS／Android 發行包是不同交付物；網站部署成功不會自動產生 IPA、APK 或 AAB。
+核對日期：2026-10-17。這是原生發行準備，不是已上架或已提交審查的聲明。正式網站的 main 部署／migration，與 iOS／Android 發行包是不同交付物；網站部署成功不會自動產生 IPA、APK 或 AAB。
 
-R2 最終分工：正式 AWS 備份／migration／同版 API 部署與正式驗收全部由 Jerry 負責；Hao 不操作正式 AWS／RDS、不執行 migration，只接手機工程與上架，不需移交 AWS／DB 憑證。Jerry 以 [完成回報表](../JERRY_RETURN_FORM_MIGRATION_MOBILE_2026-10-14.md)交回結果；本機文件、素材及 mock 可並行準備。正式順序為同版資料庫更新 → 相容 API 部署／驗收 → 原生真機 → 送審，不能倒序後補 migration。詳見 [部署依賴與發行輸入](RELEASE_INPUTS_2026-10-14.md#4-migration-可以後補嗎準備可並行上線必須-db-first)。
+2026-10-17 新指示取代舊文件的「不移交 AWS」安排：使用者要求協助登入 AWS IAM，登入後由本人接手。代理本輪僅完成 Console 登入，未修改 IAM 權限、RDS、Amplify、安全群組或正式 DB，也未將 Access Key 設定至 CLI。名冊正式 ID 映射、reparent 與舊活動 host 修復仍交 Jerry；其餘正式執行分工由使用者與 Jerry 確認，不因取得登入就推定代理可執行。AWS 帳密與金鑰不放本文件或 Git。
+
+正式順序仍是同版資料庫更新 → 相容 API 部署／驗收 → 原生真機 → 送審，不能倒序後補 migration。Jerry 以 [完成回報表](../JERRY_RETURN_FORM_MIGRATION_MOBILE_2026-10-14.md)交回版本與驗收；本機文件、素材及 mock 可並行。新工作板見 [2026-10-17 發行準備](RELEASE_PREPARATION_2026-10-17.md)。
 
 ## 現況：已有 Web 功能，原生建置仍有缺口
 
@@ -11,17 +13,19 @@ R2 最終分工：正式 AWS 備份／migration／同版 API 部署與正式驗�
 | Web 會員、QR、資歷、活動、幹部工具與日夜外觀 | 現有 Next.js 客戶端與動態 /api/* | 原生功能基礎，不是原生驗收 |
 | 登入安全 | 已實作 Session version、密碼重設撤銷、其他裝置登出、地址綁定驗證信、同源防護 | 有隔離回歸測試；原生跨來源登入尚未實作 |
 | 刪帳／檢舉／封鎖 | 已有 API、檔案內入口與封鎖名單；刪帳採匿名化與可重試頭像清理 | 部分實作；資料保留、刪帳阻擋、外部入口與營運仍待完成 |
-| 公開政策／客服／外部刪帳頁 | 未找到 /privacy、/support、/account/delete 頁面 | 待聯絡資訊與政策定稿，不提交不存在的網址 |
+| 公開政策／客服／外部刪帳頁 | /privacy、/support、/account/delete 的程式已存在 | 正式部署可用性、聯絡責任與完整刪帳流程仍未驗收，不等於政策已通過 |
 | 原生工程／素材 | 未見 Capacitor、標準 iOS／Android 工程及已驗收原生素材 | 尚無可簽章發行包 |
 | 本機工具 | macOS 26.3／arm64；Node 24.19.0；僅 Command Line Tools | 無可用完整 Xcode／iOS SDK；標準位置未找到 Android Studio、JDK、SDK 36 |
 
-本次沒有讀取 Apple／Google 登入、Keychain、簽章、keystore、.env 或機密。自訂安裝位置未全面搜尋；帳號狀態是「未驗證」，不是「沒有帳號」。完整輸入清單見 [發行輸入與完成定義](RELEASE_INPUTS_2026-10-14.md)。
+本機工具盤點沒有讀取 Apple／Google 登入、Keychain、簽章、keystore 或 .env。AWS 登入所需的附件帳密只用於官方 Console，未寫入 repo 或發行包。自訂安裝位置未全面搜尋；帳號後台與簽章是「未驗證」，不是「沒有帳號」。完整輸入清單見 [發行輸入與完成定義](RELEASE_INPUTS_2026-10-14.md)。
 
-使用者已確認有 Apple 帳號、尚未建立 Google Play 帳號；Apple Developer 有效會員與 Team ID 尚未核實。未建 Play 帳號不阻擋先開發測試 APK，但會阻擋 Play 發行；本機工具鏈與簽章仍需另外準備。
+2026-10-17 使用者確認 App 名稱 LionClubs、客服 jerry@prepmateai.com、Apple Developer 已付費啟用、Google Play 尚未建立。付費狀態已記為使用者回報，尚未核對後台；提供的登入信箱不是 10 碼英數 Team ID，因此 Team ID／永久 App ID 仍留空。未建 Play 帳號不阻擋先開發測試 APK，但會阻擋 Play 發行；本機工具鏈與簽章仍需另外準備。
 
 ## 文件與唯讀盤點
 
-- [繁體中文商店資料草稿](METADATA.zh-Hant.json)：未知資料維持 null，未驗收維持 false；「獅子會 App」尚未定名。
+- [繁體中文商店資料草稿](METADATA.zh-Hant.json)：名稱已核定 LionClubs、客服已提供；其餘未知資料維持 null，未驗收維持 false。
+- [發行工作板與修正版排程](RELEASE_PREPARATION_2026-10-17.md)：JSON 私人交付、帳號／工具／政策 gate；新個人 Play 帳號不承諾一週 production。
+- [商店文案與素材腳本](STORE_CONTENT_2026-10-17.md)：可並行準備的草稿，不拿瀏覽器截圖冒充原生實機。
 - [原生架構選項](NATIVE_ARCHITECTURE.md)：仍待原生登入垂直試作，不可整包靜態匯出現有動態後端。
 - [隱私與 API 歷史提案](PRIVACY_AND_ACCOUNT_API_DRAFT.md)：2026-10-13 草稿，其中「尚無刪帳／封鎖／Session version」已被新版程式取代，不能照抄成現行契約；以程式、本文件及本次交接為準。
 - 以下盤點只證明欄位／檔案／工具存在，不能代替功能、簽章、真機或政策驗收。

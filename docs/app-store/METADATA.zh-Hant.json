@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "status": "draft",
   "ready": false,
-  "reviewedOn": "2026-10-14",
+  "reviewedOn": "2026-10-17",
   "locale": "zh-Hant",
   "app": {
-    "name": "獅子會 App",
-    "nameConfirmed": false,
+    "name": "LionClubs",
+    "nameConfirmed": true,
     "bundleId": null,
     "androidApplicationId": null,
     "appleTeamId": null,
@@ -15,7 +15,7 @@
     "brandAuthorizationConfirmed": false
   },
   "contacts": {
-    "supportEmail": null,
+    "supportEmail": "jerry@prepmateai.com",
     "privacyEmail": null,
     "reviewContactName": null,
     "reviewContactEmail": null,
@@ -31,7 +31,7 @@
   "listing": {
     "subtitle": "會員交流、服務活動與資歷管理",
     "promotionalText": "集中管理會員檔案、服務資歷與活動報名，透過會員 QR Code 與獅友建立連結。",
-    "description": "獅子會 App 為會員提供日常交流與服務活動工具。\n\n・會員檔案：管理頭像、聯絡資料、專長與個人介紹。\n・服務資歷：記錄所屬分會、任職組織及每年 7 月起算的會籍與幹部任期。\n・獅友交流：搜尋會員、掃描會員 QR Code 加好友，查看好友檔案。\n・活動月曆：切換月份查看活動、報名與接收站內通知。\n・幹部工具：授權幹部可審核會員與資歷、核對分派會籍，並管理活動名單及報到。\n・日夜外觀：支援淺色、深色與跟隨系統設定。\n\n本服務需要會員帳號與網路連線。註冊需共同邀請 QR Code，先開通平台並暫存台科大 AI 分會；正式會籍由授權管理者依名單核對分派。幹部工具依組織範圍及授權顯示。",
+    "description": "LionClubs 為會員提供日常交流與服務活動工具。\n\n・會員檔案：管理頭像、聯絡資料、專長與個人介紹。\n・服務資歷：記錄所屬分會、任職組織及每年 7 月起算的會籍與幹部任期。\n・獅友交流：搜尋會員、掃描會員 QR Code 加好友，查看好友檔案。\n・活動月曆：切換月份查看活動、報名與接收站內通知。\n・幹部工具：授權幹部可審核會員與資歷、核對分派會籍，並管理活動名單及報到。\n・日夜外觀：支援淺色、深色與跟隨系統設定。\n\n本服務需要會員帳號與網路連線。註冊依平台共同邀請流程辦理，正式會籍由授權管理者依名單核對分派。幹部工具依組織範圍及有效授權顯示；名冊列載與已核實資歷不自動取得行政權限。",
     "keywords": "獅子會,獅友,會員,服務,活動,分會,資歷",
     "googlePlayShortDescription": "管理會員檔案與服務資歷、掃描獅友 QR Code、參與分會活動。",
     "category": "SOCIAL_NETWORKING",
@@ -45,6 +45,7 @@
     "buildNumber": null,
     "nativeArchitecture": null,
     "appleAccountReportedAvailable": true,
+    "appleDeveloperEnrollmentReportedActive": true,
     "appleDeveloperEnrollmentConfirmed": false,
     "appStoreConnectAppCreated": false,
     "googlePlayAccountCreated": false,
@@ -58,9 +59,9 @@
     "submissionReady": false
   },
   "deploymentDependencies": {
-    "status": "pending_jerry",
-    "decisionRevision": "2026-10-14-R2",
-    "productionAwsMigrationDeploymentOwner": "Jerry",
+    "status": "pending_operator_handoff",
+    "decisionRevision": "2026-10-17-login-handoff",
+    "productionAwsMigrationDeploymentOwner": "使用者接手，與 Jerry 確認正式執行分工",
     "nativeEngineeringAndStoreOwner": "Hao",
     "haoRunsProductionMigration": false,
     "productionDatabaseMigrationVerified": false,
@@ -72,7 +73,7 @@
       "原生客戶端接同版 API 完成實機端到端驗收",
       "簽章、商店資料與政策驗收通過後才提交審查"
     ],
-    "notes": "R2 最終分工：Jerry 負責正式 AWS 備份、migration、同版後端部署及正式驗收；Hao 不操作正式 AWS/RDS、不執行 migration，負責手機工程與上架。不再移交 AWS/DB 憑證給 Hao，舊接手方案作廢。Jerry 交回版本、結果與未完成項目後，Hao 接正式 API/原生真機；文件、素材與 mock 可並行。不可先部署新版再補 schema。尚無原生工程、完整工具鏈或可發布產物，未提交商店。"
+    "notes": "2026-10-17 使用者要求協助登入 AWS IAM 後由本人接手，取代舊不移交登入安排。代理本輪僅完成 Console 登入，未改 IAM/RDS/Amplify/安全群組、未跑正式 migration 或套名冊，Access Key 未設定至 CLI。Jerry 接私人核定 JSON 後仍需正式 ID 映射、reparent、舊官方活動 host 及角色驗收。正式 AWS 執行分工由使用者與 Jerry 確認，不能將登入當作代理已取得執行授權。DB-first、同版 API、原生真機與政策驗收順序不變。尚無原生工程、完整工具鏈或可發布產物，未提交商店。"
   },
   "review": {
     "demoAccountConfigured": false,

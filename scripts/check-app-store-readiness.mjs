@@ -4,6 +4,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { validAppleTeamId } from "./lib/store-identifiers.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -67,12 +68,13 @@ try {
 if (metadata) {
   record(metadata.status === "ready" && metadata.ready === true && metadata.release?.submissionReady === true, "metadata status", `${metadata.status ?? "未提供"}；ready 與 submissionReady 都需實際完成驗收，檔案存在不代表可送審`);
   for (const key of [
-    "app.name", "app.bundleId", "app.androidApplicationId", "app.appleTeamId", "app.legalEntityName", "app.copyright",
+    "app.name", "app.bundleId", "app.androidApplicationId", "app.legalEntityName", "app.copyright",
     "contacts.supportEmail", "contacts.privacyEmail", "contacts.reviewContactName", "contacts.reviewContactEmail", "contacts.reviewContactPhone",
     "urls.support", "urls.privacyPolicy", "urls.accountDeletion",
     "listing.subtitle", "listing.description", "listing.keywords", "listing.googlePlayShortDescription",
     "release.version", "release.buildNumber", "release.nativeArchitecture", "release.googlePlayAccountType", "review.sampleQrPath",
   ]) checkText(metadata, key);
+  record(validAppleTeamId(metadata.app?.appleTeamId), "app.appleTeamId", "需 Apple 產生的 10 碼英數 Team ID；登入 Email 不能代替");
   for (const key of [
     "app.nameConfirmed", "app.brandAuthorizationConfirmed", "listing.categoryConfirmed",
     "release.appleDeveloperEnrollmentConfirmed", "release.appStoreConnectAppCreated", "release.signingConfigured", "release.physicalDeviceVerificationComplete",

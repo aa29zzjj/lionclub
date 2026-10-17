@@ -27,6 +27,9 @@ test("public support gives functional deletion/password routes without inventing
     assert.match(html, /href="mailto:jaijai0830@gmail\.com"/);
     assert.doesNotMatch(html, /3 個工作天/);
   }
+  if (metadata.contacts.supportEmail) assert.ok(html.includes(`href="mailto:${metadata.contacts.supportEmail}"`));
+  if (metadata.app.nameConfirmed) assert.doesNotMatch(html, /名稱及品牌資料待持有人確認/);
+  assert.doesNotMatch(html, /3 個工作天/);
 });
 
 test("external deletion resource renders explanation and an identity-gated action, not only mailto instructions", () => {

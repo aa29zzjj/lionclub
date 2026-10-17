@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import PublicServicePage, { ServiceContactDetails } from "@/components/PublicServicePage";
 
-export const metadata: Metadata = { title: "客服與操作協助｜獅子會 App" };
+export const metadata: Metadata = { title: "客服與操作協助｜LionClubs" };
 
 export default function SupportPage() {
   return <PublicServicePage title="客服與操作協助">

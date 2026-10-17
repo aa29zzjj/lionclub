@@ -3,7 +3,7 @@ import PublicServicePage from "@/components/PublicServicePage";
 import AccountDeletionPanel from "@/components/AccountDeletionPanel";
 import Link from "next/link";
 
-export const metadata: Metadata = { title: "刪除帳號｜獅子會 App", robots: { index: false, follow: true } };
+export const metadata: Metadata = { title: "刪除帳號｜LionClubs", robots: { index: false, follow: true } };
 
 export default function AccountDeletionPage() {
   return <PublicServicePage title="刪除帳號與資料">

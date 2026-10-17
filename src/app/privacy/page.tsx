@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import PublicServicePage, { ServiceContactDetails } from "@/components/PublicServicePage";
 
-export const metadata: Metadata = { title: "隱私權政策與資料處理說明｜獅子會 App" };
+export const metadata: Metadata = { title: "隱私權政策與資料處理說明｜LionClubs" };
 
 export default function PrivacyPage() {
   return <PublicServicePage title="隱私權政策與資料處理說明">

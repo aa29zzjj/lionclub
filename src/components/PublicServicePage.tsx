@@ -15,7 +15,7 @@ const validEmail = (value: string | null): value is string => typeof value === "
 
 export function ServiceContactDetails() {
   return <div className="space-y-2 text-base leading-relaxed">
-    <p>服務名稱：{metadata.app.name}（名稱及品牌資料待持有人確認）</p>
+    <p>服務名稱：{metadata.app.name}{!metadata.app.nameConfirmed ? "（名稱及品牌資料待持有人確認）" : !metadata.app.brandAuthorizationConfirmed ? "（品牌使用權仍待核對）" : ""}</p>
     <p>營運主體：{legalEntity || "法定名稱尚待服務持有人補齊"}</p>
     <p>客服聯絡：<a className="touch-link break-all text-lion-gold underline" href={`mailto:${validEmail(supportEmail) ? supportEmail : existingWebsiteContact}`}>{validEmail(supportEmail) ? supportEmail : existingWebsiteContact}</a></p>
     <p>隱私聯絡：<a className="touch-link break-all text-lion-gold underline" href={`mailto:${validEmail(privacyEmail) ? privacyEmail : existingWebsiteContact}`}>{validEmail(privacyEmail) ? privacyEmail : existingWebsiteContact}</a></p>
