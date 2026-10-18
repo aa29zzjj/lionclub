@@ -51,6 +51,15 @@ type MeResponse = {
   organization: { name: string; districtCode?: string | null };
 };
 
+type AnnualAppointmentSuggestion = {
+  id: string;
+  positionName: string;
+  listingNature: string;
+  sourcePage: string;
+  yearStart: number;
+  organizationName: string;
+};
+
 const currentYear = new Date().getFullYear();
 const currentLionYear = getCurrentLionYearStart();
 const yearOptions = Array.from({ length: currentYear - 1916 }, (_, index) => currentYear - index);
@@ -113,14 +122,17 @@ export default function ExperiencePage() {
   const [useCustomOrganization, setUseCustomOrganization] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [suggestions, setSuggestions] = useState<AnnualAppointmentSuggestion[]>([]);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     Promise.all([
       fetch("/api/me", { cache: "no-store" }),
       fetch("/api/me/experiences", { cache: "no-store" }),
+      fetch("/api/me/annual-appointment-suggestions", { cache: "no-store" }),
     ])
-      .then(async ([meResponse, experiencesResponse]) => {
+      .then(async ([meResponse, experiencesResponse, suggestionsResponse]) => {
         if (meResponse.status === 401 || experiencesResponse.status === 401) {
           router.replace("/login");
           return;
@@ -132,6 +144,10 @@ export default function ExperiencePage() {
         if (!active) return;
         setMe(mePayload);
         setExperiences(experiencesPayload.experiences ?? []);
+        if (suggestionsResponse.ok) {
+          const suggestionsPayload = await suggestionsResponse.json();
+          if (active) setSuggestions(suggestionsPayload.suggestions ?? []);
+        }
       })
       .catch((requestError) => {
         if (active) setError(requestError instanceof Error ? requestError.message : "載入失敗");
@@ -143,6 +159,29 @@ export default function ExperiencePage() {
       active = false;
     };
   }, [router]);
+
+  async function claimSuggestion(appointmentId: string) {
+    if (claimingId) return;
+    setClaimingId(appointmentId);
+    setError("");
+    try {
+      const response = await fetch("/api/me/annual-appointment-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 401) { router.replace("/login?reason=session-expired"); return; }
+      if (!response.ok) { setError(data.error ?? "帶入失敗，請重新整理後再試"); return; }
+      setExperiences((previous) => [...previous, data.experience]);
+      setSuggestions((previous) => previous.filter((s) => s.id !== appointmentId));
+      setToast(`已帶入「${data.experience.positionName}」，等候核實`);
+    } catch {
+      setError("連線中斷，請重新整理確認是否已帶入");
+    } finally {
+      setClaimingId(null);
+    }
+  }
 
   const districtCode = me?.organization.districtCode ?? "300A-1";
   const profile = {
@@ -751,6 +790,30 @@ export default function ExperiencePage() {
               </button>
             </div>
           </form>
+        )}
+
+        {suggestions.length > 0 && (
+          <div className="mb-4 rounded-2xl border border-lion-gold/30 bg-lion-gold/5 p-4">
+            <h2 className="font-semibold text-sm">在今年度核定名冊找到你的職務</h2>
+            <p className="text-[11px] text-lion-muted mt-0.5 mb-3">依姓名與分會比對，一鍵帶入後仍為「本人填寫」狀態，需經授權管理者核實。</p>
+            <div className="flex flex-col gap-2">
+              {suggestions.map((s) => (
+                <div key={s.id} className="flex items-center justify-between gap-3 rounded-xl bg-lion-card border border-white/[0.06] px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{s.positionName}</p>
+                    <p className="text-[11px] text-lion-muted">{s.organizationName} · {s.yearStart}-{s.yearStart + 1} 年度 · {s.listingNature}</p>
+                  </div>
+                  <button
+                    onClick={() => claimSuggestion(s.id)}
+                    disabled={claimingId === s.id}
+                    className="shrink-0 min-h-10 rounded-xl bg-lion-action px-3 text-xs font-semibold text-lion-navyDeep disabled:opacity-50"
+                  >
+                    {claimingId === s.id ? "帶入中…" : "加入我的資歷"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         <div className="flex items-end justify-between mb-3">

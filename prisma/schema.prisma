@@ -321,6 +321,10 @@ model MemberExperience {
   rejectedReason String?
   auditReviews ExperienceReviewAudit[]
 
+  // 來自年度核定名冊的比對建議；避免同一筆名冊任職被重複帶入。刪除名冊來源不影響既有資歷。
+  sourceAppointmentId String?            @unique
+  sourceAppointment   AnnualAppointment? @relation(fields: [sourceAppointmentId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -376,6 +380,8 @@ model AnnualAppointment {
   approvedBy String
   approvedAt DateTime
   createdAt DateTime @default(now())
+
+  claimedByExperience MemberExperience?
 
   @@unique([batchId, sourceKey])
   @@unique([yearStart, organizationId, sourceKey])

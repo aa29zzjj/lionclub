@@ -7,11 +7,11 @@
   "app": {
     "name": "LionClubs",
     "nameConfirmed": true,
-    "bundleId": null,
+    "bundleId": "com.lionclubsmembership.app",
     "androidApplicationId": null,
     "appleTeamId": null,
-    "legalEntityName": null,
-    "copyright": null,
+    "legalEntityName": "Prepmate AI Inc",
+    "copyright": "© 2026 Prepmate AI Inc.",
     "brandAuthorizationConfirmed": false
   },
   "contacts": {
@@ -37,8 +37,8 @@
     "category": "SOCIAL_NETWORKING",
     "categoryConfirmed": false,
     "ageRating": null,
-    "territories": null,
-    "price": null
+    "territories": "全球（App Store／Google Play 所有可上架地區，不限台灣）",
+    "price": "免費 (Free)"
   },
   "release": {
     "version": null,
@@ -49,7 +49,7 @@
     "appleDeveloperEnrollmentConfirmed": false,
     "appStoreConnectAppCreated": false,
     "googlePlayAccountCreated": false,
-    "googlePlayAccountType": null,
+    "googlePlayAccountType": "organization",
     "nativeProjectCreated": false,
     "iosBuildEnvironmentVerified": false,
     "androidBuildEnvironmentVerified": false,
