@@ -242,8 +242,11 @@ export default function EventsPage() {
           </button>
         </div>
 
-        <Link href="/events/calendar" className="mb-4 flex min-h-12 items-center justify-center gap-2 rounded-xl border border-lion-border bg-lion-card px-4 py-3 text-base font-semibold text-lion-gold">
+        <Link href="/events/calendar" className="mb-2 flex min-h-12 items-center justify-center gap-2 rounded-xl border border-lion-border bg-lion-card px-4 py-3 text-base font-semibold text-lion-gold">
           <CalendarIcon className="h-5 w-5" /> 活動行事曆
+        </Link>
+        <Link href="/events/official-calendar" className="mb-4 flex min-h-12 items-center justify-center gap-2 rounded-xl border border-lion-border bg-lion-card px-4 py-3 text-base font-semibold text-lion-cream/80">
+          <CalendarIcon className="h-5 w-5" /> 300A1 區官方行事曆
         </Link>
 
         {toast && (
