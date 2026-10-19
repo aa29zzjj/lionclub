@@ -5,7 +5,7 @@ type Database = Pick<Prisma.TransactionClient, "annualAppointment" | "organizati
 
 const CLUB_SUFFIX = "獅子會";
 
-function bareClubName(name: string) {
+export function bareClubName(name: string) {
   return name.endsWith(CLUB_SUFFIX) ? name.slice(0, -CLUB_SUFFIX.length) : name;
 }
 

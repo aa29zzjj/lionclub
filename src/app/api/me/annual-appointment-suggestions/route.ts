@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
-import { findAnnualAppointmentSuggestions } from "@/lib/annual-appointment-match";
+import { bareClubName, findAnnualAppointmentSuggestions } from "@/lib/annual-appointment-match";
 import { serializeExperience } from "@/lib/member-experience";
 
 const listingNatureKind: Record<string, "position" | "honorary"> = {
@@ -53,8 +53,7 @@ export async function POST(request: NextRequest) {
       });
       if (!appointment || appointment.claimedByExperience) throw new Error("NOT_FOUND");
       // Re-verify the match server-side; never trust the client's appointmentId alone.
-      const bareClub = actor.organization.name.endsWith("獅子會") ? actor.organization.name.slice(0, -3) : actor.organization.name;
-      if (appointment.personName !== actor.name || appointment.homeClubSourceName !== bareClub) throw new Error("NOT_FOUND");
+      if (appointment.personName !== actor.name || appointment.homeClubSourceName !== bareClubName(actor.organization.name)) throw new Error("NOT_FOUND");
 
       const kind = listingNatureKind[appointment.listingNature] ?? "position";
       return tx.memberExperience.create({
