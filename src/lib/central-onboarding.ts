@@ -47,7 +47,7 @@ export const centralRegistrationSchema = z.object({
   bio: z.string().trim().max(3000).optional(),
   tags: z.array(z.string().trim().min(1).max(50)).max(30).optional(),
   declaredOrganizationName: z.string().trim().max(200).optional(),
-  privacyConsent: z.boolean().refine((value) => value === true, "請先閱讀並同意隱私權政策與資料處理說明"),
+  privacyConsent: z.preprocess((value) => value === true, z.literal(true, "請先閱讀並同意隱私權政策與資料處理說明")),
 });
 export type CentralRegistrationInput = z.infer<typeof centralRegistrationSchema>;
 
