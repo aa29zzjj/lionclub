@@ -4,13 +4,14 @@ import { fetchDistrictCalendarEvents } from "@/lib/district-calendar";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// The district calendar is Taipei-local; compute "today" in Taipei, not UTC.
+function taipeiDate(offsetDays = 0) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(d);
+}
+
 function defaultRange() {
-  const today = new Date();
-  const from = new Date(today);
-  const to = new Date(today);
-  to.setDate(to.getDate() + 60);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-  return { from: iso(from), to: iso(to) };
+  return { from: taipeiDate(0), to: taipeiDate(60) };
 }
 
 export async function GET(req: NextRequest) {

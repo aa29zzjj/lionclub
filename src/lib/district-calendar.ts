@@ -46,5 +46,7 @@ export async function fetchDistrictCalendarEvents(start: string, end: string): P
   if (!response.ok) throw new Error(`DISTRICT_CALENDAR_UPSTREAM_${response.status}`);
   const body = await response.json().catch(() => null);
   if (!Array.isArray(body)) throw new Error("DISTRICT_CALENDAR_UNEXPECTED_SHAPE");
-  return body.map(sanitize).filter((event): event is DistrictCalendarEvent => event !== null);
+  // Upstream returns events unordered; start strings are Taipei-local ISO-like text, so lexical order is chronological.
+  return body.map(sanitize).filter((event): event is DistrictCalendarEvent => event !== null)
+    .sort((a, b) => a.start.localeCompare(b.start));
 }

@@ -15,14 +15,17 @@ type OfficialEvent = {
   address: string | null;
 };
 
+// Upstream times carry no offset and are already Taipei-local; never pass them through Date,
+// which would reinterpret them in the viewer's device timezone.
 function formatDate(value: string, allDay: boolean) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("zh-TW", {
-    year: "numeric", month: "2-digit", day: "2-digit",
-    ...(allDay ? {} : { hour: "2-digit", minute: "2-digit" }),
-    timeZone: "Asia/Taipei",
-  });
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(value);
+  if (!match) return value;
+  const [, y, m, d, hh, mm] = match;
+  if (allDay || !hh) return `${y}/${m}/${d}（全天）`;
+  const hour = Number(hh);
+  const period = hour < 12 ? "上午" : "下午";
+  const hour12 = String(hour % 12 === 0 ? 12 : hour % 12).padStart(2, "0");
+  return `${y}/${m}/${d} ${period}${hour12}:${mm}`;
 }
 
 export default function OfficialCalendarPage() {
