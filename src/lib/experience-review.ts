@@ -16,7 +16,9 @@ export const EXPERIENCE_REVIEW_MATRIX: readonly ReviewRule[] = [
   { codes: ["club_president", "club_founder_president"], kind: "position", level: "club", scopeLevel: "zone", parent: true, roles: ["ZONE_ADMIN"], label: "直屬分區有效授權者核實會長" },
   { codes: ["zone_chair", "zone_secretary", "zone_treasurer"], kind: "position", level: "zone", scopeLevel: "region", parent: true, roles: ["REGION_ADMIN"], label: "直屬專區有效授權者核實分區職務" },
   { codes: ["zone_advisory"], kind: "advisor", level: "zone", scopeLevel: "region", parent: true, roles: ["REGION_ADMIN"], label: "直屬專區有效授權者核實分區顧問" },
-  { codes: ["region_chair", "region_vice_chair", "region_secretary", "region_treasurer"], kind: "position", level: "region", scopeLevel: "district", parent: true, roles: ["DISTRICT_ADMIN", "DISTRICT_GOVERNOR"], label: "直屬區有效授權者核實專區職務" },
+  { codes: ["region_vice_chair", "region_secretary", "region_treasurer"], kind: "position", level: "region", scopeLevel: "district", parent: true, roles: ["DISTRICT_ADMIN", "DISTRICT_GOVERNOR"], label: "直屬區有效授權者核實專區職務" },
+  // Tom 2026-10-20 要求：專區主席改由（直屬區）GMT／GLT／GST 協調長共用的區內閣角色核實，疊加既有的區管理者／總監權限，不取代。
+  { codes: ["region_chair"], kind: "position", level: "region", scopeLevel: "district", parent: true, roles: ["DISTRICT_ADMIN", "DISTRICT_GOVERNOR", "DISTRICT_CABINET"], label: "直屬區有效授權者（含 GMT／GLT／GST 協調長）核實專區主席" },
   { codes: ["region_advisor"], kind: "advisor", level: "region", scopeLevel: "district", parent: true, roles: ["DISTRICT_ADMIN", "DISTRICT_GOVERNOR"], label: "直屬區有效授權者核實專區顧問" },
   { codes: ["dist_deputy_secretary", "dist_treasurer", "dist_deputy_treasurer", "dist_general_affairs", "dist_pr_chair", "dist_information"], kind: "position", level: "district", scopeLevel: "district", parent: false, roles: ["DISTRICT_SECRETARY"], label: "同區秘書長核實區內閣職務" },
   { codes: ["dist_special_advisor"], kind: "advisor", level: "district", scopeLevel: "district", parent: false, roles: ["DISTRICT_SECRETARY"], label: "同區秘書長核實區特別顧問" },

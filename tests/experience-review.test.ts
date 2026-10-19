@@ -32,6 +32,16 @@ test("district roles never imply blanket descendant or all-cabinet review author
   assert.equal(experienceReviewDecision(context(grant("CLUB_PRESIDENT", "club")), target("club_president")).allowed, false);
 });
 
+test("region chair review is shared by district admin/governor and the district cabinet (GMT/GLT/GST), but not other region positions", () => {
+  const chair = target("region_chair", "region");
+  assert.equal(experienceReviewDecision(context(grant("DISTRICT_ADMIN", "district")), chair).allowed, true);
+  assert.equal(experienceReviewDecision(context(grant("DISTRICT_GOVERNOR", "district")), chair).allowed, true);
+  assert.equal(experienceReviewDecision(context(grant("DISTRICT_CABINET", "district")), chair).allowed, true);
+  const otherRegionPosition = target("region_secretary", "region");
+  assert.equal(experienceReviewDecision(context(grant("DISTRICT_CABINET", "district")), otherRegionPosition).allowed, false);
+  assert.equal(experienceReviewDecision(context(grant("DISTRICT_ADMIN", "district")), otherRegionPosition).allowed, true);
+});
+
 test("future, expired, null-scope and wrong-scope-type grants fail closed", () => {
   for (const role of [
     { ...grant("CLUB_PRESIDENT", "club"), validFrom: future },
