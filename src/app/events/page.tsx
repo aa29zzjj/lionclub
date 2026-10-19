@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
+import TermsConsentPrompt from "@/components/TermsConsentPrompt";
 import Avatar from "@/components/Avatar";
 import { CalendarIcon, PinIcon, PlusIcon } from "@/components/icons";
 import { EVENT_TIME_ZONE, taipeiEventStartAt } from "@/lib/event-calendar";
@@ -57,6 +58,7 @@ export default function EventsPage() {
   const [officialHosts, setOfficialHosts] = useState<EventPublishingOption[]>([]);
   const [filter, setFilter] = useState<EventCategory | "ALL">("ALL");
   const [error, setError] = useState("");
+  const [needsTerms, setNeedsTerms] = useState(false);
 
   function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -200,6 +202,7 @@ export default function EventsPage() {
       }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (data.code === "TERMS_REQUIRED") { setNeedsTerms(true); setError(""); return; }
         setError(data.error ?? "發布失敗，請再試一次");
         return;
       }
@@ -457,6 +460,7 @@ export default function EventsPage() {
             </div>
 
             {error && <p role="alert" className="text-base text-lion-danger">{error}</p>}
+            {needsTerms && <TermsConsentPrompt onAccepted={() => { setNeedsTerms(false); setToast("已同意使用條款，請再按一次發布"); }} />}
 
             <div className="flex gap-2">
               <button

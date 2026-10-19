@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
+import { hasAcceptedCurrentTerms, termsRequiredResponse } from "@/lib/terms-gate";
 import { EVENT_CATEGORIES } from "@/lib/event-category";
 import { EVENT_SCOPES, EventScopeError, getEventPublishingOptions, resolveEventPublication } from "@/lib/event-scope";
 
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
   if (!isTrustedBrowserMutation(req)) return NextResponse.json({ error: "請從網站操作" }, { status: 403 });
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
+  if (!hasAcceptedCurrentTerms(me)) return termsRequiredResponse();
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {

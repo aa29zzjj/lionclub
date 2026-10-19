@@ -7,6 +7,8 @@ import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import FriendQrScanner from "@/components/FriendQrScanner";
 import AccessibleDialog from "@/components/AccessibleDialog";
+import EventReportPanel from "@/components/EventReportPanel";
+import TermsConsentPrompt from "@/components/TermsConsentPrompt";
 import { PinIcon } from "@/components/icons";
 import { colorFromId } from "@/lib/avatar-color";
 import { EVENT_TIME_ZONE, taipeiEventStartAt } from "@/lib/event-calendar";
@@ -57,6 +59,7 @@ export default function EventDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [needsTerms, setNeedsTerms] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -306,6 +309,7 @@ export default function EventDetailPage() {
       return;
     }
     if (!response.ok) {
+      if (result.code === "TERMS_REQUIRED") { setNeedsTerms(true); setError(""); return; }
       setError(result.error ?? "活動更新失敗");
       return;
     }
@@ -534,6 +538,7 @@ export default function EventDetailPage() {
         </div>}
 
         {error && <p role="alert" className="mb-4 text-base text-lion-danger">{error}</p>}
+        {needsTerms && <div className="mb-4"><TermsConsentPrompt onAccepted={() => { setNeedsTerms(false); setError("已同意使用條款，請再按一次儲存"); }} /></div>}
 
         {event.description && (
           <div className="mb-6">
@@ -628,6 +633,7 @@ export default function EventDetailPage() {
         <Link href="/notifications" className="touch-link flex min-h-12 justify-center text-center text-sm text-lion-gold mt-4">
           通知好友一起參加 →
         </Link>
+        {!event.canManage && <EventReportPanel eventId={event.id} />}
       </div>
 
       {scanning && (

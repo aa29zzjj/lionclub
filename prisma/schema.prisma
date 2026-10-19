@@ -103,6 +103,10 @@ model Member {
   privacyConsentedAt     DateTime?
   privacyConsentVersion  String?
 
+  // 使用條款（含不容忍違規內容、檢舉與停權規則）的同意紀錄。
+  termsAcceptedAt DateTime?
+  termsVersion    String?
+
   experiences         MemberExperience[]       @relation("MemberExperiences")
   verifiedExperiences MemberExperience[]       @relation("ExperienceVerifiedBy")
   experienceReviewsMade ExperienceReviewAudit[] @relation("ExperienceReviewActor")
@@ -130,6 +134,8 @@ model Member {
   reportsMade     MemberReport[] @relation("ReporterMember")
   reportsReceived MemberReport[] @relation("ReportedMember")
   reportsReviewed MemberReport[] @relation("ReportReviewedBy")
+  eventReportsMade     EventReport[] @relation("EventReporter")
+  eventReportsReviewed EventReport[] @relation("EventReportReviewedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -453,8 +459,29 @@ model Event {
   registrations EventRegistration[]
   checkInHistory EventCheckInAudit[]
   notifications EventNotification[]
+  reports       EventReport[]
 
   createdAt DateTime @default(now())
+}
+
+// 活動內容檢舉。活動被移除內容後仍保留標題快照，處置紀錄不隨活動消失。
+model EventReport {
+  id           String    @id @default(cuid())
+  reporterId   String
+  reporter     Member    @relation("EventReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  eventId      String?
+  event        Event?    @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  eventTitle   String
+  reason       String
+  details      String?
+  status       String    @default("PENDING") // PENDING | REVIEWED | DISMISSED | CONTENT_REMOVED
+  reviewedById String?
+  reviewedBy   Member?   @relation("EventReportReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([status])
+  @@index([eventId])
 }
 
 model EventRegistration {

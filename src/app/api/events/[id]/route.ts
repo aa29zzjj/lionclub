@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
+import { hasAcceptedCurrentTerms, termsRequiredResponse } from "@/lib/terms-gate";
 import { EVENT_CATEGORIES } from "@/lib/event-category";
 import { EVENT_SCOPES, EventScopeError, canManageEvent, getEventPublishingOptions, resolveEventPublication } from "@/lib/event-scope";
 
@@ -79,6 +80,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!isTrustedBrowserMutation(request)) return NextResponse.json({ error: "請從網站管理活動" }, { status: 403 });
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
+  if (!hasAcceptedCurrentTerms(me)) return termsRequiredResponse();
 
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "欄位格式錯誤" }, { status: 400 });

@@ -57,6 +57,7 @@ function RegisterForm() {
   const [title, setTitle] = useState("");
   const [bio, setBio] = useState("");
   const [privacyConsent, setPrivacyConsent] = useState(false);
+  const [termsConsent, setTermsConsent] = useState(false);
   const [declaredOrganizationName, setDeclaredOrganizationName] = useState("");
   const [orgSuggestions, setOrgSuggestions] = useState<{ id: string; name: string; districtCode: string | null }[]>([]);
   const [orgSuggestionsOpen, setOrgSuggestionsOpen] = useState(false);
@@ -200,6 +201,10 @@ function RegisterForm() {
       setProfileError("請先閱讀並同意隱私權政策與資料處理說明。");
       return;
     }
+    if (!termsConsent) {
+      setProfileError("請先閱讀並同意使用條款。");
+      return;
+    }
     setProfileError("");
     setSubmitting(true);
     try {
@@ -211,7 +216,7 @@ function RegisterForm() {
           name: name.trim(), email: email.trim(), password,
           birthday: birthday || undefined, phone: phone.trim() || undefined,
           title: title || undefined, bio: bio.trim() || undefined, tags: selectedTags,
-          declaredOrganizationName: declaredOrganizationName.trim() || undefined, privacyConsent, ...invitePayload,
+          declaredOrganizationName: declaredOrganizationName.trim() || undefined, privacyConsent, termsConsent, ...invitePayload,
         }),
       });
       const data = await response.json().catch(() => null);
@@ -391,10 +396,24 @@ function RegisterForm() {
               （必填）
             </span>
           </label>
+          <label className="flex items-start gap-2.5 rounded-xl border border-lion-border bg-lion-soft px-3.5 py-3 text-sm">
+            <input
+              type="checkbox"
+              checked={termsConsent}
+              onChange={(event) => setTermsConsent(event.target.checked)}
+              disabled={submitting}
+              className="mt-0.5 accent-[#C8A951]"
+            />
+            <span>
+              我已閱讀並同意
+              <Link href="/terms" target="_blank" className="text-lion-gold underline mx-1">使用條款</Link>
+              ，包含不得發布違規內容及檢舉與停權規則（必填）
+            </span>
+          </label>
           {profileError && <p className="text-sm text-lion-danger" role="alert">{profileError}</p>}
           <div className="flex gap-3">
             <button type="button" disabled={submitting} onClick={() => setStep("invite")} className={`${secondaryButtonClass} flex-1`}>查看邀請</button>
-            <button type="submit" disabled={submitting || !invitationReady || !privacyConsent} className={`${primaryButtonClass} flex-1`}>{submitting ? "正在註冊…" : "完成註冊並開通"}</button>
+            <button type="submit" disabled={submitting || !invitationReady || !privacyConsent || !termsConsent} className={`${primaryButtonClass} flex-1`}>{submitting ? "正在註冊…" : "完成註冊並開通"}</button>
           </div>
           <Link href="/login" className="flex min-h-12 items-center justify-center text-sm text-lion-muted" aria-disabled={submitting} onClick={(event) => { if (submitting) event.preventDefault(); }}>已有帳號？返回登入</Link>
         </form>}

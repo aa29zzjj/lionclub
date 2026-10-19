@@ -12,6 +12,7 @@ import {
   requiresRegistrationInvite,
 } from "../src/lib/central-onboarding";
 import { PRIVACY_POLICY_VERSION } from "../src/lib/privacy-policy";
+import { TERMS_VERSION } from "../src/lib/terms";
 
 /*
  * No database, network, or test-library dependency. Run:
@@ -184,7 +185,7 @@ class FakePrisma {
   writes() { return this.calls.filter((call) => ["create", "updateMany"].includes(call.method)); }
 }
 
-const registration = (extra: Row = {}) => centralRegistrationSchema.parse({ name: " 新會員 ", email: " NEW@EXAMPLE.TEST ", password: "passw0rd!", privacyConsent: true, ...extra });
+const registration = (extra: Row = {}) => centralRegistrationSchema.parse({ name: " 新會員 ", email: " NEW@EXAMPLE.TEST ", password: "passw0rd!", privacyConsent: true, termsConsent: true, ...extra });
 const assignment = (extra: Row = {}) => assignmentSchema.parse({ organizationId: OTHER, expectedOrganizationId: INTAKE, expectedAssignmentVersion: 0, reason: "依正式會員名單核對", ...extra });
 function errorStatus(status: number) {
   return (error: unknown) => error instanceof OnboardingError && error.status === status;
@@ -244,6 +245,7 @@ test("registration schema normalizes fields, validates dates, strips role and as
   assert.equal("pin" in registration({ pin: "123456" }), false, "PIN is not a central-registration authorization field");
   assert.equal(centralRegistrationSchema.safeParse({ name: " 新會員 ", email: "a@b.test", password: "passw0rd!" }).success, false, "missing privacyConsent must be rejected");
   assert.equal(centralRegistrationSchema.safeParse({ name: " 新會員 ", email: "a@b.test", password: "passw0rd!", privacyConsent: false }).success, false, "unchecked privacyConsent must be rejected");
+  assert.equal(centralRegistrationSchema.safeParse({ name: " 新會員 ", email: "a@b.test", password: "passw0rd!", privacyConsent: true }).success, false, "missing termsConsent must be rejected");
   const assignInput = assignment({ role: "SUPER_ADMIN", status: "ACTIVE", assignedById: TARGET, memberNo: "stolen-id", organizationAssignmentVersion: 100 });
   assert.deepEqual(Object.keys(assignInput).sort(), ["organizationId", "expectedOrganizationId", "expectedAssignmentVersion", "reason"].sort());
 });
@@ -272,6 +274,8 @@ test("valid other-club invite creates active ordinary member only in intake, wit
   assert.deepEqual(result.member.birthday, new Date("2000-02-29"));
   assert.ok(result.member.privacyConsentedAt instanceof Date, "registration must record a consent timestamp");
   assert.equal(result.member.privacyConsentVersion, PRIVACY_POLICY_VERSION);
+  assert.ok(result.member.termsAcceptedAt instanceof Date, "registration must record terms acceptance");
+  assert.equal(result.member.termsVersion, TERMS_VERSION);
   assert.equal(result.user.memberId, result.member.id);
   assert.equal(result.user.passwordHash, "hashed-password");
   assert.equal(fake.state.clubInvite[0].usageCount, 1);

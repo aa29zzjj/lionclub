@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { generateMemberNo } from "./member-no";
 import { PRIVACY_POLICY_VERSION } from "./privacy-policy";
+import { TERMS_VERSION } from "./terms";
 
 type Database = PrismaClient | Prisma.TransactionClient;
 export const ASSIGNMENT_MANAGER_ROLES = ["CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
@@ -48,6 +49,7 @@ export const centralRegistrationSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(50)).max(30).optional(),
   declaredOrganizationName: z.string().trim().max(200).optional(),
   privacyConsent: z.preprocess((value) => value === true, z.literal(true, "請先閱讀並同意隱私權政策與資料處理說明")),
+  termsConsent: z.preprocess((value) => value === true, z.literal(true, "請先閱讀並同意使用條款")),
 });
 export type CentralRegistrationInput = z.infer<typeof centralRegistrationSchema>;
 
@@ -98,6 +100,8 @@ export async function createCentralMember(
             declaredOrganizationName: input.declaredOrganizationName || null,
             privacyConsentedAt: now,
             privacyConsentVersion: PRIVACY_POLICY_VERSION,
+            termsAcceptedAt: now,
+            termsVersion: TERMS_VERSION,
             tags: input.tags?.length ? { connectOrCreate: [...new Set(input.tags)].map((name) => ({ where: { name }, create: { name } })) } : undefined,
             organizationAssignments: { create: {
               toOrganizationId: intake.id, toOrganizationName: intake.name,
