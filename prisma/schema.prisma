@@ -99,6 +99,10 @@ model Member {
   user User?
   emailVerifiedAt DateTime?
 
+  // 註冊當下對隱私政策的同意紀錄；versioned so a later policy change can be re-prompted.
+  privacyConsentedAt     DateTime?
+  privacyConsentVersion  String?
+
   experiences         MemberExperience[]       @relation("MemberExperiences")
   verifiedExperiences MemberExperience[]       @relation("ExperienceVerifiedBy")
   experienceReviewsMade ExperienceReviewAudit[] @relation("ExperienceReviewActor")

@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import PublicServicePage, { ServiceContactDetails } from "@/components/PublicServicePage";
+import { PRIVACY_POLICY_VERSION } from "@/lib/privacy-policy";
 
 export const metadata: Metadata = { title: "隱私權政策與資料處理說明｜LionClubs" };
 
 export default function PrivacyPage() {
   return <PublicServicePage title="隱私權政策與資料處理說明">
-    <p className="text-sm text-lion-muted">更新日期：2026-10-15。以下如實說明目前網站程式的資料處理；營運主體、正式聯絡、部分保留期限與商店隱私宣告仍待服務持有人確認，並非已完成上架合規驗收。</p>
+    <p className="text-sm text-lion-muted">更新日期：{PRIVACY_POLICY_VERSION}。以下如實說明目前網站程式的資料處理；營運主體、正式聯絡、部分保留期限與商店隱私宣告仍待服務持有人確認，並非已完成上架合規驗收。</p>
     <section><h2 className="mb-3 text-lg font-semibold">服務與聯絡</h2><ServiceContactDetails /></section>
     <section><h2 className="text-lg font-semibold">使用哪些資料、用在哪裡？</h2><ul className="mt-3 list-disc space-y-3 pl-5">
       <li>姓名、Email 與密碼用於建立及辨識帳號；密碼以雜湊保存，不會在頁面顯示。手機、生日、頭像、介紹、標籤及資歷由您選擇填寫，供會員交流與會籍／任職資料管理。</li>
