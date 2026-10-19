@@ -368,6 +368,19 @@ export default function ProfilePage() {
               </div>
             )}
 
+            <section className="overflow-hidden rounded-2xl border border-lion-border bg-lion-card">
+              <Link href="/organizations" className="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors hover:bg-lion-soft">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-lion-gold/10 text-lion-gold">
+                  <PeopleIcon className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-base font-medium">組織架構與幹部名單</span>
+                  <span className="mt-0.5 block text-sm text-lion-muted">查看複合區、區、專區、分區、分會的隸屬關係與本年度在任幹部</span>
+                </span>
+                <ChevronRightIcon className="h-4 w-4 shrink-0 text-lion-muted" />
+              </Link>
+            </section>
+
             {adminTools.length > 0 && (
               <section className="overflow-hidden rounded-2xl border border-lion-border bg-lion-card">
                 <div className="border-b border-lion-border px-4 py-3">
