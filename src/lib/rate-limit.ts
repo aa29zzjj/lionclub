@@ -36,9 +36,9 @@ export async function isRateLimited(key: string, limit: number, windowMs = WINDO
   return (await consumeRateLimit(await getPrisma(), key, limit, windowMs)).limited;
 }
 
-export type AuthAction = "register" | "login" | "forgot-password" | "resend-verification" | "reset-password" | "verify-email" | "revoke-sessions";
-const IP_LIMITS: Record<AuthAction, number> = { register: 1000, login: 600, "forgot-password": 100, "resend-verification": 100, "reset-password": 100, "verify-email": 600, "revoke-sessions": 100 };
-const IDENTITY_LIMITS: Record<AuthAction, number> = { register: 5, login: 20, "forgot-password": 5, "resend-verification": 5, "reset-password": 10, "verify-email": 20, "revoke-sessions": 5 };
+export type AuthAction = "register" | "login" | "forgot-password" | "resend-verification" | "reset-password" | "verify-email" | "revoke-sessions" | "oauth-start";
+const IP_LIMITS: Record<AuthAction, number> = { register: 1000, login: 600, "forgot-password": 100, "resend-verification": 100, "reset-password": 100, "verify-email": 600, "revoke-sessions": 100, "oauth-start": 1000 };
+const IDENTITY_LIMITS: Record<AuthAction, number> = { register: 5, login: 20, "forgot-password": 5, "resend-verification": 5, "reset-password": 10, "verify-email": 20, "revoke-sessions": 5, "oauth-start": 10 };
 
 export async function consumeAuthLimits(db: RateLimitDatabase, action: AuthAction, ip: string, identity: string, invite?: string, now = new Date()) {
   const limits: Array<[string, number]> = [

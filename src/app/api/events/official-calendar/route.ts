@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/current-member";
-import { fetchDistrictCalendarEvents } from "@/lib/district-calendar";
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+import { DISTRICT_CALENDAR_SOURCE, fetchDistrictCalendarEvents, validCalendarRange } from "@/lib/district-calendar";
 
 // The district calendar is Taipei-local; compute "today" in Taipei, not UTC.
 function taipeiDate(offsetDays = 0) {
@@ -22,11 +20,11 @@ export async function GET(req: NextRequest) {
   const fallback = defaultRange();
   const from = searchParams.get("from") ?? fallback.from;
   const to = searchParams.get("to") ?? fallback.to;
-  if (!DATE_RE.test(from) || !DATE_RE.test(to)) return NextResponse.json({ error: "日期格式錯誤" }, { status: 400 });
+  if (!validCalendarRange(from, to)) return NextResponse.json({ error: "請選擇有效日期，結束日須晚於開始日，且範圍不得超過 366 天。" }, { status: 400 });
 
   try {
     const events = await fetchDistrictCalendarEvents(from, to);
-    return NextResponse.json({ source: "300a1.org.tw", events });
+    return NextResponse.json({ source: "300a1.org.tw", sourceUrl: DISTRICT_CALENDAR_SOURCE, from, to, checkedAt: new Date().toISOString(), cacheSeconds: 600, readOnly: true, events }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return NextResponse.json({ error: "官方行事曆暫時無法取得，請稍後再試或直接前往 300A1 區官網查看" }, { status: 502 });
   }

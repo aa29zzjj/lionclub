@@ -6,16 +6,20 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 
-type Role = { id: string; role: string; validFrom: string };
-type Member = { id: string; name: string; email: string | null; title: string | null; adminRoles: Role[] };
-type Organization = { id: string; name: string; districtCode: string | null };
-type AssignableRole = "CLUB_OFFICER" | "CLUB_FINANCE" | "CLUB_VICE_PRESIDENT" | "CLUB_PRESIDENT";
+type Role = { id: string; role: string; validFrom: string; validUntil?: string | null };
+type Member = { id: string; name: string; email: string | null; title: string | null; adminRoles: Role[]; eligibleForGrant?: boolean };
+type Organization = { id: string; name: string; districtCode: string | null; level?: string };
+type AssignableRole = "CLUB_OFFICER" | "CLUB_FINANCE" | "CLUB_VICE_PRESIDENT" | "CLUB_PRESIDENT" | "DISTRICT_GOVERNOR" | "DISTRICT_SECRETARY" | "DISTRICT_CABINET" | "DISTRICT_GMT_COORDINATOR";
 
 const roleLabels: Record<AssignableRole, string> = {
   CLUB_OFFICER: "分會幹部",
   CLUB_FINANCE: "分會財務",
   CLUB_VICE_PRESIDENT: "分會副會長",
   CLUB_PRESIDENT: "分會會長",
+  DISTRICT_GOVERNOR: "區總監（資歷審核專用）",
+  DISTRICT_SECRETARY: "區秘書長（資歷審核專用）",
+  DISTRICT_CABINET: "區內閣（不含 GMT 專用審核授權）",
+  DISTRICT_GMT_COORDINATOR: "GMT 協調長（直屬專區主席資歷審核專用）",
 };
 
 export default function AdminRolesPage() {
@@ -25,6 +29,8 @@ export default function AdminRolesPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [memberId, setMemberId] = useState("");
   const [role, setRole] = useState<AssignableRole>("CLUB_OFFICER");
+  const [assignableRoles, setAssignableRoles] = useState<AssignableRole[]>([]);
+  const [validUntilDate, setValidUntilDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -50,9 +56,12 @@ export default function AdminRolesPage() {
     setOrganizations(result.organizations ?? []);
     setOrganization(result.organization ?? null);
     setMembers(result.members ?? []);
-    setMemberId((current) => result.members?.some((member: Member) => member.id === current)
+    const allowed = (Array.isArray(result.assignableRoles) ? result.assignableRoles : []).filter((value: string): value is AssignableRole => Object.hasOwn(roleLabels, value));
+    setAssignableRoles(allowed);
+    setRole(current => allowed.includes(current) ? current : allowed[0] ?? "CLUB_OFFICER");
+    setMemberId((current) => result.members?.some((member: Member) => member.id === current && member.eligibleForGrant !== false)
       ? current
-      : result.members?.[0]?.id ?? "");
+      : result.members?.find((member: Member) => member.eligibleForGrant !== false)?.id ?? "");
     setLoading(false);
     } catch { setError("幹部名單連線中斷，請重新載入"); }
     finally { setLoading(false); }
@@ -64,7 +73,12 @@ export default function AdminRolesPage() {
 
   async function grant(event: React.FormEvent) {
     event.preventDefault();
-    if (!organization || saving) return;
+    if (!organization || saving || !assignableRoles.includes(role)) return;
+    if (organization.level === "district" && !validUntilDate) { setError("區級審核角色必須填寫有效期限，最長 366 日"); return; }
+    const validUntil = validUntilDate ? new Date(`${validUntilDate}T23:59:59.999+08:00`) : null;
+    if (validUntil && !Number.isFinite(+validUntil)) { setError("請確認有效期限日期"); return; }
+    const target = members.find(member => member.id === memberId);
+    if (!window.confirm(`確定手動授予 ${target?.name ?? "此會員"} 在 ${organization.name} 的「${roleLabels[role]}」嗎？${validUntilDate ? `有效至 ${validUntilDate}（台灣時間）。` : ""}此操作是系統授權，不會核實其自填資歷，也不會自動續期。`)) return;
     setSaving(true);
     setError("");
     setNotice("");
@@ -72,7 +86,7 @@ export default function AdminRolesPage() {
     const response = await fetch("/api/admin/roles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ organizationId: organization.id, memberId, role }),
+      body: JSON.stringify({ organizationId: organization.id, memberId, role, validUntil: validUntil?.toISOString() }),
     });
     const result = await response.json();
     if (response.status === 401) { setMembers([]); router.replace("/login?reason=session-expired"); return; }
@@ -113,16 +127,16 @@ export default function AdminRolesPage() {
   return (
     <AppShell>
       <div className="px-5 pt-6 pb-8">
-        <h1 className="text-xl font-bold">幹部系統權限</h1>
-        <p className="mt-1 text-xs text-lion-muted">管理範圍依登入者的分會、區或複合區權限自動限制</p>
+        <h1 className="text-xl font-bold">幹部與審核系統角色</h1>
+        <p className="mt-1 text-sm text-lion-muted">分會角色依有效管理範圍限制。區級資歷審核角色只有有效 GLOBAL SUPER 可手動配置，不提供授予 SUPER 的入口。</p>
 
         {organizations.length > 1 && (
           <div className="mt-5">
-            <label htmlFor="managed-organization" className="mb-1 block text-xs text-lion-muted">管理分會</label>
+            <label htmlFor="managed-organization" className="mb-1 block text-sm text-lion-muted">授權組織／精確範圍</label>
             <select
               id="managed-organization"
               value={organization?.id ?? ""}
-              onChange={(event) => void load(event.target.value)}
+              onChange={(event) => { setValidUntilDate(""); void load(event.target.value); }}
               disabled={loading || saving}
               className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none focus:border-lion-gold disabled:opacity-50"
             >
@@ -143,21 +157,28 @@ export default function AdminRolesPage() {
 
         {loading ? <p className="py-12 text-center text-sm text-lion-muted">載入中…</p> : <>
           <form onSubmit={grant} className="mt-5 flex flex-col gap-3 rounded-2xl border border-white/10 bg-lion-card p-4">
+            <fieldset disabled={saving || !organization} className="flex min-w-0 flex-col gap-3">
             <div>
               <label htmlFor="role-member" className="mb-1 block text-xs text-lion-muted">會員</label>
               <select id="role-member" value={memberId} onChange={(event) => setMemberId(event.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm">
-                {members.map((member) => <option key={member.id} value={member.id} className="bg-lion-card text-lion-cream">{member.name}{member.email ? ` · ${member.email}` : ""}</option>)}
+                {members.filter(member => member.eligibleForGrant !== false).map((member) => <option key={member.id} value={member.id} className="bg-lion-card text-lion-cream">{member.name}{member.email ? ` · ${member.email}` : ""}</option>)}
               </select>
             </div>
             <div>
               <label htmlFor="role-type" className="mb-1 block text-xs text-lion-muted">系統權限</label>
               <select id="role-type" value={role} onChange={(event) => setRole(event.target.value as AssignableRole)} className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm">
-                {Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value} className="bg-lion-card text-lion-cream">{label}</option>)}
+                {assignableRoles.map(value => <option key={value} value={value} className="bg-lion-card text-lion-cream">{roleLabels[value]}</option>)}
               </select>
             </div>
-            <button type="submit" disabled={!memberId || !organization || saving} className="rounded-xl bg-lion-action py-2.5 text-sm font-semibold text-lion-navyDeep disabled:opacity-40">
+            <div>
+              <label htmlFor="role-valid-until" className="mb-1 block text-base">有效至（台灣日期含當日，{organization?.level === "district" ? "必填" : "選填"}）</label>
+              <input id="role-valid-until" type="date" value={validUntilDate} required={organization?.level === "district"} onChange={event => setValidUntilDate(event.target.value)} className="min-h-12 w-full rounded-xl border border-lion-border bg-lion-page px-3 py-3 text-base" />
+              {organization?.level === "district" && <p className="mt-2 text-sm text-lion-muted">區級資歷審核權限最長 366 日，不自動續期；GMT 專用角色不包含會員異動、邀請或官方活動發布權。GLT／GST 不能借用此角色。</p>}
+            </div>
+            <button type="submit" disabled={!memberId || !organization || !assignableRoles.includes(role) || saving} className="min-h-12 rounded-xl bg-lion-action py-2.5 text-base font-semibold text-lion-navyDeep disabled:opacity-40">
               {saving ? "處理中…" : "授予權限"}
             </button>
+            </fieldset>
           </form>
 
           {notice && <p role="status" className="mt-3 rounded-xl border border-lion-border bg-lion-card px-3 py-3 text-base">{notice}</p>}
@@ -172,14 +193,16 @@ export default function AdminRolesPage() {
               <div key={adminRole.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-lion-card p-3">
                 <div>
                   <p className="text-sm font-medium">{member.name}</p>
-                  <p className="text-xs text-lion-muted">{roleLabels[adminRole.role as AssignableRole] ?? adminRole.role}{member.title ? ` · ${member.title}` : ""}</p>
+                  <p className="text-sm text-lion-muted">{roleLabels[adminRole.role as AssignableRole] ?? adminRole.role}{member.title ? ` · 自填職稱：${member.title}` : ""}</p>
+                  <p className="mt-1 text-sm text-lion-muted">{new Date(adminRole.validFrom).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" })} 起，{adminRole.validUntil ? `至 ${new Date(adminRole.validUntil).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" })}` : "未設定到期日（既有角色）"}</p>
+                  {member.eligibleForGrant === false && <p className="mt-1 text-sm text-lion-danger">目前不在可新增授權的啟用會員範圍，既有角色仍可核對撤銷。</p>}
                 </div>
                 <button disabled={saving} onClick={() => void revoke(adminRole.id)} className="shrink-0 rounded-lg border border-lion-border px-2.5 py-1.5 text-sm text-lion-danger disabled:opacity-50">撤銷</button>
               </div>
             )))}
             {activeRoleCount === 0 && (
               <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-lion-muted">
-                此分會目前沒有可管理的幹部權限
+                此組織目前沒有可管理的角色
               </div>
             )}
           </div>

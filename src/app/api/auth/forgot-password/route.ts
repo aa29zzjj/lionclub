@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   const limited = await consumeAuthLimits(prisma, "forgot-password", getClientIp(request), parsed.data.email);
   if (limited) return rateLimitResponse(limited);
   const user = await findUserByEmail(prisma, parsed.data.email);
-  if (!user || isProductionDemoUser(user)) return NextResponse.json({ ok: true, message: genericMessage });
+  if (!user?.passwordHash || isProductionDemoUser(user)) return NextResponse.json({ ok: true, message: genericMessage });
 
   const from = process.env.PASSWORD_RESET_FROM_EMAIL;
   if (!from) return NextResponse.json({ error: "密碼重設信件服務尚未完成設定" }, { status: 503 });

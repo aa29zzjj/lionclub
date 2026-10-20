@@ -52,11 +52,11 @@ test("direct experience review matrix and audit transaction over real isolated S
       for (const [code, org, role, scope] of [
         ["club_president", s.ai, "ZONE_ADMIN", zone],
         ["zone_chair", zone, "REGION_ADMIN", region],
-        ["region_chair", region, "DISTRICT_ADMIN", district],
+        ["region_chair", region, "DISTRICT_GMT_COORDINATOR", district],
         ["dist_treasurer", district, "DISTRICT_SECRETARY", district],
         ["dist_secretary", district, "DISTRICT_GOVERNOR", district],
         ["dist_governor", district, "MULTIDISTRICT_ADMIN", md],
-        ["dist_gmt_coordinator", district, "DISTRICT_CABINET", district],
+        ["dist_gmt_coordinator", district, "DISTRICT_SECRETARY", district],
       ]) {
         await grant(role, scope);
         const row = await experience(code, org);
@@ -68,6 +68,26 @@ test("direct experience review matrix and audit transaction over real isolated S
       check(await review(await experience("dist_treasurer", district)), 403);
       await grant("DISTRICT_ADMIN", district);
       check(await review(await experience("club_president")), 403);
+    });
+    await t.test("GMT is separate from CABINET/GLT/GST; heads cannot skip the declared direct chain", async () => {
+      const chair = await experience("region_chair", region);
+      for (const role of ["DISTRICT_CABINET", "DISTRICT_GOVERNOR", "DISTRICT_ADMIN", "DISTRICT_SECRETARY", "DISTRICT_GLT_COORDINATOR", "DISTRICT_GST_COORDINATOR"]) {
+        await grant(role, district);
+        check(await review(chair), 403);
+      }
+      await sim.prisma.adminRole.deleteMany({ where: { memberId: s.chair.id } });
+      await sim.prisma.member.update({ where: { id: s.chair.id }, data: { title: "GMT 協調長" } });
+      check(await review(chair), 403);
+      await grant("DISTRICT_GMT_COORDINATOR", district);
+      const rows = await list(); assert.ok(rows.some(row => row.id === chair.id));
+      check(await review(await experience("zone_chair", zone)), 403);
+      check(await review(await experience("club_president")), 403);
+      check(await review(chair), 200);
+      assert.equal((await sim.prisma.experienceReviewAudit.findFirst({ where: { experienceId: chair.id } })).reviewRole, "DISTRICT_GMT_COORDINATOR");
+      await grant("DISTRICT_GOVERNOR", district);
+      check(await review(await experience("dist_treasurer", district)), 403);
+      await grant("DISTRICT_CABINET", district);
+      check(await review(await experience("dist_gmt_coordinator", district)), 403);
     });
     await t.test("revoked/future/expired or malformed grants cannot review a previously loaded row", async () => {
       const row = await experience("club_secretary");

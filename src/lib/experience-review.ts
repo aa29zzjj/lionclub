@@ -17,12 +17,13 @@ export const EXPERIENCE_REVIEW_MATRIX: readonly ReviewRule[] = [
   { codes: ["zone_chair", "zone_secretary", "zone_treasurer"], kind: "position", level: "zone", scopeLevel: "region", parent: true, roles: ["REGION_ADMIN"], label: "直屬專區有效授權者核實分區職務" },
   { codes: ["zone_advisory"], kind: "advisor", level: "zone", scopeLevel: "region", parent: true, roles: ["REGION_ADMIN"], label: "直屬專區有效授權者核實分區顧問" },
   { codes: ["region_vice_chair", "region_secretary", "region_treasurer"], kind: "position", level: "region", scopeLevel: "district", parent: true, roles: ["DISTRICT_ADMIN", "DISTRICT_GOVERNOR"], label: "直屬區有效授權者核實專區職務" },
-  // Tom 2026-10-20 要求：專區主席改由（直屬區）GMT／GLT／GST 協調長共用的區內閣角色核實，疊加既有的區管理者／總監權限，不取代。
-  { codes: ["region_chair"], kind: "position", level: "region", scopeLevel: "district", parent: true, roles: ["DISTRICT_ADMIN", "DISTRICT_GOVERNOR", "DISTRICT_CABINET"], label: "直屬區有效授權者（含 GMT／GLT／GST 協調長）核實專區主席" },
+  // Platform policy 2026-10-20: only an explicitly granted GMT reviewer may verify
+  // a directly attached region chair. Cabinet/GLT/GST/title/experience are not grants.
+  { codes: ["region_chair"], kind: "position", level: "region", scopeLevel: "district", parent: true, roles: ["DISTRICT_GMT_COORDINATOR"], label: "直屬區有效 GMT 專用審核授權者核實專區主席" },
   { codes: ["region_advisor"], kind: "advisor", level: "region", scopeLevel: "district", parent: true, roles: ["DISTRICT_ADMIN", "DISTRICT_GOVERNOR"], label: "直屬區有效授權者核實專區顧問" },
   { codes: ["dist_deputy_secretary", "dist_treasurer", "dist_deputy_treasurer", "dist_general_affairs", "dist_pr_chair", "dist_information"], kind: "position", level: "district", scopeLevel: "district", parent: false, roles: ["DISTRICT_SECRETARY"], label: "同區秘書長核實區內閣職務" },
   { codes: ["dist_special_advisor"], kind: "advisor", level: "district", scopeLevel: "district", parent: false, roles: ["DISTRICT_SECRETARY"], label: "同區秘書長核實區特別顧問" },
-  { codes: ["dist_gmt_coordinator", "dist_glt_coordinator", "dist_gst_coordinator"], kind: "position", level: "district", scopeLevel: "district", parent: false, roles: ["DISTRICT_CABINET"], label: "同區有效區內閣授權者核實 GMT／GLT／GST 協調長" },
+  { codes: ["dist_gmt_coordinator", "dist_glt_coordinator", "dist_gst_coordinator"], kind: "position", level: "district", scopeLevel: "district", parent: false, roles: ["DISTRICT_SECRETARY"], label: "同區秘書長核實 GMT／GLT／GST 區內閣職務" },
   { codes: ["dist_secretary"], kind: "position", level: "district", scopeLevel: "district", parent: false, roles: ["DISTRICT_GOVERNOR"], label: "同區總監核實秘書長" },
   { codes: ["dist_governor", "dist_vdg1", "dist_vdg2"], kind: "position", level: "district", scopeLevel: "md", parent: true, roles: ["MULTIDISTRICT_ADMIN"], label: "直屬複合區有效授權者核實總監／副總監" },
   { codes: ["dist_honor_governor", "dist_honor_vdg"], kind: "honorary", level: "district", scopeLevel: "md", parent: true, roles: ["MULTIDISTRICT_ADMIN"], label: "直屬複合區有效授權者核實榮譽總監／副總監" },
@@ -54,11 +55,11 @@ function validHierarchy(org: ReviewOrganization, organizations: ReadonlyMap<stri
   return false;
 }
 function isGlobal(grant: ReviewGrant, now: Date) {
-  return grant.role === "SUPER_ADMIN" && grant.scopeType.toLowerCase() === "global" && grant.scopeId === null && isActiveAdminRole(grant, now);
+  return grant.role === "SUPER_ADMIN" && grant.scopeType === "GLOBAL" && grant.scopeId === null && isActiveAdminRole(grant, now);
 }
 function matchesGrant(grant: ReviewGrant, rule: ReviewRule, scope: ReviewOrganization, now: Date) {
   return rule.roles.includes(grant.role) && isActiveAdminRole(grant, now) && grant.scopeId === scope.id &&
-    grant.scopeType.toLowerCase() === rule.scopeLevel && scope.level === rule.scopeLevel;
+    grant.scopeType === rule.scopeLevel && scope.level === rule.scopeLevel;
 }
 export function resolveExperienceOrganization(target: ReviewTarget, organizations: ReviewOrganization[]) {
   const matches = organizations.filter(org => org.level === target.level && org.name === target.organizationName.trim() &&

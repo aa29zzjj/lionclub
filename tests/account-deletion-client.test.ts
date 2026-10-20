@@ -59,3 +59,13 @@ test("empty passwords never send and Retry-After remains visible without an auto
   const result = await deleteOwnAccount("synthetic-password", async () => json({ error: "稍後再試" }, 429, { "Retry-After": "60" }));
   assert.deepEqual(result, { kind: "rejected", status: 429, message: "稍後再試", retryAfterSeconds: 60 });
 });
+
+test("federated deletion sends no browser identity or token and still needs explicit successful completion", async () => {
+  let calls = 0;
+  const result = await deleteOwnAccount("", async (url, init) => {
+    calls++; assert.equal(url, "/api/me/account-deletion"); assert.deepEqual(JSON.parse(String(init?.body)), {});
+    assert.equal(init?.credentials, "same-origin");
+    return json({ ok: true, accountDeleted: true, cleanupPending: false });
+  }, { federatedReauthenticated: true });
+  assert.equal(calls, 1); assert.deepEqual(result, { kind: "deleted", cleanupPending: false });
+});

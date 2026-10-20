@@ -13,7 +13,9 @@ test("isolated real-route / real-SQL acceptance", { timeout: 180000 }, async t =
     const chair = await login(sim, s.chair), member = await login(sim, s.member), friend = await login(sim, s.friend);
     await t.test("QR required, immediate intake registration, captured mail and one-use verification", async () => {
       const jar = sim.jar();
-      const body = { name: "模擬來賓", email: "new@example.test", password: s.password, organizationId: s.ai.id };
+      const body = { name: "模擬來賓", email: "new@example.test", password: s.password, organizationId: s.ai.id, privacyConsent: true, termsConsent: true };
+      status(await sim.call("/api/auth/register", "POST", { ...body, token: s.invite.token, privacyConsent: false }, jar), 400);
+      status(await sim.call("/api/auth/register", "POST", { ...body, token: s.invite.token, termsConsent: false }, jar), 400);
       status(await sim.call("/api/auth/register", "POST", body, jar), 400);
       const registered = status(await sim.call("/api/auth/register", "POST", { ...body, token: s.invite.token }, jar), 200);
       assert.equal(registered.organizationAssignmentStatus, "NEEDS_ASSIGNMENT"); assert.equal(registered.canLogin, true);
@@ -35,7 +37,7 @@ test("isolated real-route / real-SQL acceptance", { timeout: 180000 }, async t =
       status(await sim.call("/api/auth/verify-email", "POST", { token: tokenIn(sim.inbox.at(-1)) }), 200);
     });
     await t.test("same banquet IP supports twelve distinct registrations, retains rate protection", async () => {
-      for (let i = 0; i < 12; i++) status(await sim.call("/api/auth/register", "POST", { name: `來賓${i}`, email: `banquet-${i}@example.test`, password: s.password, token: s.invite.token }, sim.jar(), { ip: "192.0.2.33" }), 200);
+      for (let i = 0; i < 12; i++) status(await sim.call("/api/auth/register", "POST", { name: `來賓${i}`, email: `banquet-${i}@example.test`, password: s.password, token: s.invite.token, privacyConsent: true, termsConsent: true }, sim.jar(), { ip: "192.0.2.33" }), 200);
       const { consumeRateLimit } = sim.load("src/lib/rate-limit.ts");
       assert.equal(typeof consumeRateLimit, "function");
       const now = new Date();
@@ -173,6 +175,9 @@ test("isolated real-route / real-SQL acceptance", { timeout: 180000 }, async t =
     await t.test("event create/edit routes enforce origin, input, live capacity and owner permission", async () => {
       const body = { title: "真路由建立模擬活動", location: "合成地點", startAt: "2026-11-01T04:00:00.000Z", capacity: 2 };
       status(await sim.call("/api/events", "POST", body, chair, { origin: null }), 403);
+      const gated = await sim.call("/api/events", "POST", body, chair);
+      status(gated, 403); assert.equal(gated.data.code, "TERMS_REQUIRED");
+      status(await sim.call("/api/me/terms-consent", "POST", { accept: true }, chair), 200);
       status(await sim.call("/api/events", "POST", { ...body, startAt: "invalid" }, chair), 400);
       const created = status(await sim.call("/api/events", "POST", body, chair), 200);
       const path = `/api/events/${created.eventId}`;

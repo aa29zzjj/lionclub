@@ -21,7 +21,7 @@ const require = createRequire(join(ROOT, "package.json"));
 const ts = require("typescript");
 const ORIGIN = "https://simulation.example.test";
 
-export async function createSimulation({ beforeFinalMigration, environment = {} } = {}) {
+export async function createSimulation({ beforeFinalMigration, environment = {}, fetcher = async () => { throw Error("External network forbidden in simulation"); } } = {}) {
   const database = await PGlite.create();
   const folders = readdirSync(join(ROOT, "prisma/migrations")).filter(name => /^\d/.test(name)).sort();
   for (const folder of folders) {
@@ -81,7 +81,8 @@ export async function createSimulation({ beforeFinalMigration, environment = {} 
     }
     vm.runInNewContext(code, {
       module, exports: module.exports, require: dependency, process: { env }, console,
-      Buffer, TextEncoder, TextDecoder, URL, URLSearchParams, Date, Request, Response,
+      Buffer, TextEncoder, TextDecoder, URL, URLSearchParams, Date, Request, Response, Headers,
+      AbortController, AbortSignal, fetch: fetcher,
       crypto: crypto.webcrypto, setTimeout, clearTimeout,
     }, { filename: absolute });
     return module.exports;
@@ -91,16 +92,17 @@ export async function createSimulation({ beforeFinalMigration, environment = {} 
     const { NextRequest } = require("next/server");
     const headers = new Headers({ "x-forwarded-for": options.ip ?? "192.0.2.1" });
     if (!["GET", "HEAD"].includes(method)) {
-      headers.set("Content-Type", "application/json");
+      headers.set("Content-Type", options.contentType ?? "application/json");
       if (options.origin !== null) headers.set("Origin", options.origin ?? ORIGIN);
     }
-    const request = new NextRequest(new URL(path, ORIGIN), { method, headers, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+    const request = new NextRequest(new URL(path, ORIGIN), { method, headers, ...(body !== undefined ? { body: options.contentType === "application/x-www-form-urlencoded" ? String(body) : JSON.stringify(body) } : {}) });
     const route = resolveRoute(path);
     const handler = load(`src/app/api/${route.file}/route.ts`)[method];
     if (!handler) return { status: 405, data: { error: "Method not implemented" } };
     return context.run({ jar: cookieJar, cookieOptions: cookieJar.options ?? new Map() }, async () => {
       const response = await handler(request, { params: Promise.resolve(route.params) });
-      return { status: response.status, data: await response.json(), headers: response.headers, jar: cookieJar };
+      const data = response.headers.get("Content-Type")?.includes("application/json") ? await response.json() : null;
+      return { status: response.status, data, headers: response.headers, jar: cookieJar };
     });
   }
   return { database, prisma, env, control, inbox, load, call, jar, origin: ORIGIN,
@@ -112,6 +114,7 @@ function resolveRoute(path) {
   const pathname = new URL(path, ORIGIN).pathname.replace(/^\/api\//, "");
   if (existsSync(join(ROOT, "src/app/api", pathname, "route.ts"))) return { file: pathname, params: {} };
   const candidates = [
+    [/^auth\/oauth\/([^/]+)\/(start|callback)$/, m => ({ file: `auth/oauth/[provider]/${m[2]}`, params: { provider: m[1] } })],
     [/^events\/([^/]+)\/(check-in|register|registrations)$/, m => ({ file: `events/[id]/${m[2]}`, params: { id: m[1] } })],
     [/^events\/([^/]+)$/, m => ({ file: "events/[id]", params: { id: m[1] } })],
     [/^members\/([^/]+)\/(block|report)$/, m => ({ file: `members/[memberId]/${m[2]}`, params: { memberId: m[1] } })],

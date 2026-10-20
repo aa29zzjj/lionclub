@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { EXPERIENCE_REVIEW_MATRIX, experienceReviewCandidateWhere, experienceReviewDecision, type ExperienceReviewContext, type ReviewGrant, type ReviewOrganization, type ReviewTarget } from "../src/lib/experience-review";
-import { currentExperienceLabel, isVerifiedCurrentPosition, positionOptions, type MemberExperience } from "../src/lib/experience-data";
+import { currentExperienceLabel, formatLionsYear, isVerifiedCurrentPosition, positionOptions, shortPositionLabel, type MemberExperience } from "../src/lib/experience-data";
 
 const now = new Date("2026-10-15T00:00:00Z");
 const past = new Date("2020-01-01"), future = new Date("2100-01-01");
@@ -26,17 +26,22 @@ test("district roles never imply blanket descendant or all-cabinet review author
   assert.equal(experienceReviewDecision(context(grant("DISTRICT_ADMIN", "district")), target()).allowed, false);
   assert.equal(experienceReviewDecision(context(grant("DISTRICT_GOVERNOR", "district")), target("club_president")).allowed, false);
   assert.equal(experienceReviewDecision(context(grant("DISTRICT_SECRETARY", "district")), target("zone_chair", "zone")).allowed, false);
-  assert.equal(experienceReviewDecision(context(grant("DISTRICT_CABINET", "district")), target("dist_gmt_coordinator", "district")).allowed, true);
+  assert.equal(experienceReviewDecision(context(grant("DISTRICT_CABINET", "district")), target("dist_gmt_coordinator", "district")).allowed, false);
+  assert.equal(experienceReviewDecision(context(grant("DISTRICT_SECRETARY", "district")), target("dist_gmt_coordinator", "district")).allowed, true);
   assert.equal(experienceReviewDecision(context(grant("DISTRICT_CABINET", "district")), target("dist_treasurer", "district")).allowed, false);
   assert.equal(experienceReviewDecision(context(grant("DISTRICT_CABINET", "district")), target("dist_secretary", "district")).allowed, false);
   assert.equal(experienceReviewDecision(context(grant("CLUB_PRESIDENT", "club")), target("club_president")).allowed, false);
 });
 
-test("region chair review is shared by district admin/governor and the district cabinet (GMT/GLT/GST), but not other region positions", () => {
+test("only a separate effective GMT grant reviews the directly attached region chair", () => {
   const chair = target("region_chair", "region");
-  assert.equal(experienceReviewDecision(context(grant("DISTRICT_ADMIN", "district")), chair).allowed, true);
-  assert.equal(experienceReviewDecision(context(grant("DISTRICT_GOVERNOR", "district")), chair).allowed, true);
-  assert.equal(experienceReviewDecision(context(grant("DISTRICT_CABINET", "district")), chair).allowed, true);
+  for (const role of ["DISTRICT_ADMIN", "DISTRICT_GOVERNOR", "DISTRICT_SECRETARY", "DISTRICT_CABINET", "DISTRICT_GLT_COORDINATOR", "DISTRICT_GST_COORDINATOR", "MULTIDISTRICT_ADMIN"]) assert.equal(experienceReviewDecision(context(grant(role, "district")), chair).allowed, false, role);
+  assert.equal(experienceReviewDecision(context(grant("DISTRICT_GMT_COORDINATOR", "district")), chair).allowed, true);
+  assert.equal(experienceReviewDecision(context(grant("DISTRICT_GMT_COORDINATOR", "region", "district")), chair).allowed, false);
+  assert.equal(experienceReviewDecision(context({ ...grant("DISTRICT_GMT_COORDINATOR", "district"), validUntil: now }), chair).allowed, false);
+  assert.equal(experienceReviewDecision(context({ ...grant("DISTRICT_GMT_COORDINATOR", "district"), validFrom: future }), chair).allowed, false);
+  assert.equal(experienceReviewDecision(context(grant("DISTRICT_GMT_COORDINATOR", "district")), target("zone_chair", "zone")).allowed, false);
+  assert.equal(experienceReviewDecision(context(grant("DISTRICT_GMT_COORDINATOR", "district")), target("club_president")).allowed, false);
   const otherRegionPosition = target("region_secretary", "region");
   assert.equal(experienceReviewDecision(context(grant("DISTRICT_CABINET", "district")), otherRegionPosition).allowed, false);
   assert.equal(experienceReviewDecision(context(grant("DISTRICT_ADMIN", "district")), otherRegionPosition).allowed, true);
@@ -105,6 +110,19 @@ test("verified-year badge needs verified known position and July interval, not t
 
 test("founder/charter member and mentor/guiding lion remain distinct codes and labels", () => {
   const labels = ["club_founder", "club_charter_member", "club_mentor", "club_guiding_lion"].map(code => positionOptions.find(option => option.code === code)?.label);
-  assert.deepEqual(labels, ["創會人", "創會員", "導師", "導獅"]);
+  assert.deepEqual(labels, ["創會人", "創會會員", "導師", "導獅"]);
   assert.equal(new Set(positionOptions.map(option => option.code)).size, positionOptions.length);
+});
+
+test("stable office codes get clear canonical labels, vice abbreviations and historical years", () => {
+  assert.equal(shortPositionLabel("club_vp1", "一副"), "第一副");
+  assert.equal(shortPositionLabel("club_vp2", "二副"), "第二副");
+  assert.equal(shortPositionLabel("club_founder_president", "舊標示"), "創會長（首屆會長）");
+  assert.equal(shortPositionLabel("club_honor_president", "榮譽會長"), "分會榮譽會長");
+  assert.equal(shortPositionLabel("dist_honor_vdg", "舊標示"), "榮譽副總監");
+  assert.equal(shortPositionLabel("unknown", "自訂職務"), "自訂職務");
+  const historical = { ...experience, startYear: 2024, endYear: 2025, isCurrent: true };
+  assert.equal(currentExperienceLabel(historical, now), "歷任職務（已核實）");
+  assert.match(formatLionsYear(historical), /2024.*2025.*2026/);
+  assert.equal(isVerifiedCurrentPosition(historical, now), false);
 });

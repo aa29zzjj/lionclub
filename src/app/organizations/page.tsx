@@ -13,6 +13,7 @@ type OrgNode = {
   districtCode?: string | null;
   hasChildren: boolean;
   officers: { positionName: string; personName: string }[];
+  officersTruncated?: boolean;
 };
 
 const levelLabel = (level: OrganizationLevel) => organizationLevelOptions.find((o) => o.value === level)?.label ?? level;
@@ -65,6 +66,7 @@ function TreeNode({ node, depth }: { node: OrgNode; depth: number }) {
               {node.officers.map((o) => `${o.positionName} ${o.personName}`).join("、")}
             </p>
           )}
+          {node.officersTruncated && <p className="text-xs text-lion-muted">僅顯示有界部分名單；不是完整名冊下載。</p>}
         </div>
       </button>
       {loading && <p className="text-xs text-lion-muted pl-6 pb-2">載入中…</p>}
@@ -82,6 +84,7 @@ export default function OrganizationsPage() {
   const [roots, setRoots] = useState<OrgNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [directoryMessage, setDirectoryMessage] = useState("待營運者確認名冊揭露授權；目前僅提供組織架構。");
 
   useEffect(() => {
     let active = true;
@@ -90,7 +93,7 @@ export default function OrganizationsPage() {
         if (res.status === 401) { router.replace("/login"); return; }
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error ?? "載入失敗");
-        if (active) setRoots(data.organizations ?? []);
+        if (active) { setRoots(data.organizations ?? []); setDirectoryMessage(data.directory?.message ?? "待營運者確認名冊揭露授權"); }
       })
       .catch((e) => { if (active) setError(e instanceof Error ? e.message : "載入失敗"); })
       .finally(() => { if (active) setLoading(false); });
@@ -102,7 +105,8 @@ export default function OrganizationsPage() {
       <div className="px-5 pt-6 pb-8">
         <button onClick={() => router.back()} className="min-h-12 text-base text-lion-muted mb-2">← 返回</button>
         <h1 className="text-xl font-bold mb-1">組織架構與幹部名單</h1>
-        <p className="text-sm text-lion-muted mb-4">從複合區往下展開，可以看到各層級的分會、專區、分區，以及本年度在任的幹部。</p>
+        <p className="text-sm text-lion-muted mb-3">從複合區往下展開，查看區、專區、分區與分會。名冊列載、本人資歷核實與管理授權分開處理。</p>
+        <p className="mb-4 rounded-xl border border-lion-border bg-lion-card p-3 text-sm text-lion-muted">{directoryMessage}</p>
 
         {loading && <p role="status" className="text-base text-lion-muted text-center py-8">載入中…</p>}
         {error && <p role="alert" className="text-base text-lion-danger text-center py-8">{error}</p>}

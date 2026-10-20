@@ -3,83 +3,88 @@ import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
-import { bareClubName, findAnnualAppointmentSuggestions } from "@/lib/annual-appointment-match";
+import { findAnnualAppointmentSuggestions, RosterMatchError } from "@/lib/annual-appointment-match";
 import { serializeExperience } from "@/lib/member-experience";
+import { isRosterSchemaUnavailable, RosterConsentError } from "@/lib/roster-consent";
+import { positionOptions } from "@/lib/experience-data";
 
-const listingNatureKind: Record<string, "position" | "honorary"> = {
-  "現任職務": "position",
-  "歷任列載": "position",
-  "榮譽列載": "honorary",
-};
+const response = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { "Cache-Control": "no-store" } });
+function failure(error: unknown) {
+  if (error instanceof RosterConsentError || error instanceof RosterMatchError) return response({ error: error.message, code: error.code }, error.status);
+  if (isRosterSchemaUnavailable(error)) return response({ error: "名冊功能尚未完成部署，請稍後重試；仍可手動填寫資歷。", code: "ROSTER_MATCH_UNAVAILABLE" }, 503);
+  if (error && typeof error === "object" && "code" in error && ["P2034", "P2002", "P2003"].includes(String(error.code))) return response({ error: "名冊、同意或帳號狀態已更新，請重新載入後核對。", code: "ROSTER_MATCH_CHANGED" }, 409);
+  return null;
+}
 
 export async function GET() {
   const me = await getCurrentMember();
-  if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
-
-  const prisma = await getPrisma();
-  const suggestions = await findAnnualAppointmentSuggestions(prisma, { name: me.name, organizationName: me.organization.name });
-
-  return NextResponse.json({
-    suggestions: suggestions.map((s) => ({
-      id: s.id,
-      positionName: s.positionName,
-      listingNature: s.listingNature,
-      sourcePage: s.sourcePage,
-      yearStart: s.yearStart,
-      organizationName: s.organization.name,
-    })),
-  });
+  if (!me) return response({ error: "未登入" }, 401);
+  try {
+    const prisma = await getPrisma();
+    const result = await prisma.$transaction(tx => findAnnualAppointmentSuggestions(tx, { memberId: me.id }), { isolationLevel: "RepeatableRead" });
+    return response({ ...result, suggestions: result.suggestions.map(s => ({
+      id: s.id, positionName: s.positionName, listingNature: s.listingNature, sourcePage: s.sourcePage,
+      sourceRosterYear: s.yearStart, organizationName: s.organization.name, requiresActualYears: s.listingNature !== "現任職務",
+    })) });
+  } catch (error) {
+    if (error instanceof RosterConsentError && error.code === "ROSTER_CONSENT_REQUIRED") return response({ consentRequired: true, matchStatus: "consent_required", canImport: false, suggestions: [] });
+    const result = failure(error); if (result) return result; throw error;
+  }
 }
 
-const claimSchema = z.object({ appointmentId: z.string().trim().min(1).max(200) });
+const claimSchema = z.object({ appointmentId: z.string().trim().min(1).max(200), confirmOwnRecord: z.literal(true),
+  actualStartYear: z.number().int().min(1917).max(2200).optional(), actualEndYear: z.number().int().min(1917).max(2200).optional(),
+  confirmHistoricalYears: z.literal(true).optional(),
+});
 
 export async function POST(request: NextRequest) {
-  if (!isTrustedBrowserMutation(request)) return NextResponse.json({ error: "請從網站操作" }, { status: 403 });
+  if (!isTrustedBrowserMutation(request)) return response({ error: "請從網站操作" }, 403);
   const me = await getCurrentMember();
-  if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
+  if (!me) return response({ error: "未登入" }, 401);
 
   const parsed = claimSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "欄位格式錯誤" }, { status: 400 });
+  if (!parsed.success) return response({ error: "請明確確認這是本人的任職資料，並以正確格式填寫。" }, 400);
 
   const prisma = await getPrisma();
   try {
     const experience = await prisma.$transaction(async (tx) => {
-      const actor = await tx.member.findFirst({ where: { id: me.id, status: "ACTIVE", deletedAt: null }, select: { id: true, name: true, organization: { select: { name: true } } } });
-      if (!actor) throw new Error("ACCOUNT_CHANGED");
-
-      const appointment = await tx.annualAppointment.findUnique({
-        where: { id: parsed.data.appointmentId },
-        include: { organization: { select: { id: true, name: true, level: true } }, claimedByExperience: { select: { id: true } } },
-      });
-      if (!appointment || appointment.claimedByExperience) throw new Error("NOT_FOUND");
-      // Re-verify the match server-side; never trust the client's appointmentId alone.
-      if (appointment.personName !== actor.name || appointment.homeClubSourceName !== bareClubName(actor.organization.name)) throw new Error("NOT_FOUND");
-
-      const kind = listingNatureKind[appointment.listingNature] ?? "position";
+      const matches = await findAnnualAppointmentSuggestions(tx, { memberId: me.id });
+      if (!matches.canImport) throw new RosterMatchError(409, "ROSTER_CANDIDATE_ONLY", "分會歸屬或資料尚待唯一核對；候選資料不能直接認領，仍可自行手填資歷。");
+      const appointment = matches.suggestions.find(row => row.id === parsed.data.appointmentId);
+      if (!appointment) throw new RosterMatchError(404, "ROSTER_SUGGESTION_NOT_FOUND", "找不到可帶入的本人名冊建議；資料可能已更新或已帶入。");
+      const historical = appointment.listingNature !== "現任職務";
+      if (historical && (parsed.data.confirmHistoricalYears !== true || parsed.data.actualStartYear === undefined || parsed.data.actualEndYear === undefined ||
+        parsed.data.actualEndYear < parsed.data.actualStartYear || parsed.data.actualEndYear > appointment.yearStart)) {
+        throw new RosterMatchError(400, "ACTUAL_TERM_REQUIRED", "歷任／榮譽名冊年度不是實際任期；請自行確認並填寫實際開始、最後任期年度，不確定時不要帶入。");
+      }
+      if (!historical && (parsed.data.actualStartYear !== undefined || parsed.data.actualEndYear !== undefined)) throw new RosterMatchError(400, "SOURCE_TERM_MISMATCH", "本年度列載使用來源年度；不能以帶入參數改寫來源。");
+      const startYear = historical ? parsed.data.actualStartYear! : appointment.yearStart;
+      const endYear = historical ? parsed.data.actualEndYear! : appointment.yearStart;
+      const positions = positionOptions.filter(option => option.label === appointment.positionName && option.level === appointment.organization.level);
+      const known = positions.length === 1 ? positions[0] : null;
+      const kind = known?.kind ?? (appointment.listingNature === "榮譽列載" ? "honorary" : "position");
       return tx.memberExperience.create({
         data: {
           memberId: me.id,
           kind,
           level: appointment.organization.level,
-          positionCode: appointment.positionName,
+          positionCode: known?.code ?? appointment.positionName,
           organizationId: appointment.organization.id,
           organizationName: appointment.organization.name,
           organizationIsUnlisted: false,
-          startYear: appointment.yearStart,
+          districtCode: appointment.organization.districtCode,
+          startYear, endYear,
           datePrecision: "lions_year",
           isCurrent: appointment.listingNature === "現任職務",
-          verificationStatus: "self_declared",
-          visibility: "members",
-          note: `來自 ${appointment.yearStart}-${appointment.yearStart + 1} 年度核定名冊（第 ${appointment.sourcePage} 頁），帶入後仍須依平台核實分工審核。`,
+          verificationStatus: "under_review", visibility: "only_me", verifiedById: null, verifiedAt: null,
+          note: `本人確認帶入：${appointment.yearStart}-${appointment.yearStart + 1} 年度核定名冊第 ${appointment.sourcePage} 頁；原文職稱「${appointment.positionName}」，列載性質「${appointment.listingNature}」。${historical ? `來源年度僅為列載年度；實際任期 ${startYear}-${endYear + 1} 由本人另行填寫，未核實。` : "任期依本年度現任列載帶入，仍未核實。"}姓名與分會比對不是身分或管理授權驗證。`,
           sourceAppointmentId: appointment.id,
         },
       });
-    });
-    return NextResponse.json({ experience: serializeExperience(experience) }, { status: 201 });
+    }, { isolationLevel: "Serializable" });
+    return response({ experience: serializeExperience(experience) }, 201);
   } catch (error) {
-    if (error instanceof Error && error.message === "NOT_FOUND") return NextResponse.json({ error: "找不到此筆名冊建議，可能已被帶入或資料已更新" }, { status: 404 });
-    if (error instanceof Error && error.message === "ACCOUNT_CHANGED") return NextResponse.json({ error: "帳號已更新，請重新登入" }, { status: 409 });
-    if (error && typeof error === "object" && "code" in error && error.code === "P2002") return NextResponse.json({ error: "此筆名冊建議已被帶入" }, { status: 409 });
+    const result = failure(error); if (result) return result;
     throw error;
   }
 }

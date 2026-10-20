@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
+import RosterConsentPanel from "@/components/RosterConsentPanel";
 import { getClubDirectory, isClubInDistrictDirectory } from "@/lib/club-directory";
 import { organizationDisplayName } from "@/lib/organization-label";
 import { formatLionYear, formatLionYearDateRange, getCurrentLionYearStart, getLionYearStart } from "@/lib/lion-year";
@@ -56,8 +57,9 @@ type AnnualAppointmentSuggestion = {
   positionName: string;
   listingNature: string;
   sourcePage: string;
-  yearStart: number;
+  sourceRosterYear: number;
   organizationName: string;
+  requiresActualYears: boolean;
 };
 
 const currentYear = new Date().getFullYear();
@@ -124,15 +126,45 @@ export default function ExperiencePage() {
   const [toast, setToast] = useState("");
   const [suggestions, setSuggestions] = useState<AnnualAppointmentSuggestion[]>([]);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [rosterConsentAccepted, setRosterConsentAccepted] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState("");
+  const [matchStatus, setMatchStatus] = useState("");
+  const [canImportSuggestions, setCanImportSuggestions] = useState(false);
+  const [actualTerms, setActualTerms] = useState<Record<string, { start: string; end: string }>>({});
+  const suggestionRequest = useRef(0);
+
+  const loadSuggestions = useCallback(async () => {
+    const request = ++suggestionRequest.current;
+    setSuggestionsLoading(true); setSuggestionsError("");
+    try {
+      const response = await fetch("/api/me/annual-appointment-suggestions", { cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (request !== suggestionRequest.current) return;
+      if (response.status === 401) { router.replace("/login?reason=session-expired"); return; }
+      if (!response.ok) throw Error(data.error ?? "名冊候選暫時無法載入，仍可手填資歷。");
+      setSuggestions(data.suggestions ?? []); setMatchStatus(data.matchStatus ?? ""); setCanImportSuggestions(data.canImport === true);
+      if (data.consentRequired) setRosterConsentAccepted(false);
+    } catch (failure) {
+      if (request !== suggestionRequest.current) return;
+      setSuggestions([]); setCanImportSuggestions(false);
+      setSuggestionsError(failure instanceof TypeError ? "連線中斷，未確認名冊候選；不會自動帶入。" : failure instanceof Error ? failure.message : "名冊候選暫時無法載入。");
+    } finally { if (request === suggestionRequest.current) setSuggestionsLoading(false); }
+  }, [router]);
+  const onRosterConsentChange = useCallback((accepted: boolean) => {
+    ++suggestionRequest.current;
+    setRosterConsentAccepted(accepted); setSuggestions([]); setMatchStatus(""); setSuggestionsError(""); setCanImportSuggestions(false);
+    setSuggestionsLoading(false); setActualTerms({});
+    if (accepted) void loadSuggestions();
+  }, [loadSuggestions]);
 
   useEffect(() => {
     let active = true;
     Promise.all([
       fetch("/api/me", { cache: "no-store" }),
       fetch("/api/me/experiences", { cache: "no-store" }),
-      fetch("/api/me/annual-appointment-suggestions", { cache: "no-store" }),
     ])
-      .then(async ([meResponse, experiencesResponse, suggestionsResponse]) => {
+      .then(async ([meResponse, experiencesResponse]) => {
         if (meResponse.status === 401 || experiencesResponse.status === 401) {
           router.replace("/login");
           return;
@@ -144,10 +176,6 @@ export default function ExperiencePage() {
         if (!active) return;
         setMe(mePayload);
         setExperiences(experiencesPayload.experiences ?? []);
-        if (suggestionsResponse.ok) {
-          const suggestionsPayload = await suggestionsResponse.json();
-          if (active) setSuggestions(suggestionsPayload.suggestions ?? []);
-        }
       })
       .catch((requestError) => {
         if (active) setError(requestError instanceof Error ? requestError.message : "載入失敗");
@@ -161,18 +189,27 @@ export default function ExperiencePage() {
   }, [router]);
 
   async function claimSuggestion(appointmentId: string) {
-    if (claimingId) return;
+    if (claimingId || !rosterConsentAccepted || !canImportSuggestions) return;
+    const suggestion = suggestions.find(row => row.id === appointmentId);
+    if (!suggestion) return;
+    const terms = actualTerms[appointmentId] ?? { start: "", end: "" };
+    if (suggestion.requiresActualYears && (!terms.start || !terms.end || Number(terms.end) < Number(terms.start) || Number(terms.end) > suggestion.sourceRosterYear)) {
+      setSuggestionsError("歷任／榮譽名冊年份不是實際任期；請自行填寫確認的實際起始年與最後任期起始年，不確定時不要帶入。");
+      return;
+    }
+    if (!window.confirm(`請確認「${suggestion.positionName}／${suggestion.organizationName}」確實是您的任職資料。${suggestion.requiresActualYears ? `實際任期 ${terms.start}–${Number(terms.end) + 1} 為您自行確認，` : ""}來源是 ${suggestion.sourceRosterYear}–${suggestion.sourceRosterYear + 1} 名冊；帶入後僅自己可見、待核實，不會取得管理權限。`)) return;
     setClaimingId(appointmentId);
     setError("");
     try {
       const response = await fetch("/api/me/annual-appointment-suggestions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appointmentId }),
+        body: JSON.stringify({ appointmentId, confirmOwnRecord: true, ...(suggestion.requiresActualYears
+          ? { actualStartYear: Number(terms.start), actualEndYear: Number(terms.end), confirmHistoricalYears: true } : {}) }),
       });
       const data = await response.json().catch(() => ({}));
       if (response.status === 401) { router.replace("/login?reason=session-expired"); return; }
-      if (!response.ok) { setError(data.error ?? "帶入失敗，請重新整理後再試"); return; }
+      if (!response.ok) { setSuggestionsError(data.error ?? "帶入失敗，請重新載入後核對"); return; }
       setExperiences((previous) => [...previous, data.experience]);
       setSuggestions((previous) => previous.filter((s) => s.id !== appointmentId));
       setToast(`已帶入「${data.experience.positionName}」，等候核實`);
@@ -792,24 +829,45 @@ export default function ExperiencePage() {
           </form>
         )}
 
-        {suggestions.length > 0 && (
+        <RosterConsentPanel onChange={onRosterConsentChange} />
+
+        {rosterConsentAccepted && (
           <div className="mb-4 rounded-2xl border border-lion-gold/30 bg-lion-gold/5 p-4">
-            <h2 className="font-semibold text-sm">在今年度核定名冊找到你的職務</h2>
-            <p className="text-[11px] text-lion-muted mt-0.5 mb-3">依姓名與分會比對，一鍵帶入後仍為「本人填寫」狀態，需經授權管理者核實。</p>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-semibold text-sm">供本人核對的名冊候選</h2>
+              <button type="button" disabled={suggestionsLoading || !!claimingId} onClick={() => void loadSuggestions()} className="min-h-12 shrink-0 rounded-xl border border-lion-border px-3 text-xs disabled:opacity-50">{suggestionsLoading ? "比對中…" : "重新比對"}</button>
+            </div>
+            <p className="text-xs text-lion-muted mt-1 mb-3 leading-relaxed">姓名與分會相符不等於本人核實。確認帶入後預設僅自己可見、待授權管理者核實，不會建立帳號連結或管理權限。名冊年度是來源出版年度，不一定是歷任任期。</p>
+            {matchStatus === "pending_assignment" && <p role="status" className="mb-3 text-sm text-amber-300">分會尚待確認；目前僅依自填分會提供待核對候選，完成分派前不可認領。仍可手填自己的資歷。</p>}
+            {["ambiguous_organization", "ambiguous_identity", "ambiguous_source_scope", "ambiguous_source_rows", "unresolved_organization", "unresolved_hierarchy"].includes(matchStatus) && <p role="status" className="mb-3 text-sm text-amber-300">分會層級、同名或名冊資料有待釐清，暫不提供帶入；請向管理者確認，或先手填資歷。</p>}
+            {matchStatus === "no_match" && <p role="status" className="mb-3 text-sm text-lion-muted">沒有可安全比對的候選；這不代表沒有任職紀錄，可自行新增。</p>}
+            {suggestionsError && <p role="alert" className="mb-3 text-sm text-lion-danger">{suggestionsError}</p>}
             <div className="flex flex-col gap-2">
               {suggestions.map((s) => (
-                <div key={s.id} className="flex items-center justify-between gap-3 rounded-xl bg-lion-card border border-white/[0.06] px-3 py-2.5">
+                <div key={s.id} className="rounded-xl bg-lion-card border border-white/[0.06] p-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{s.positionName}</p>
-                    <p className="text-[11px] text-lion-muted">{s.organizationName} · {s.yearStart}-{s.yearStart + 1} 年度 · {s.listingNature}</p>
+                    <p className="text-sm font-medium break-words">{s.positionName}</p>
+                    <p className="text-xs text-lion-muted mt-1">{s.organizationName} · 來源 {s.sourceRosterYear}–{s.sourceRosterYear + 1} 年度名冊 · {s.listingNature}</p>
+                    <p className="text-xs text-lion-muted mt-1">來源頁次：{s.sourcePage}</p>
                   </div>
-                  <button
+                  {s.requiresActualYears && canImportSuggestions && <fieldset className="mt-3">
+                    <legend className="text-xs text-lion-muted">請填已知的實際任期；不確定時請勿帶入。每年度為 7/1 至隔年 6/30。</legend>
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {(["start", "end"] as const).map(key => <label key={key} className="text-xs text-lion-muted">{key === "start" ? "第一個任期年度" : "最後任期年度（起始年）"}
+                        <select value={actualTerms[s.id]?.[key] ?? ""} onChange={event => setActualTerms(previous => ({ ...previous, [s.id]: { start: previous[s.id]?.start ?? "", end: previous[s.id]?.end ?? "", [key]: event.target.value } }))} className="mt-1 min-h-12 w-full rounded-xl border border-lion-border bg-lion-card px-3 text-sm text-lion-cream">
+                          <option value="">請自行確認，不預設年份</option>
+                          {yearOptions.filter(year => year <= s.sourceRosterYear).map(year => <option key={year} value={year}>{formatLionYear(year)}</option>)}
+                        </select>
+                      </label>)}
+                    </div>
+                  </fieldset>}
+                  {canImportSuggestions && <button type="button"
                     onClick={() => claimSuggestion(s.id)}
-                    disabled={claimingId === s.id}
-                    className="shrink-0 min-h-10 rounded-xl bg-lion-action px-3 text-xs font-semibold text-lion-navyDeep disabled:opacity-50"
+                    disabled={!!claimingId || suggestionsLoading}
+                    className="mt-3 min-h-12 rounded-xl bg-lion-action px-3 text-xs font-semibold text-lion-navyDeep disabled:opacity-50"
                   >
-                    {claimingId === s.id ? "帶入中…" : "加入我的資歷"}
-                  </button>
+                    {claimingId === s.id ? "帶入中…" : "確認本人並帶入待核實草稿"}
+                  </button>}
                 </div>
               ))}
             </div>

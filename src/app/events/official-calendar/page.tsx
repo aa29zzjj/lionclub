@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { PinIcon } from "@/components/icons";
+import { currentMembershipCalendarYear, membershipCalendarRange } from "@/lib/district-calendar";
 
 type OfficialEvent = {
   id: string;
@@ -33,45 +34,56 @@ export default function OfficialCalendarPage() {
   const [events, setEvents] = useState<OfficialEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [year, setYear] = useState(() => currentMembershipCalendarYear());
+  const [checkedAt, setCheckedAt] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
-  const loadEvents = useCallback(async () => {
+  const loadEvents = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
     setLoadError("");
+    setEvents([]);
     try {
-      const res = await fetch("/api/events/official-calendar", { cache: "no-store" });
+      const range = membershipCalendarRange(year);
+      const res = await fetch(`/api/events/official-calendar?from=${range.from}&to=${range.to}`, { cache: "no-store", signal });
       const data = await res.json().catch(() => ({}));
+      if (signal.aborted) return;
       if (res.status === 401) { router.replace("/login?reason=session-expired"); return; }
       if (!res.ok) throw new Error(data.error ?? "無法載入官方行事曆");
       setEvents(data.events ?? []);
+      setCheckedAt(typeof data.checkedAt === "string" ? data.checkedAt : "");
     } catch (error) {
+      if (signal.aborted) return;
       setLoadError(error instanceof Error && !(error instanceof TypeError) ? error.message : "連線中斷，請重試");
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
-  }, [router]);
+  }, [router, year]);
 
-  useEffect(() => { void loadEvents(); }, [loadEvents]);
+  useEffect(() => { const controller = new AbortController(); void loadEvents(controller.signal); return () => controller.abort(); }, [loadEvents, attempt]);
 
   return (
     <AppShell>
       <div className="px-5 pt-6 pb-8">
         <button onClick={() => router.back()} className="min-h-12 text-base text-lion-muted mb-2">← 返回</button>
-        <h1 className="text-xl font-bold mb-1">300A1 區官方行事曆</h1>
+        <h1 className="text-xl font-bold mb-1">300A-1 區官方行事曆</h1>
         <p className="text-sm text-lion-muted mb-4">
-          直接讀取國際獅子會 300A1 區官網的公開行事曆（未來 60 天），僅供查看；報名與詳情請至
+          讀取國際獅子會 300A-1 區官網的公開行事曆，僅供查看；報名與詳情請至
           <a href="https://www.300a1.org.tw/Activity/Calendar" target="_blank" rel="noreferrer" className="text-lion-gold underline mx-1">官方網站</a>
           確認，不是本平台發布的活動。
         </p>
+        <label htmlFor="official-calendar-year" className="mb-1 block text-sm font-medium">會籍年度（7 月至翌年 6 月）</label>
+        <div className="mb-3 flex gap-2"><select id="official-calendar-year" value={year} onChange={(event) => setYear(Number(event.target.value))} className="min-h-12 min-w-0 flex-1 rounded-xl border border-lion-border bg-lion-card px-3 text-base">{[-2, -1, 0, 1].map((offset) => { const y = currentMembershipCalendarYear() + offset; return <option key={y} value={y}>{y}–{y + 1}</option>; })}</select><button type="button" disabled={loading} onClick={() => setAttempt((value) => value + 1)} className="min-h-12 rounded-xl border border-lion-border px-3 text-sm disabled:opacity-50">重新查詢</button></div>
+        <p className="mb-4 text-xs leading-relaxed text-lion-muted">重新開啟或查詢時讀取最新可用快取（最多 10 分鐘）。不在背景推播、不自動報名，也不寫入本平台活動。{checkedAt && !loading && !loadError ? `查詢時間：${new Date(checkedAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}（台灣時間，非官網修改時間）。` : ""}</p>
 
         {loading && <p role="status" className="text-base text-lion-muted text-center py-8">載入中…</p>}
         {loadError && (
           <div role="alert" className="rounded-xl border border-lion-danger/40 bg-lion-card p-4">
             <p className="text-base text-lion-danger">{loadError}</p>
-            <button type="button" onClick={() => void loadEvents()} disabled={loading} className="mt-3 min-h-12 rounded-xl bg-lion-action px-5 text-base font-semibold text-lion-navyDeep disabled:opacity-50">重新載入</button>
+            <button type="button" onClick={() => setAttempt((value) => value + 1)} disabled={loading} className="mt-3 min-h-12 rounded-xl bg-lion-action px-5 text-base font-semibold text-lion-navyDeep disabled:opacity-50">重新載入</button>
           </div>
         )}
         {!loading && !loadError && events.length === 0 && (
-          <p className="text-base text-lion-muted text-center py-8">未來 60 天內官方行事曆沒有資料</p>
+          <p className="text-base text-lion-muted text-center py-8">此年度官方行事曆沒有資料</p>
         )}
         {!loading && !loadError && (
           <div className="flex flex-col gap-3">

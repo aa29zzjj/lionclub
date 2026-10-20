@@ -14,14 +14,21 @@ export class AccountDeletionError extends Error {
  */
 export async function anonymizeAccount(
   prisma: PrismaClient,
-  input: { memberId: string; userId: string; expectedPasswordHash: string; bucket?: string; region?: string },
+  input: { memberId: string; userId: string; expectedPasswordHash: string | null; expectedSessionVersion?: number; expectedFederatedIdentities?: { id: string; updatedAt: Date }[]; bucket?: string; region?: string },
 ) {
   if (!/^[A-Za-z0-9_-]{1,200}$/.test(input.memberId)) throw new AccountDeletionError(400, "會員識別格式錯誤");
   try {
     return await prisma.$transaction(async (tx) => {
       const member = await tx.member.findFirst({ where: { id: input.memberId, status: "ACTIVE", deletedAt: null }, select: { id: true } });
-      const user = await tx.user.findFirst({ where: { id: input.userId, memberId: input.memberId, passwordHash: input.expectedPasswordHash }, select: { id: true } });
+      const user = await tx.user.findFirst({ where: { id: input.userId, memberId: input.memberId, passwordHash: input.expectedPasswordHash,
+        ...(input.expectedSessionVersion === undefined ? {} : { sessionVersion: input.expectedSessionVersion }) }, select: { id: true } });
       if (!member || !user) throw new AccountDeletionError(409, "帳號或密碼已變更，請重新登入後操作");
+      if (input.expectedFederatedIdentities !== undefined) {
+        const current = await tx.federatedIdentity.findMany({ where: { userId: input.userId }, select: { id: true, updatedAt: true } });
+        if (current.length !== input.expectedFederatedIdentities.length || current.some(identity => !input.expectedFederatedIdentities!.some(expected => expected.id === identity.id && +expected.updatedAt === +identity.updatedAt))) {
+          throw new AccountDeletionError(409, "第三方帳號連結同時更新，請重新驗證後操作");
+        }
+      }
       const now = new Date();
       // Scheduled future grants also block deletion until another manager revokes them.
       const activeRoles = await tx.adminRole.count({ where: { memberId: input.memberId, OR: [{ validUntil: null }, { validUntil: { gt: now } }] } });

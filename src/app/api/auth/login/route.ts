@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const inputDenial = productionLoginDenial(email, password);
   if (inputDenial) return NextResponse.json({ error: inputDenial.error, code: inputDenial.code }, { status: inputDenial.status });
   const user = await findUserByEmail(prisma, email);
-  if (!user || productionLoginDenial(email, password, user)) {
+  if (!user || !user.passwordHash || productionLoginDenial(email, password, user)) {
     return NextResponse.json({ error: "帳號或密碼錯誤" }, { status: 401 });
   }
 

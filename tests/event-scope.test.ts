@@ -90,10 +90,25 @@ test("future/expired grants including exact boundary do not authorize publicatio
 });
 
 test("experience-review district roles are not official event publishers", async () => {
-  for (const name of ["DISTRICT_GOVERNOR", "DISTRICT_SECRETARY", "DISTRICT_CABINET"]) {
+  for (const name of ["DISTRICT_GOVERNOR", "DISTRICT_SECRETARY", "DISTRICT_CABINET", "DISTRICT_GMT_COORDINATOR"]) {
     const db = fake([role(name, "district", "district-a")]);
     assert.deepEqual(await getEventPublishingOptions(db.prisma, "actor", "club-a", "club-a", NOW), []);
     assert.equal(await canPublishOfficialEvent(db.prisma, "actor", "DISTRICT", "district-a", NOW), false);
+  }
+});
+
+test("each official publisher cannot move upward beyond the level of its explicit grant", async () => {
+  for (const [name, level, id, scopes] of [
+    ["CLUB_PRESIDENT", "club", "club-a", ["ZONE", "REGION", "DISTRICT"]],
+    ["ZONE_ADMIN", "zone", "zone-a", ["REGION", "DISTRICT"]],
+    ["REGION_ADMIN", "region", "region-a", ["DISTRICT"]],
+  ] as const) {
+    const db = fake([role(name, level, id)]);
+    for (const scope of scopes) {
+      const host = { ZONE: "zone-a", REGION: "region-a", DISTRICT: "district-a" }[scope];
+      assert.equal(await canPublishOfficialEvent(db.prisma, "actor", scope, host, NOW), false);
+      await assert.rejects(resolveEventPublication(db.prisma, "actor", "club-a", { category: "CLUB_OFFICIAL", scope, hostOrganizationId: host }, NOW), denied(403));
+    }
   }
 });
 

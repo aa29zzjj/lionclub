@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PasswordInput from "@/components/PasswordInput";
+import FederatedAuthButtons, { oauthErrorMessage } from "@/components/FederatedAuthButtons";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,7 +13,10 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [resetRequired, setResetRequired] = useState(false);
   useEffect(() => {
-    const reason = new URLSearchParams(window.location.search).get("reason");
+    const params = new URLSearchParams(window.location.search);
+    const providerError = oauthErrorMessage(params.get("oauth_error"));
+    if (providerError) { setError(providerError); return; }
+    const reason = params.get("reason");
     if (reason === "account-deleted") setError("帳號已移除；共享活動保留匿名紀錄，圖片清理可能稍後完成。");
     else if (reason === "sessions-revoked") setError("所有裝置的登入已撤銷，請重新登入。");
     else if (reason) setError("登入已到期或安全設定已更新，請重新登入後繼續。");
@@ -57,7 +61,7 @@ export default function LoginPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/lions-logo.svg" alt="Lions Clubs International" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-lion-cream tracking-wide">獅子會 App</h1>
+          <h1 className="text-2xl font-bold text-lion-cream tracking-wide">LionClubs</h1>
           <p className="text-lion-cream/50 text-sm mt-1">LIONS CLUB MEMBER PORTAL</p>
         </div>
 
@@ -107,6 +111,7 @@ export default function LoginPage() {
           </button>
         </form>
 
+        <div className="mt-6 space-y-3"><p className="text-center text-sm text-lion-muted">或使用第三方帳號</p><FederatedAuthButtons /><p className="text-xs leading-relaxed text-lion-muted">將前往 Apple／Google 授權。新會員仍需有效邀請，並確認資料與使用條款；不使用電話號碼登入。</p></div>
         <p className="text-center text-xs text-lion-muted mt-8">
           還不是會員？
           <Link href="/register" className="text-lion-gold">

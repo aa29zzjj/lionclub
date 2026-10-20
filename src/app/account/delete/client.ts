@@ -24,10 +24,10 @@ export async function loginForDeletion(email: string, password: string, transpor
   if (data.ok !== true) throw new Error("登入結果尚未確認，請重新確認登入狀態。");
 }
 
-export async function deleteOwnAccount(password: string, transport: Transport = fetch): Promise<DeletionResult> {
-  if (!password) return { kind: "rejected", status: 400, message: "請輸入目前密碼確認。" };
+export async function deleteOwnAccount(password: string, transport: Transport = fetch, options: { federatedReauthenticated?: boolean } = {}): Promise<DeletionResult> {
+  if (!password && !options.federatedReauthenticated) return { kind: "rejected", status: 400, message: "請輸入目前密碼確認。" };
   try {
-    const response = await transport("/api/me/account-deletion", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
+    const response = await transport("/api/me/account-deletion", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(password ? { password } : {}) });
     const data = await response.json().catch(() => null);
     if (response.ok) {
       return data?.ok === true && data.accountDeleted === true && typeof data.cleanupPending === "boolean"

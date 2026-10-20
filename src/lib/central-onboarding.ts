@@ -3,6 +3,7 @@ import { z } from "zod";
 import { generateMemberNo } from "./member-no";
 import { PRIVACY_POLICY_VERSION } from "./privacy-policy";
 import { TERMS_VERSION } from "./terms";
+import { OAUTH_DATA_VERSION } from "./federated-auth";
 
 type Database = PrismaClient | Prisma.TransactionClient;
 export const ASSIGNMENT_MANAGER_ROLES = ["CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
@@ -54,9 +55,11 @@ export const centralRegistrationSchema = z.object({
 export type CentralRegistrationInput = z.infer<typeof centralRegistrationSchema>;
 
 export async function createCentralMember(
-  prisma: PrismaClient, input: CentralRegistrationInput, passwordHash: string,
+  prisma: PrismaClient, input: Omit<CentralRegistrationInput, "password"> & { password?: string }, passwordHash: string | null,
   _legacyRequireInvite?: boolean,
+  federated?: { transactionId: string; browserHash: string },
 ) {
+  if (passwordHash === null && !federated) throw new OnboardingError(400, "第三方註冊必須完成身分驗證");
   // Never authorize by PIN or a retired open-mode flag. Legacy QR tokens stay valid.
   if (!input.token) throw new OnboardingError(400, "請掃描共同邀請 QR Code 開啟註冊頁面");
   const token = input.token;
@@ -66,6 +69,16 @@ export async function createCentralMember(
     try {
       return await prisma.$transaction(async (tx) => {
         const now = new Date();
+        const oauth = federated ? await tx.oAuthTransaction.findUnique({ where: { id: federated.transactionId } }) : null;
+        if (federated && (!oauth || oauth.browserHash !== federated.browserHash || oauth.purpose !== "login" || !oauth.verifiedAt
+          || oauth.completedAt || oauth.expiresAt <= now || !oauth.subject || oauth.email !== input.email
+          || !["google", "apple"].includes(oauth.provider) || oauth.provider === "apple" && !oauth.refreshTokenCiphertext)) {
+          throw new OnboardingError(400, "第三方驗證已失效，請重新開始");
+        }
+        if (oauth) {
+          const claimed = await tx.oAuthTransaction.updateMany({ where: { id: oauth.id, completedAt: null, expiresAt: { gt: now } }, data: { completedAt: now } });
+          if (claimed.count !== 1) throw new OnboardingError(400, "第三方驗證已使用，請重新開始");
+        }
         const activeIntake = await tx.organization.findFirst({ where: { id: intake.id, level: "club", isActive: true } });
         if (!activeIntake) throw new OnboardingError(503, "中央註冊分會暫時無法使用");
         const duplicate = await tx.user.findFirst({ where: { email: { equals: input.email, mode: "insensitive" } }, select: { id: true } });
@@ -102,6 +115,7 @@ export async function createCentralMember(
             privacyConsentVersion: PRIVACY_POLICY_VERSION,
             termsAcceptedAt: now,
             termsVersion: TERMS_VERSION,
+            emailVerifiedAt: oauth ? now : undefined,
             tags: input.tags?.length ? { connectOrCreate: [...new Set(input.tags)].map((name) => ({ where: { name }, create: { name } })) } : undefined,
             organizationAssignments: { create: {
               toOrganizationId: intake.id, toOrganizationName: intake.name,
@@ -111,6 +125,12 @@ export async function createCentralMember(
           },
         });
         const user = await tx.user.create({ data: { email: input.email, passwordHash, memberId: member.id } });
+        if (oauth) {
+          await tx.federatedIdentity.create({ data: { userId: user.id, provider: oauth.provider, subject: oauth.subject!, email: oauth.email!, refreshTokenCiphertext: oauth.refreshTokenCiphertext } });
+          await tx.memberDataConsent.create({ data: { memberId: member.id, purpose: "federated_auth", version: OAUTH_DATA_VERSION } });
+          await tx.oAuthTransaction.update({ where: { id: oauth.id }, data: { userId: user.id, sessionVersion: user.sessionVersion,
+            subject: null, email: null, providerName: null, refreshTokenCiphertext: null, inviteToken: null, codeVerifier: null, nonce: "", browserHash: "" } });
+        }
         return { member, user, organization: intake };
       }, { isolationLevel: "Serializable" });
     } catch (error) {

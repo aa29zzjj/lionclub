@@ -15,7 +15,7 @@ export async function revokeOtherSessions(prisma: PrismaClient, session: Session
 ) {
   const user = await prisma.user.findUnique({ where: { id: session.userId } });
   if (!user || user.memberId !== session.memberId || user.sessionVersion !== session.sessionVersion) throw new SessionRevocationError("SESSION_CONFLICT");
-  if (!(await dependencies.verifyPassword(password, user.passwordHash))) throw new SessionRevocationError("PASSWORD_INVALID");
+  if (!user.passwordHash || !(await dependencies.verifyPassword(password, user.passwordHash))) throw new SessionRevocationError("PASSWORD_INVALID");
   const changed = await prisma.user.updateMany({
     where: { id: user.id, memberId: session.memberId, sessionVersion: session.sessionVersion, passwordHash: user.passwordHash },
     data: { sessionVersion: { increment: 1 } },

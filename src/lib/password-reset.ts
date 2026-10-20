@@ -19,7 +19,7 @@ export async function sendPasswordResetEmail(prisma: PrismaClient,
   const tokenHash = hashToken(token);
   const recipient = await prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: input.userId }, include: { member: true } });
-    if (!user || normalized(user.email) !== normalized(input.requestedEmail) || isProductionDemoUser(user, options.production)) return null;
+    if (!user?.passwordHash || normalized(user.email) !== normalized(input.requestedEmail) || isProductionDemoUser(user, options.production)) return null;
     const email = normalized(user.email);
     await tx.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null } });
     await tx.passwordResetToken.create({ data: { userId: user.id, email, tokenHash, expiresAt: new Date(now.getTime() + 30 * 60 * 1000) } });
@@ -47,7 +47,7 @@ export async function completePasswordReset(prisma: PrismaClient, token: string,
       const record = await tx.passwordResetToken.findUnique({ where: { tokenHash: hashToken(token) } });
       if (!record?.email || record.usedAt || record.expiresAt <= now) throw new PasswordResetError("RESET_TOKEN_INVALID");
       const user = await tx.user.findUnique({ where: { id: record.userId }, include: { member: true } });
-      if (!user || normalized(user.email) !== normalized(record.email) || isProductionDemoUser(user)) throw new PasswordResetError("RESET_TOKEN_INVALID");
+      if (!user?.passwordHash || normalized(user.email) !== normalized(record.email) || isProductionDemoUser(user)) throw new PasswordResetError("RESET_TOKEN_INVALID");
       const claimed = await tx.passwordResetToken.updateMany({ where: { id: record.id, email: record.email, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } });
       if (claimed.count !== 1) throw new PasswordResetError("RESET_TOKEN_INVALID");
       const changed = await tx.user.updateMany({ where: { id: record.userId, email: { equals: record.email, mode: "insensitive" }, sessionVersion: user.sessionVersion }, data: { passwordHash, sessionVersion: { increment: 1 } } });

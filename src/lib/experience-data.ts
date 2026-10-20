@@ -143,16 +143,16 @@ export const positionOptions: PositionOption[] = [
   { code: "zone_treasurer", label: "分區財務", level: "zone", kind: "position" },
   { code: "zone_advisory", label: "分區顧問會議成員", level: "zone", kind: "advisor" },
   { code: "club_president", label: "會長", level: "club", kind: "position" },
-  { code: "club_founder_president", label: "首屆會長（創會會長）", level: "club", kind: "position" },
+  { code: "club_founder_president", label: "創會長（首屆會長）", level: "club", kind: "position" },
   { code: "club_vp1", label: "第一副會長", level: "club", kind: "position" },
   { code: "club_vp2", label: "第二副會長", level: "club", kind: "position" },
   { code: "club_secretary", label: "秘書", level: "club", kind: "position" },
   { code: "club_treasurer", label: "財務", level: "club", kind: "position" },
   { code: "club_director", label: "理事", level: "club", kind: "position" },
   { code: "club_supervisor", label: "監事", level: "club", kind: "position" },
-  { code: "club_honor_president", label: "榮譽會長", level: "club", kind: "honorary" },
+  { code: "club_honor_president", label: "分會榮譽會長", level: "club", kind: "honorary" },
   { code: "club_founder", label: "創會人", level: "club", kind: "honorary" },
-  { code: "club_charter_member", label: "創會員", level: "club", kind: "honorary" },
+  { code: "club_charter_member", label: "創會會員", level: "club", kind: "honorary" },
   { code: "club_honor_founder", label: "榮譽創會人", level: "club", kind: "honorary" },
   { code: "club_guiding_lion", label: "導獅", level: "club", kind: "advisor" },
   { code: "club_mentor", label: "導師", level: "club", kind: "advisor" },
@@ -187,12 +187,12 @@ export function formatLionsYear(experience: MemberExperience) {
 }
 
 const positionAbbreviations: Record<string, string> = {
-  club_vp1: "一副",
-  club_vp2: "二副",
+  club_vp1: "第一副",
+  club_vp2: "第二副",
 };
 
 export function shortPositionLabel(positionCode: string, fallbackLabel: string) {
-  return positionAbbreviations[positionCode] ?? fallbackLabel;
+  return positionAbbreviations[positionCode] ?? positionOptions.find(position => position.code === positionCode)?.label ?? fallbackLabel;
 }
 
 export function isOfficerPosition(level: OrganizationLevel, kind: ExperienceKind) {
@@ -211,6 +211,10 @@ export function isVerifiedCurrentPosition(experience: MemberExperience, now = ne
 
 export function currentExperienceLabel(experience: MemberExperience, now = new Date()): string | null {
   if (isVerifiedCurrentPosition(experience, now)) return "本年度已核實職務";
+  if (experience.verificationStatus === "verified" && experience.kind === "position" && experience.datePrecision === "lions-year" &&
+    Number.isInteger(experience.startYear) && Number.isInteger(experience.endYear ?? experience.startYear) &&
+    experience.startYear <= (experience.endYear ?? experience.startYear) && (experience.endYear ?? experience.startYear) < getCurrentLionYearStart(now) &&
+    positionOptions.some(position => position.code === experience.positionCode && position.kind === experience.kind && position.level === experience.level)) return "歷任職務（已核實）";
   if (!experience.isCurrent) return null;
   if (experience.kind === "membership") return "本人標示仍具會籍";
   if (experience.verificationStatus === "verified" && experience.kind === "position") return "本人標示現任（年度待確認）";

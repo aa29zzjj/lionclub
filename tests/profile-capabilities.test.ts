@@ -8,7 +8,7 @@ test("every backend experience-review role has a visible experience-review entry
 });
 
 test("experience-only district offices cannot see invite, member or role administration", () => {
-  for (const role of ["DISTRICT_GOVERNOR", "DISTRICT_SECRETARY", "DISTRICT_CABINET"]) {
+  for (const role of ["DISTRICT_GOVERNOR", "DISTRICT_SECRETARY", "DISTRICT_CABINET", "DISTRICT_GMT_COORDINATOR"]) {
     assert.deepEqual(profileCapabilities([{ role }]), { reviewExperiences: true, reviewMembers: false, issueInvites: false, manageRoles: false, assignMembers: false, reviewReports: false }, role);
   }
 });

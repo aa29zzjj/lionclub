@@ -97,6 +97,7 @@ model Member {
   tags Tag[] @relation("MemberTags")
 
   user User?
+  dataConsents MemberDataConsent[]
   emailVerifiedAt DateTime?
 
   // 註冊當下對隱私政策的同意紀錄；versioned so a later policy change can be re-prompted.
@@ -167,7 +168,7 @@ model MemberOrganizationAssignment {
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
-  passwordHash String
+  passwordHash String? // null only for explicitly registered federated-only accounts
   sessionVersion Int @default(1)
   memberId     String?  @unique
   member       Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
@@ -175,6 +176,66 @@ model User {
 
   passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+  federatedIdentities FederatedIdentity[]
+  oauthTransactions OAuthTransaction[]
+}
+
+model MemberDataConsent {
+  id String @id @default(cuid())
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  purpose String
+  version String
+  acceptedAt DateTime @default(now())
+
+  @@unique([memberId, purpose, version])
+}
+
+// Provider + stable subject is the identity. Email is never an automatic link key.
+model FederatedIdentity {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider String
+  subject String
+  email String
+  refreshTokenCiphertext String? // Apple revocation token, AES-256-GCM encrypted
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, subject])
+  @@unique([userId, provider])
+}
+
+// Short-lived, browser-bound, one-use authorization/registration/reauth state.
+// No provider tokens, authorization codes or verifier are exposed to client JS.
+model OAuthTransaction {
+  id String @id @default(cuid())
+  provider String
+  purpose String
+  stateHash String @unique
+  browserHash String
+  nonce String
+  codeVerifier String?
+  inviteToken String? // invitation stays server-side; never forwarded to provider
+  userId String?
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionVersion Int?
+  expiresAt DateTime
+  claimedAt DateTime?
+  verifiedAt DateTime?
+  completedAt DateTime?
+  subject String?
+  email String?
+  providerName String?
+  refreshTokenCiphertext String?
+  reauthHash String? @unique
+  reauthExpiresAt DateTime?
+  reauthUsedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@index([userId, reauthExpiresAt])
 }
 
 model PasswordResetToken {

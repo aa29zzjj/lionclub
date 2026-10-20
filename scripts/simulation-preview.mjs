@@ -65,7 +65,7 @@ export async function createSimulationPreview({ port = 3196, frontendPort = 3195
         if (result.headers?.get("Retry-After")) response.setHeader("Retry-After", result.headers.get("Retry-After"));
         return send(response, result.status, JSON.stringify(result.data).replaceAll(sim.origin, origin));
       }
-      const extra = new Set(["/login", "/verify-email", "/forgot-password", "/reset-password", "/admin/reports", "/events/calendar", "/account/delete", "/privacy", "/support"]);
+      const extra = new Set(["/login", "/verify-email", "/forgot-password", "/reset-password", "/admin/reports", "/events/calendar", "/events/official-calendar", "/organizations", "/account/delete", "/privacy", "/terms", "/support"]);
       if (!["GET", "HEAD"].includes(request.method) || !isDemoFrontendPath(url.pathname) && !extra.has(url.pathname)) return send(response, 404, { error: "Not in local preview" });
       const headers = { host: `127.0.0.1:${frontendPort}`, "accept-encoding": "identity" };
       for (const key of ["accept", "accept-language", "user-agent", "rsc", "next-router-state-tree", "next-router-prefetch"]) if (request.headers[key]) headers[key] = request.headers[key];
