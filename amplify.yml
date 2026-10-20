@@ -1,0 +1,18 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci --cache .npm --prefer-offline
+    build:
+      commands:
+        - env | grep -e AVATAR_BUCKET_NAME -e AVATAR_PUBLIC_BASE_URL -e PASSWORD_RESET_FROM_EMAIL -e FEDERATED_AUTH_ENABLED -e GOOGLE_OAUTH_CLIENT_ID -e GOOGLE_OAUTH_CLIENT_SECRET -e OAUTH_TOKEN_ENCRYPTION_KEY >> .env.production
+        - npm run build
+  artifacts:
+    baseDirectory: .next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - .next/cache/**/*
+      - .npm/**/*
