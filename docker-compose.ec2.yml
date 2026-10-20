@@ -1,0 +1,24 @@
+# docker-compose for AWS EC2 deployment.
+# Run from the repo root on the EC2 host: docker compose -f docker-compose.ec2.yml up -d --build
+#
+# All runtime environment variables (DATABASE_URL, AUTH_SECRET, GOOGLE_OAUTH_*,
+# APPLE_OAUTH_*, etc.) live in .env.docker next to this file on the EC2 host
+# (gitignored, never committed). Copy .env.example as a starting point.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lionclub-app:latest
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./.env.docker
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/auth/providers').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
