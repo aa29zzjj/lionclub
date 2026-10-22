@@ -22,7 +22,7 @@ export default function TermsPage() {
     <section><h2 className="text-lg font-semibold">檢舉與封鎖</h2><ul className="mt-3 list-disc space-y-3 pl-5">
       <li>任何會員都可以在會員頁檢舉該會員，或在活動頁檢舉活動內容；也可以封鎖會員，封鎖後雙方無法互相加好友、搜尋到對方或查看對方的檔案。</li>
       <li>檢舉由授權管理者審核。查證屬實時，管理者可以移除違規活動內容，或停權違規帳號（停權後該帳號所有登入立即失效）。</li>
-      <li>營運方將儘速審核檢舉（內部目標為 24 小時內初步處理）；處理結果以站內或聯絡信箱通知為準。</li>
+      <li>營運方將儘速審核檢舉；處理結果以站內或聯絡信箱通知為準。</li>
       <li>惡意或不實的檢舉本身也屬於違規行為。</li>
     </ul></section>
     <section><h2 className="text-lg font-semibold">您發布的內容</h2><p className="mt-3">您對自己發布的活動、頭像、介紹等內容負責，並保證有權發布。您同意營運方為執行本條款，得移除違規內容或停權帳號。個人資料如何使用與刪除，請見<Link href="/privacy" className="text-lion-gold underline mx-1">隱私權政策</Link>。</p></section>
