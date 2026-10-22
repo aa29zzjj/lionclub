@@ -4,6 +4,7 @@ import { createRuntimeSecretsResolver, pickApprovedSecrets } from "../src/lib/ru
 import { providerConfig, publicProviders } from "../src/lib/federated-auth";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const record = { DATABASE_URL: "postgresql://synthetic:synthetic@localhost/synthetic", AUTH_SECRET: "synthetic-auth-secret", FEDERATED_AUTH_ENABLED: "true",
   GOOGLE_OAUTH_CLIENT_ID: "synthetic-client", GOOGLE_OAUTH_CLIENT_SECRET: "synthetic-google-secret", OAUTH_APP_ORIGIN: "https://app.example.test", GOOGLE_OAUTH_FRESH_REAUTH_ENABLED: "false" };
@@ -68,5 +69,5 @@ test("AWS adapter has a server-only boundary and no client module imports runtim
   function walk(path: string) { for (const entry of readdirSync(path, { withFileTypes: true })) { const target = join(path, entry.name); if (entry.isDirectory()) walk(target); else if (/\.tsx?$/.test(entry.name)) {
     const source = readFileSync(target, "utf8"); if (/^[\s]*["']use client["']/.test(source)) assert.doesNotMatch(source, /(?:from\s+["']|import\(["'])[^"']*(?:secrets|federated-auth-runtime)["']/);
   } } }
-  walk(decodeURIComponent(root.pathname));
+  walk(fileURLToPath(root));
 });
