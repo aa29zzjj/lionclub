@@ -55,7 +55,15 @@ export async function createSimulation({ beforeFinalMigration, environment = {},
     const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
     function dependency(name) {
       if (name === "@/lib/prisma" || /(?:^|\/)prisma$/.test(name) && name.startsWith(".")) return { getPrisma: async () => prisma };
-      if (name === "@/lib/secrets" || name === "./secrets") return { getAppSecrets: async () => ({ DATABASE_URL: databaseUrl, AUTH_SECRET: env.AUTH_SECRET }) };
+      if (name === "@/lib/secrets" || name === "./secrets") return {
+        getAppSecrets: async () => ({ DATABASE_URL: databaseUrl, AUTH_SECRET: env.AUTH_SECRET }),
+        // Synthetic, allowlisted settings only. Never load the real AWS adapter
+        // or inspect ambient OAuth credentials in an isolated simulation.
+        getOAuthRuntimeSettings: async () => Object.fromEntries([
+          "NODE_ENV", "FEDERATED_AUTH_ENABLED", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET",
+          "GOOGLE_OAUTH_FRESH_REAUTH_ENABLED", "OAUTH_APP_ORIGIN", "NEXT_PUBLIC_APP_URL",
+        ].filter(key => env[key] !== undefined).map(key => [key, env[key]])),
+      };
       if (name === "@/lib/aws-http" || name === "./aws-http") return { sendSesEmail: async input => {
         if (control.failEmail) throw Error("SIMULATED_MAIL_UNAVAILABLE");
         if (!String(input.to).endsWith("@example.test")) throw Error("Simulation mail requires example.test recipient");

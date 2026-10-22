@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PasswordInput from "@/components/PasswordInput";
@@ -17,20 +17,23 @@ export default function LoginPage() {
     const providerError = oauthErrorMessage(params.get("oauth_error"));
     if (providerError) { setError(providerError); return; }
     const reason = params.get("reason");
-    if (reason === "account-deleted") setError("帳號已移除；共享活動保留匿名紀錄，圖片清理可能稍後完成。");
-    else if (reason === "sessions-revoked") setError("所有裝置的登入已撤銷，請重新登入。");
+    if (reason === "sessions-revoked") setError("所有裝置的登入已撤銷，請重新登入。");
     else if (reason) setError("登入已到期或安全設定已更新，請重新登入後繼續。");
   }, []);
   const [loading, setLoading] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const busyRef = useRef(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (busyRef.current) return;
     if (!email || !password) {
       setError("請輸入帳號與密碼");
       return;
     }
     setError("");
     setResetRequired(false);
+    busyRef.current = true;
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
@@ -49,6 +52,7 @@ export default function LoginPage() {
     } catch {
       setError("連線失敗，請稍後再試");
     } finally {
+      busyRef.current = false;
       setLoading(false);
     }
   }
@@ -65,7 +69,7 @@ export default function LoginPage() {
           <p className="text-lion-cream/50 text-sm mt-1">LIONS CLUB MEMBER PORTAL</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4" aria-busy={loading || oauthBusy}>
           <div>
             <label htmlFor="login-email" className="text-sm text-lion-muted mb-1 block">會員信箱</label>
             <input
@@ -74,6 +78,7 @@ export default function LoginPage() {
               autoComplete="username"
               autoCapitalize="none"
               required
+              disabled={loading || oauthBusy}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@lions.tw"
@@ -86,6 +91,7 @@ export default function LoginPage() {
               id="login-password"
               autoComplete="current-password"
               required
+              disabled={loading || oauthBusy}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -104,14 +110,14 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || oauthBusy}
             className="mt-2 w-full rounded-xl bg-lion-action text-lion-navyDeep font-semibold py-3 hover:bg-lion-actionHover transition-colors disabled:opacity-60"
           >
             {loading ? "登入中..." : "登入"}
           </button>
         </form>
 
-        <div className="mt-6 space-y-3"><p className="text-center text-sm text-lion-muted">或使用第三方帳號</p><FederatedAuthButtons /><p className="text-xs leading-relaxed text-lion-muted">將前往 Apple／Google 授權。新會員仍需有效邀請，並確認資料與使用條款；不使用電話號碼登入。</p></div>
+        <div className="mt-6 space-y-3"><p className="text-center text-sm text-lion-muted">或使用第三方帳號</p><FederatedAuthButtons disabled={loading} onBusyChange={(busy) => { busyRef.current = busy; setOauthBusy(busy); }} /><p className="text-xs leading-relaxed text-lion-muted">將前往已啟用的第三方授權。新會員仍需有效邀請，並確認資料與使用條款；不使用電話號碼登入。</p></div>
         <p className="text-center text-xs text-lion-muted mt-8">
           還不是會員？
           <Link href="/register" className="text-lion-gold">

@@ -9,8 +9,8 @@ export const OAUTH_REAUTH_COOKIE = "lionclub_oauth_reauth";
 export const oauthNoStore = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
 export function oauthJson(data: unknown, status = 200) { return NextResponse.json(data, { status, headers: oauthNoStore }); }
 export async function readOAuthCookie(name: string) { return (await cookies()).get(name)?.value; }
-export async function setOAuthCookie(name: string, value: string, seconds: number, crossSite = false) {
-  const secure = process.env.NEXT_PUBLIC_APP_URL?.startsWith("https:") || process.env.NODE_ENV === "production";
+export async function setOAuthCookie(name: string, value: string, seconds: number, crossSite = false, configuredOrigin?: string) {
+  const secure = Boolean((configuredOrigin || process.env.OAUTH_APP_ORIGIN || process.env.NEXT_PUBLIC_APP_URL)?.startsWith("https:") || process.env.NODE_ENV === "production");
   (await cookies()).set(name, value, { httpOnly: true, secure, sameSite: crossSite && secure ? "none" : "lax", path: "/", maxAge: seconds });
 }
 export async function clearOAuthCookie(name: string) { (await cookies()).delete(name); }

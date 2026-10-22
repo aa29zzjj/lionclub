@@ -6,7 +6,9 @@ frontend:
         - npm ci --cache .npm --prefer-offline
     build:
       commands:
-        - env | grep -e AVATAR_BUCKET_NAME -e AVATAR_PUBLIC_BASE_URL -e PASSWORD_RESET_FROM_EMAIL >> .env.production
+        # Nonsecret references/flags only. Runtime secrets use the SSR compute
+        # role + approved Secrets Manager entry, never deployment artifacts.
+        - node scripts/write-amplify-runtime-env.mjs --write
         - npm run build
   artifacts:
     baseDirectory: .next

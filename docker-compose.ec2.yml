@@ -1,5 +1,6 @@
 # docker-compose for AWS EC2 deployment.
-# Run from the repo root on the EC2 host: docker compose -f docker-compose.ec2.yml up -d --build
+# Run only after the separate, approved DB-first rollout (see EC2_DEPLOY.md).
+# Requires Docker Compose v2.20+ for the documented --wait deployment command.
 #
 # All runtime environment variables (DATABASE_URL, AUTH_SECRET, GOOGLE_OAUTH_*,
 # APPLE_OAUTH_*, etc.) live in .env.docker next to this file on the EC2 host
@@ -12,12 +13,18 @@ services:
       dockerfile: Dockerfile
     image: lionclub-app:latest
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     env_file:
       - ./.env.docker
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    init: true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/auth/providers').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      # HTTP liveness ONLY: not database, OAuth/provider or feature acceptance.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       start_period: 20s

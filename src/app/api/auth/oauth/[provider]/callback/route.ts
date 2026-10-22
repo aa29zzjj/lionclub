@@ -3,12 +3,15 @@ import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { acceptOAuthCallback } from "@/lib/federated-auth-service";
 import { FederatedAuthError, isAuthProvider, providerConfig } from "@/lib/federated-auth";
+import { configuredOAuthOrigin, resolveOAuthRuntimeSettings } from "@/lib/federated-auth-runtime";
 import { OAUTH_BROWSER_COOKIE, oauthErrorCode, oauthNoStore, readOAuthCookie } from "@/lib/federated-auth-http";
 async function callback(request: NextRequest, provider: string, body: URLSearchParams) {
-  const config = isAuthProvider(provider) ? providerConfig(provider) : null;
-  // Origin is configured, never taken from forwarded Host or callback data.
-  const origin = config?.origin || (() => { try { return new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").origin; } catch { return "http://localhost:3000"; } })();
+  let origin: string | null = null;
   try {
+    const settings = await resolveOAuthRuntimeSettings();
+    const config = isAuthProvider(provider) ? providerConfig(provider, settings) : null;
+    origin = configuredOAuthOrigin(settings);
+    if (!origin) return new NextResponse(null, { status: 503, headers: oauthNoStore });
     if (!config || !isAuthProvider(provider)) throw new FederatedAuthError(503, "PROVIDER_DISABLED", "此第三方登入尚未開放");
     if (provider === "apple" && request.method !== "POST" || provider === "google" && request.method !== "GET") throw new FederatedAuthError(400, "OAUTH_FAILED", "不支援的回傳方式");
     if (body.get("error")) throw new FederatedAuthError(400, "OAUTH_CANCELLED", "第三方驗證未完成");
@@ -19,10 +22,11 @@ async function callback(request: NextRequest, provider: string, body: URLSearchP
       try { const user = JSON.parse(body.get("user")!); appleName = [user?.name?.lastName, user?.name?.firstName].filter(value => typeof value === "string").join(" ").slice(0, 100); } catch { /* optional */ }
     }
     await acceptOAuthCallback(await getPrisma(), provider, body.get("state") || "", await readOAuthCookie(OAUTH_BROWSER_COOKIE) || "",
-      { code: body.get("code") || "", idToken: body.get("id_token") || undefined, appleName });
+      { code: body.get("code") || "", idToken: body.get("id_token") || undefined, appleName }, { config });
     const next = new URL("/api/auth/oauth/complete", origin); next.searchParams.set("state", body.get("state")!);
     return NextResponse.redirect(next, { status: 303, headers: oauthNoStore });
   } catch (error) {
+    if (!origin) return new NextResponse(null, { status: 503, headers: oauthNoStore });
     const next = new URL("/login", origin); next.searchParams.set("oauth_error", oauthErrorCode(error));
     return NextResponse.redirect(next, { status: 303, headers: oauthNoStore });
   }

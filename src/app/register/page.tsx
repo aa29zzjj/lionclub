@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useEffect, useId, useState } from "react";
+import { Suspense, useEffect, useId, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { memberTitleOptions, tagOptions } from "@/lib/mock-data";
 import PasswordInput from "@/components/PasswordInput";
 import FederatedAuthButtons from "@/components/FederatedAuthButtons";
+import { cancelFederatedSignup, OAuthClientError, oauthErrorMessage, readPendingFederatedProfile } from "@/lib/federated-auth-client";
 
 type Step = "invite" | "profile" | "done";
 type Onboarding = {
@@ -71,24 +72,48 @@ function RegisterForm() {
   const [federated, setFederated] = useState<{ provider: string; email: string; hasInvite: boolean } | null>(null);
   const [oauthConsent, setOauthConsent] = useState(false);
   const [federatedNotice, setFederatedNotice] = useState("");
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [pendingAttempt, setPendingAttempt] = useState(0);
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const actionRef = useRef(false);
+  const formBusy = submitting || oauthBusy || pendingLoading;
   const completingFederated = searchParams.get("federated") === "1";
 
   useEffect(() => {
     const controller = new AbortController();
-    void fetch("/api/auth/oauth/pending", { cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        const data = await response.json().catch(() => null);
+    setPendingLoading(true);
+    setFederatedNotice("");
+    void readPendingFederatedProfile(fetch, controller.signal)
+      .then((data) => {
         if (controller.signal.aborted) return;
-        if (!response.ok || data?.pending !== true || typeof data.email !== "string") {
-          if (completingFederated) setFederatedNotice("第三方驗證已失效或目前無法確認。尚未建立會員帳號，請返回登入頁重新驗證；原邀請仍會在完成註冊時核對。");
+        if (!data.pending) {
+          setFederated(null);
+          if (completingFederated) setFederatedNotice("第三方驗證已失效或目前無法確認。尚未建立會員帳號，請重新驗證；原邀請仍會在完成註冊時核對。");
           return;
         }
-        setFederated({ provider: data.provider, email: data.email, hasInvite: data.hasInvite === true });
+        setFederated({ provider: data.provider, email: data.email, hasInvite: data.hasInvite });
         setEmail(data.email);
-        if (typeof data.name === "string") setName((current) => current || data.name);
-      }).catch(() => { if (!controller.signal.aborted && completingFederated) setFederatedNotice("目前無法確認第三方身分，請返回登入頁重新驗證；沒有自動建立帳號。"); });
+        setPassword(""); setConfirmPassword(""); setOauthConsent(false);
+        const suggestedName = data.name;
+        if (typeof suggestedName === "string") setName((current) => current || suggestedName);
+      }).catch(() => { if (!controller.signal.aborted) setFederatedNotice("目前無法確認第三方身分。請重新確認，或取消本次驗證後返回登入；沒有自動建立帳號。"); })
+      .finally(() => { if (!controller.signal.aborted) setPendingLoading(false); });
     return () => controller.abort();
-  }, [completingFederated]);
+  }, [completingFederated, pendingAttempt]);
+
+  async function cancelOAuth() {
+    if (actionRef.current || pendingLoading) return;
+    actionRef.current = true; setOauthBusy(true); setFederatedNotice("");
+    try {
+      await cancelFederatedSignup();
+      setFederated(null); setEmail(""); setPassword(""); setConfirmPassword("");
+      setOauthConsent(false); setPrivacyConsent(false); setTermsConsent(false);
+      router.replace("/login");
+    } catch (error) {
+      setFederatedNotice(error instanceof OAuthClientError ? oauthErrorMessage(error.code) : "目前無法取消驗證，請稍後再試。");
+      actionRef.current = false; setOauthBusy(false);
+    }
+  }
 
   const currentVerifiedInvite = verifiedInvite?.token === tokenFromUrl ? verifiedInvite : null;
   const configurationReady = Boolean(onboarding) && !onboardingLoading && !onboardingError;
@@ -208,7 +233,7 @@ function RegisterForm() {
 
   async function handleProfileSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (submitting || !onboarding || !configurationReady || !invitationReady) return;
+    if (actionRef.current || formBusy || federatedNotice || !onboarding || !configurationReady || !invitationReady) return;
     if (!name.trim() || !email.trim()) {
       setProfileError("請填寫姓名與 Email。");
       return;
@@ -231,6 +256,7 @@ function RegisterForm() {
     }
     if (federated && !oauthConsent) { setProfileError("請先確認第三方身分資料使用同意。"); return; }
     setProfileError("");
+    actionRef.current = true;
     setSubmitting(true);
     try {
       const invitePayload = currentVerifiedInvite ? { token: currentVerifiedInvite.token } : {};
@@ -245,7 +271,7 @@ function RegisterForm() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const message = typeof data?.error === "string" ? data.error : "註冊失敗，請稍後再試。";
+        const message = federated ? oauthErrorMessage(data?.code) || "第三方註冊未完成，請重新確認身分與邀請。" : typeof data?.error === "string" ? data.error : "註冊失敗，請稍後再試。";
         if (/QR|邀請|invite|token/i.test(message)) {
           setInviteError(message);
           setStep("invite");
@@ -263,7 +289,7 @@ function RegisterForm() {
       setStep("done");
     } catch {
       setProfileError("連線失敗，填寫內容已保留。請確認網路後再試；若已完成註冊，可直接返回登入頁。");
-    } finally { setSubmitting(false); }
+    } finally { actionRef.current = false; setSubmitting(false); }
   }
 
   return (
@@ -276,7 +302,9 @@ function RegisterForm() {
           </span>
           <div><h1 className="text-lg font-bold">獅子會新會員註冊</h1><p className="mt-0.5 text-xs text-lion-muted">{step === "invite" ? "使用共同邀請加入" : step === "profile" ? "填寫個人資料" : "註冊完成"}</p></div>
         </div>
-        {federatedNotice && <div role="alert" className="mb-4 rounded-xl border border-lion-border p-4 text-sm"><p>{federatedNotice}</p><Link href="/login" className="mt-2 inline-flex min-h-12 items-center text-lion-gold underline">重新選擇 Apple／Google 登入</Link></div>}
+        {pendingLoading && <p role="status" className="mb-4 text-sm text-lion-muted">正在確認第三方驗證狀態…</p>}
+        {federatedNotice && <div role="alert" className="mb-4 rounded-xl border border-lion-border p-4 text-sm"><p>{federatedNotice}</p><button type="button" disabled={formBusy} onClick={() => setPendingAttempt((value) => value + 1)} className="mt-2 min-h-12 text-lion-gold underline">重新確認驗證狀態</button><button type="button" disabled={formBusy} onClick={() => void cancelOAuth()} className="mt-2 flex min-h-12 items-center text-lion-gold underline">取消本次驗證，返回登入</button></div>}
+        {federated && step !== "done" && !federatedNotice && <div className="mb-4 rounded-xl border border-lion-border p-4 text-sm"><p className="break-all">本次使用 {federated.provider === "google" ? "Google" : "Apple"}：{federated.email}</p><p className="mt-2 text-lion-muted">尚未建立會員帳號。若選錯帳號，可取消後重新登入。</p><button type="button" disabled={formBusy} onClick={() => void cancelOAuth()} className="mt-2 min-h-12 text-lion-gold underline">取消驗證／更換帳號</button></div>}
         {onboardingLoading && <p className="py-10 text-center text-sm text-lion-muted" role="status">正在載入註冊設定…</p>}
         {onboardingError && <div className="rounded-2xl border border-lion-border bg-lion-card p-5">
           <p className="text-sm text-lion-cream" role="alert">{onboardingError}</p>
@@ -309,10 +337,10 @@ function RegisterForm() {
           {(tokenFromUrl || federated?.hasInvite) && <button type="submit" disabled={!invitationReady} className={`${primaryButtonClass} w-full`}>下一步</button>}
           <Link href="/login" className="flex min-h-12 items-center justify-center text-sm text-lion-muted">已經是會員？返回登入</Link>
         </form>}
-        {configurationReady && onboarding && step === "profile" && <form onSubmit={handleProfileSubmit} className="flex flex-col gap-5" aria-busy={submitting}>
-          {!federated && <div className="space-y-3"><p className="text-sm">可先使用 Apple／Google 驗證身分，再完成下方會員資料。</p><FederatedAuthButtons token={currentVerifiedInvite?.token} disabled={submitting || !invitationReady} /><p className="text-center text-sm text-lion-muted">或以 Email／密碼註冊</p></div>}
+        {configurationReady && onboarding && step === "profile" && <form onSubmit={handleProfileSubmit} className="flex flex-col gap-5" aria-busy={formBusy}>
+          {!federated && <div className="space-y-3"><p className="text-sm">可先使用已啟用的第三方驗證身分，再完成下方會員資料。</p><FederatedAuthButtons token={currentVerifiedInvite?.token} onBusyChange={(busy) => { actionRef.current = busy; setOauthBusy(busy); }} disabled={submitting || pendingLoading || Boolean(federatedNotice) || !invitationReady} /><p className="text-center text-sm text-lion-muted">或以 Email／密碼註冊</p></div>}
           <p className="text-base font-medium">{federated ? `已透過 ${federated.provider === "apple" ? "Apple" : "Google"} 驗證；請確認姓名及同意事項，不必設定本機密碼。` : "先填姓名、Email 與密碼即可開始使用；其他資料可稍後補上。"}</p>
-          <fieldset disabled={submitting} className="grid grid-cols-1 gap-4">
+          <fieldset disabled={formBusy || Boolean(federatedNotice)} className="grid grid-cols-1 gap-4">
             <div className="min-[360px]:col-span-2">
               <label htmlFor="register-name" className="mb-1 block text-sm font-medium">姓名</label>
               <input id="register-name" name="name" autoComplete="name" required value={name} onChange={(event) => setName(event.target.value)} placeholder="王小明" className={inputClass} />
@@ -332,7 +360,7 @@ function RegisterForm() {
           </fieldset>
           <details className="rounded-2xl border border-lion-border bg-lion-card p-4">
             <summary className="flex min-h-12 cursor-pointer items-center text-base font-semibold">補充資料（選填，可稍後補上）</summary>
-            <fieldset disabled={submitting} className="mt-4 grid grid-cols-1 gap-4">
+            <fieldset disabled={formBusy || Boolean(federatedNotice)} className="mt-4 grid grid-cols-1 gap-4">
             <div>
               <label htmlFor="register-birthday" className="mb-1 block text-sm font-medium">生日（選填）</label>
               <input id="register-birthday" name="birthday" type="date" autoComplete="bday" value={birthday} onChange={(event) => setBirthday(event.target.value)} className={inputClass} />
@@ -396,7 +424,7 @@ function RegisterForm() {
               <p id="register-declared-organization-help" className="mt-2 text-xs leading-relaxed text-lion-muted">這是待核對的參考資料，不會直接更改加入分會或管理權限。可從清單選擇，或直接手動輸入分會名稱。</p>
             </div>
           </fieldset>
-          <fieldset disabled={submitting}>
+          <fieldset disabled={formBusy || Boolean(federatedNotice)}>
             <legend className="mb-2 text-sm font-medium">專長／興趣標籤（選填）</legend>
             <div className="flex flex-wrap gap-2">{tagOptions.map((tag) => {
               const active = selectedTags.includes(tag);
@@ -405,7 +433,7 @@ function RegisterForm() {
           </fieldset>
           <div>
             <label htmlFor="register-bio" className="mb-1 block text-sm font-medium">簡介／經歷（選填）</label>
-            <textarea id="register-bio" name="bio" autoComplete="off" disabled={submitting} value={bio} onChange={(event) => setBio(event.target.value)} rows={3} placeholder="簡單介紹自己的專業背景或獅子會經歷" className={`${inputClass} resize-y`} />
+            <textarea id="register-bio" name="bio" autoComplete="off" disabled={formBusy || Boolean(federatedNotice)} value={bio} onChange={(event) => setBio(event.target.value)} rows={3} placeholder="簡單介紹自己的專業背景或獅子會經歷" className={`${inputClass} resize-y`} />
           </div>
           </details>
           <p className="rounded-xl bg-lion-soft p-4 text-sm leading-relaxed text-lion-muted">頭像可以在註冊完成後，到「我的檔案」上傳。</p>
@@ -414,7 +442,7 @@ function RegisterForm() {
               type="checkbox"
               checked={privacyConsent}
               onChange={(event) => setPrivacyConsent(event.target.checked)}
-              disabled={submitting}
+              disabled={formBusy || Boolean(federatedNotice)}
               className="mt-0.5 accent-[#C8A951]"
             />
             <span>
@@ -428,7 +456,7 @@ function RegisterForm() {
               type="checkbox"
               checked={termsConsent}
               onChange={(event) => setTermsConsent(event.target.checked)}
-              disabled={submitting}
+              disabled={formBusy || Boolean(federatedNotice)}
               className="mt-0.5 accent-[#C8A951]"
             />
             <span>
@@ -437,13 +465,13 @@ function RegisterForm() {
               ，包含不得發布違規內容及檢舉與停權規則（必填）
             </span>
           </label>
-          {federated && <label className="flex items-start gap-2.5 rounded-xl border border-lion-border bg-lion-soft px-3.5 py-3 text-sm"><input type="checkbox" checked={oauthConsent} onChange={(event) => setOauthConsent(event.target.checked)} disabled={submitting} className="mt-0.5" /><span>我同意使用所選第三方的唯一識別碼、已驗證信箱及我確認的姓名建立登入帳號。會籍、名冊資歷與幹部權限須另行核對，不會自動授權（第三方註冊必填）。</span></label>}
+          {federated && <label className="flex items-start gap-2.5 rounded-xl border border-lion-border bg-lion-soft px-3.5 py-3 text-sm"><input type="checkbox" checked={oauthConsent} onChange={(event) => setOauthConsent(event.target.checked)} disabled={formBusy || Boolean(federatedNotice)} className="mt-0.5" /><span>我同意使用所選第三方的唯一識別碼、已驗證信箱及我確認的姓名建立登入帳號。會籍、名冊資歷與幹部權限須另行核對，不會自動授權（第三方註冊必填）。</span></label>}
           {profileError && <p className="text-sm text-lion-danger" role="alert">{profileError}</p>}
           <div className="flex gap-3">
-            <button type="button" disabled={submitting} onClick={() => setStep("invite")} className={`${secondaryButtonClass} flex-1`}>查看邀請</button>
-            <button type="submit" disabled={submitting || !invitationReady || !privacyConsent || !termsConsent || Boolean(federated && !oauthConsent)} className={`${primaryButtonClass} flex-1`}>{submitting ? "正在註冊…" : "完成註冊並開通"}</button>
+            <button type="button" disabled={formBusy} onClick={() => setStep("invite")} className={`${secondaryButtonClass} flex-1`}>查看邀請</button>
+            <button type="submit" disabled={formBusy || Boolean(federatedNotice) || !invitationReady || !privacyConsent || !termsConsent || Boolean(federated && !oauthConsent)} className={`${primaryButtonClass} flex-1`}>{submitting ? "正在註冊…" : "完成註冊並開通"}</button>
           </div>
-          <Link href="/login" className="flex min-h-12 items-center justify-center text-sm text-lion-muted" aria-disabled={submitting} onClick={(event) => { if (submitting) event.preventDefault(); }}>已有帳號？返回登入</Link>
+          <Link href="/login" className="flex min-h-12 items-center justify-center text-sm text-lion-muted" aria-disabled={formBusy} onClick={(event) => { if (formBusy) event.preventDefault(); }}>已有帳號？返回登入</Link>
         </form>}
         {step === "done" && <div className="flex flex-1 flex-col items-center justify-center gap-4 py-8 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-lion-gold bg-lion-gold/10 text-3xl text-lion-gold" aria-hidden="true">✓</div>

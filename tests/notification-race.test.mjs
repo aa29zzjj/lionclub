@@ -11,13 +11,12 @@ async function login(sim, person, password) {
 
 // Controlled boundaries on a single-connection SQL simulation, not a claim of
 // production PostgreSQL multi-connection concurrency or real mail delivery.
-test("notification/deletion race regression uses real routes and isolated SQL", { timeout: 120000 }, async t => {
+test("notification/historical internal anonymization race regression uses isolated SQL, not a public deletion feature", { timeout: 120000 }, async t => {
   const sim = await createSimulation();
   try {
     await t.test("a deletion committed after request authentication but before the send transaction rejects the stale sender", async () => {
       const s = await seedScenario(sim, "notice-deletion");
       const sending = await login(sim, s.member, s.password);
-      const deleting = await login(sim, s.member, s.password);
       const original = sim.prisma.$transaction.bind(sim.prisma);
       let injected = false;
       sim.prisma.$transaction = async (callback, options) => {
@@ -27,8 +26,9 @@ test("notification/deletion race regression uses real routes and isolated SQL", 
         if (!injected) {
           injected = true;
           sim.prisma.$transaction = original;
-          const result = await sim.call("/api/me/account-deletion", "POST", { password: s.password }, deleting);
-          assert.equal(result.status, 200);
+          const { anonymizeAccount } = sim.load("src/lib/account-deletion.ts");
+          const result = await anonymizeAccount(sim.prisma, { memberId: s.member.id, userId: s.member.user.id, expectedPasswordHash: s.member.user.passwordHash });
+          assert.equal(result.accountDeleted, true);
         }
         return original(callback, options);
       };

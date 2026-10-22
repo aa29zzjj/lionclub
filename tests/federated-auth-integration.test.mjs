@@ -5,8 +5,8 @@ import { createSimulation, seedScenario } from "./helpers/simulation.mjs";
 // Real Prisma/PGlite transactions and unchanged application services/routes.
 // The provider exchange/verification boundary is injected; real RSA verification
 // is separately covered by federated-auth.test.ts. No network/real identities.
-test("federated identities, central signup and destructive reauthentication are isolated and single-use", { timeout: 120000 }, async t => {
-  const sim = await createSimulation({ environment: { FEDERATED_AUTH_ENABLED: "true", GOOGLE_OAUTH_CLIENT_ID: "synthetic-client", GOOGLE_OAUTH_CLIENT_SECRET: "synthetic-secret",
+test("federated identities, central signup and security reauthentication are isolated and single-use", { timeout: 120000 }, async t => {
+  const sim = await createSimulation({ environment: { FEDERATED_AUTH_ENABLED: "true", GOOGLE_OAUTH_CLIENT_ID: "synthetic-client", GOOGLE_OAUTH_CLIENT_SECRET: "synthetic-secret", GOOGLE_OAUTH_FRESH_REAUTH_ENABLED: "true",
     APPLE_OAUTH_CLIENT_ID: "synthetic.apple.service", APPLE_OAUTH_TEAM_ID: "SYNTHETIC", APPLE_OAUTH_KEY_ID: "SYNTHETIC", APPLE_OAUTH_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nsynthetic-not-a-key\n-----END PRIVATE KEY-----", APPLE_OAUTH_FRESH_REAUTH_ENABLED: "true", OAUTH_TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64") } });
   try {
     const seed = await seedScenario(sim, "federated"); sim.env.ONBOARDING_ORGANIZATION_ID = seed.ai.id;
@@ -75,6 +75,57 @@ test("federated identities, central signup and destructive reauthentication are 
       assert.equal(row.userId, oauthUser.id); assert.equal(row.email, null); assert.equal(row.inviteToken, null);
       await assert.rejects(() => service.finishOAuth(sim.prisma, flow.state, flow.browser, null));
     });
+    await t.test("fresh-auth is opt-in and ordinary Google login still works while fresh capability is off", async () => {
+      sim.env.GOOGLE_OAUTH_FRESH_REAUTH_ENABLED = "false";
+      const session = { userId: oauthUser.id, memberId: oauthUser.member.id, email: oauthUser.email, sessionVersion: oauthUser.sessionVersion };
+      await assert.rejects(() => challenge({ purpose: "reauth", session, subject: "provider-new" }), error => error.code === "PROVIDER_REAUTH_UNAVAILABLE");
+      const flow = await challenge({ subject: "provider-new" }); await flow.callback();
+      assert.equal((await service.finishOAuth(sim.prisma, flow.state, flow.browser, null)).kind, "login");
+      sim.env.GOOGLE_OAUTH_FRESH_REAUTH_ENABLED = "true";
+    });
+    await t.test("cancel clears only this browser's pending capability, scrubs PII and does not create/delete/merge accounts", async () => {
+      const flow = await challenge({ email: "cancelled-oauth@example.test", subject: "cancelled-provider" }); await flow.callback();
+      assert.equal((await service.finishOAuth(sim.prisma, flow.state, flow.browser, null)).kind, "register");
+      const pendingJar = sim.jar(); pendingJar.set("lionclub_oauth_browser", flow.browser); pendingJar.set("lionclub_oauth_pending", flow.state);
+      const count = await sim.prisma.user.count();
+      assert.equal((await sim.call("/api/auth/oauth/cancel", "POST", {}, pendingJar, { origin: "https://attacker.example.test" })).status, 403);
+      assert.ok(pendingJar.has("lionclub_oauth_browser"));
+      assert.equal((await sim.call("/api/auth/oauth/cancel", "POST", {}, pendingJar)).status, 200);
+      assert.equal(pendingJar.has("lionclub_oauth_browser"), false); assert.equal(pendingJar.has("lionclub_oauth_pending"), false);
+      const row = await sim.prisma.oAuthTransaction.findUnique({ where: { stateHash: protocol.hashOAuthSecret(flow.state) } });
+      assert.ok(row.completedAt); assert.equal(row.email, null); assert.equal(row.subject, null); assert.equal(row.inviteToken, null); assert.equal(row.nonce, "");
+      await assert.rejects(() => service.finishOAuth(sim.prisma, flow.state, flow.browser, null));
+      assert.equal(await sim.prisma.user.count(), count);
+    });
+    await t.test("cancel during provider exchange prevents a late callback from restoring scrubbed identity data", async () => {
+      const flow = await challenge({ email: "late-callback@example.test", subject: "late-callback-provider", invite: seed.invite.token });
+      const userCount = await sim.prisma.user.count(), identityCount = await sim.prisma.federatedIdentity.count();
+      let enteredExchange, resumeExchange;
+      const exchangeStarted = new Promise(resolve => { enteredExchange = resolve; });
+      const exchangeGate = new Promise(resolve => { resumeExchange = resolve; });
+      const callback = service.acceptOAuthCallback(sim.prisma, "google", flow.state, flow.browser, { code: "synthetic-delayed-code" }, {
+        exchange: async () => { enteredExchange(); await exchangeGate; return { idToken: "synthetic-delayed-token" }; },
+        verify: async () => ({ subject: "late-callback-provider", email: "late-callback@example.test", name: "不得回寫的資料", payload: {} }),
+      });
+      const rejected = assert.rejects(callback, error => error.code === "OAUTH_EXPIRED");
+      let cancelled;
+      try {
+        await exchangeStarted;
+        const claimed = await sim.prisma.oAuthTransaction.findUnique({ where: { stateHash: protocol.hashOAuthSecret(flow.state) } });
+        assert.ok(claimed.claimedAt); assert.equal(claimed.verifiedAt, null);
+        await service.cancelOAuthBrowser(sim.prisma, flow.browser);
+        cancelled = await sim.prisma.oAuthTransaction.findUnique({ where: { id: claimed.id } });
+        assert.ok(cancelled.completedAt);
+      } finally { resumeExchange(); }
+      await rejected;
+      const row = await sim.prisma.oAuthTransaction.findUnique({ where: { id: cancelled.id } });
+      assert.equal(row.completedAt.getTime(), cancelled.completedAt.getTime()); assert.equal(row.verifiedAt, null);
+      for (const field of ["email", "subject", "providerName", "refreshTokenCiphertext", "inviteToken", "codeVerifier"]) assert.equal(row[field], null);
+      assert.equal(row.nonce, ""); assert.equal(row.browserHash, "");
+      await assert.rejects(() => service.finishOAuth(sim.prisma, flow.state, flow.browser, null), error => error.code === "OAUTH_EXPIRED");
+      await assert.rejects(flow.callback, error => error.code === "OAUTH_EXPIRED");
+      assert.equal(await sim.prisma.user.count(), userCount); assert.equal(await sim.prisma.federatedIdentity.count(), identityCount);
+    });
     await t.test("same provider identity cannot be linked elsewhere and linking requires confirmed current identity", async () => {
       await assert.rejects(() => challenge({ purpose: "link", session: auth(seed.friend), confirmed: false }), error => error.code === "REAUTH_REQUIRED");
       const flow = await challenge({ purpose: "link", session: auth(seed.friend), confirmed: true, subject: "provider-new" }); await flow.callback();
@@ -89,38 +140,40 @@ test("federated identities, central signup and destructive reauthentication are 
       await assert.rejects(old.callback, error => error.code === "PROVIDER_FRESH_AUTH_REQUIRED");
       const wrong = await challenge({ purpose: "reauth", session, subject: "another-subject", email: "unlinked@example.test" }); await wrong.callback();
       await assert.rejects(() => service.finishOAuth(sim.prisma, wrong.state, wrong.browser, session));
-      const good = await challenge({ purpose: "delete", session, subject: "provider-new" }); await good.callback();
+      const good = await challenge({ purpose: "reauth", session, subject: "provider-new" }); await good.callback();
       const proof = await service.finishOAuth(sim.prisma, good.state, good.browser, session);
-      assert.equal(proof.kind, "reauthenticated"); assert.equal(proof.deletion, true);
-      assert.equal(await service.consumeOAuthReauth(sim.prisma, session, proof.proof, "link"), false);
-      assert.equal(await service.consumeOAuthReauth(sim.prisma, session, proof.proof, "sessions"), false);
-      assert.equal(await service.consumeOAuthReauth(sim.prisma, { ...session, userId: seed.member.user.id }, proof.proof, "delete"), false);
-      assert.equal(await service.consumeOAuthReauth(sim.prisma, session, proof.proof, "delete"), true);
+      assert.equal(proof.kind, "reauthenticated"); assert.equal("deletion" in proof, false);
       assert.equal(await service.consumeOAuthReauth(sim.prisma, session, proof.proof, "delete"), false);
+      assert.equal(await service.consumeOAuthReauth(sim.prisma, { ...session, userId: seed.member.user.id }, proof.proof, "sessions"), false);
+      assert.equal(await service.consumeOAuthReauth(sim.prisma, session, proof.proof, "sessions"), true);
+      assert.equal(await service.consumeOAuthReauth(sim.prisma, session, proof.proof, "sessions"), false);
+      const legacyProof = protocol.randomOAuthSecret();
+      await sim.prisma.oAuthTransaction.create({ data: { provider: "google", purpose: "delete", stateHash: protocol.hashOAuthSecret(protocol.randomOAuthSecret()), browserHash: "", nonce: "", userId: session.userId,
+        sessionVersion: session.sessionVersion, expiresAt: new Date(Date.now() + 60_000), completedAt: new Date(), reauthHash: protocol.hashOAuthSecret(legacyProof), reauthExpiresAt: new Date(Date.now() + 60_000) } });
+      assert.equal(await service.consumeOAuthReauth(sim.prisma, session, legacyProof, "sessions"), false, "retired delete proof cannot authorize another security action");
     });
-    await t.test("OAuth-only forgot-password never creates a reset token; deletion requires a fresh proof, then removes User and identity", async () => {
+    await t.test("OAuth-only forgot-password never creates a reset token; fresh proof revokes sessions without enabling retired deletion", async () => {
       assert.equal((await sim.call("/api/auth/forgot-password", "POST", { email: oauthUser.email })).status, 200);
       assert.equal(await sim.prisma.passwordResetToken.count({ where: { userId: oauthUser.id } }), 0);
-      assert.equal((await sim.call("/api/me/account-deletion", "POST", {}, jar)).status, 401);
+      assert.equal((await sim.call("/api/me/account-deletion", "POST", {}, jar)).status, 410);
+      assert.equal((await sim.call("/api/me/sessions/revoke", "POST", {}, jar)).status, 401);
       const session = { userId: oauthUser.id, memberId: oauthUser.member.id, email: oauthUser.email, sessionVersion: oauthUser.sessionVersion };
-      const flow = await challenge({ purpose: "delete", session, subject: "provider-new" }); await flow.callback();
+      const flow = await challenge({ purpose: "reauth", session, subject: "provider-new" }); await flow.callback();
       const result = await service.finishOAuth(sim.prisma, flow.state, flow.browser, session); jar.set("lionclub_oauth_reauth", result.proof);
-      const deletion = await sim.call("/api/me/account-deletion", "POST", {}, jar);
-      assert.equal(deletion.status, 200); assert.equal(deletion.data.accountDeleted, true);
-      assert.equal(await sim.prisma.user.findUnique({ where: { id: oauthUser.id } }), null);
-      assert.equal(await sim.prisma.federatedIdentity.count({ where: { userId: oauthUser.id } }), 0);
-      assert.equal(await sim.prisma.oAuthTransaction.count({ where: { userId: oauthUser.id } }), 0);
+      const revoked = await sim.call("/api/me/sessions/revoke", "POST", {}, jar);
+      assert.equal(revoked.status, 200); assert.equal(revoked.data.currentSessionRetained, true);
+      assert.equal((await sim.prisma.user.findUnique({ where: { id: oauthUser.id } })).sessionVersion, session.sessionVersion + 1);
+      assert.equal(await sim.prisma.federatedIdentity.count({ where: { userId: oauthUser.id } }), 1);
+      assert.equal((await sim.call("/api/me/account-deletion", "POST", {}, jar)).status, 410);
     });
-    await t.test("Apple without a validated fresh-auth capability is gated; revocation failure cannot authorize deletion", async () => {
+    await t.test("Apple remains unavailable through runtime even if legacy Apple env flags were set", async () => {
       await sim.prisma.federatedIdentity.create({ data: { userId: seed.member.user.id, provider: "apple", subject: "apple-member", email: seed.member.email, refreshTokenCiphertext: protocol.encryptProviderToken("synthetic-token") } });
       sim.env.APPLE_OAUTH_FRESH_REAUTH_ENABLED = "false";
       await assert.rejects(() => challenge({ provider: "apple", purpose: "login" }), error => error.code === "PROVIDER_DISABLED");
-      await assert.rejects(() => challenge({ provider: "apple", purpose: "delete", session: auth(seed.member), subject: "apple-member" }), error => error.code === "PROVIDER_DISABLED");
+      await assert.rejects(() => challenge({ provider: "apple", purpose: "reauth", session: auth(seed.member), subject: "apple-member" }), error => error.code === "PROVIDER_DISABLED");
       sim.env.APPLE_OAUTH_FRESH_REAUTH_ENABLED = "true";
-      let called = 0;
-      await assert.rejects(() => service.revokeLinkedAppleBeforeDeletion(sim.prisma, seed.member.user.id, async () => { called++; throw Error("synthetic failure"); }), error => error.code === "APPLE_REVOCATION_FAILED");
-      assert.equal(called, 1); assert.ok(await sim.prisma.user.findUnique({ where: { id: seed.member.user.id } }));
-      const snapshot = await service.revokeLinkedAppleBeforeDeletion(sim.prisma, seed.member.user.id, async () => { called++; }); assert.equal(snapshot.length, 1);
+      await assert.rejects(() => challenge({ provider: "apple", purpose: "login" }), error => error.code === "PROVIDER_DISABLED");
+      assert.ok(await sim.prisma.user.findUnique({ where: { id: seed.member.user.id } }));
     });
     await t.test("SUSPENDED/deleted accounts cannot log in, link, or obtain fresh proof", async () => {
       const flow = await challenge({ email: seed.friend.email, subject: "provider-friend" }); await flow.callback();

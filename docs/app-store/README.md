@@ -1,6 +1,8 @@
 # App Store／Google Play 上架準備
 
-核對日期：2026-10-17。這是原生發行準備，不是已上架或已提交審查的聲明。正式網站的 main 部署／migration，與 iOS／Android 發行包是不同交付物；網站部署成功不會自動產生 IPA、APK 或 AAB。
+核對日期：2026-10-22。這是原生發行準備，不是已上架或已提交審查的聲明。正式網站的 main 部署／migration，與 iOS／Android 發行包是不同交付物；網站部署成功不會自動產生 IPA、APK 或 AAB。
+
+目前明確阻斷：依使用者要求移除自助刪帳。沒有 App 內／外部可發起刪除的途徑，舊頁只顯示退役說明、API 無條件 410；一般隱私詢問不代表已受理申請。建立帳號的 App 仍受 Apple／Google Play 刪帳要求約束，不能把功能移除當作政策驗收通過，也未提交商店。詳見 [2026-10-22 決策與影響](ACCOUNT_DELETION_REMOVED_2026-10-22.md)。
 
 2026-10-17 新指示取代舊文件的「不移交 AWS」安排：使用者要求協助登入 AWS IAM，登入後由本人接手。代理本輪僅完成 Console 登入，未修改 IAM 權限、RDS、Amplify、安全群組或正式 DB，也未將 Access Key 設定至 CLI。名冊正式 ID 映射、reparent 與舊活動 host 修復仍交 Jerry；其餘正式執行分工由使用者與 Jerry 確認，不因取得登入就推定代理可執行。AWS 帳密與金鑰不放本文件或 Git。
 
@@ -12,8 +14,8 @@
 | --- | --- | --- |
 | Web 會員、QR、資歷、活動、幹部工具與日夜外觀 | 現有 Next.js 客戶端與動態 /api/* | 原生功能基礎，不是原生驗收 |
 | 登入安全 | 已實作 Session version、密碼重設撤銷、其他裝置登出、地址綁定驗證信、同源防護 | 有隔離回歸測試；原生跨來源登入尚未實作 |
-| 刪帳／檢舉／封鎖 | 已有 API、檔案內入口與封鎖名單；刪帳採匿名化與可重試頭像清理 | 部分實作；資料保留、刪帳阻擋、外部入口與營運仍待完成 |
-| 公開政策／客服／外部刪帳頁 | /privacy、/support、/account/delete 的程式已存在 | 正式部署可用性、聯絡責任與完整刪帳流程仍未驗收，不等於政策已通過 |
+| 刪帳／檢舉／封鎖 | 自助刪帳已移除；檢舉／封鎖維持，歷史已提交清理 job 維護保留 | 刪帳要求未滿足，阻斷商店送審；沒有隱藏可操作 API |
+| 公開政策／客服／舊刪帳網址 | /privacy、/support 說明目前無自助刪帳，/account/delete 僅靜態退役說明 | 網址或檔案存在不能算可發起刪除，也不代表人工受理 |
 | 原生工程／素材 | 未見 Capacitor、標準 iOS／Android 工程及已驗收原生素材 | 尚無可簽章發行包 |
 | 本機工具 | macOS 26.3／arm64；Node 24.19.0；僅 Command Line Tools | 無可用完整 Xcode／iOS SDK；標準位置未找到 Android Studio、JDK、SDK 36 |
 
@@ -27,7 +29,8 @@
 - [發行工作板與修正版排程](RELEASE_PREPARATION_2026-10-17.md)：JSON 私人交付、帳號／工具／政策 gate；新個人 Play 帳號不承諾一週 production。
 - [商店文案與素材腳本](STORE_CONTENT_2026-10-17.md)：可並行準備的草稿，不拿瀏覽器截圖冒充原生實機。
 - [原生架構選項](NATIVE_ARCHITECTURE.md)：仍待原生登入垂直試作，不可整包靜態匯出現有動態後端。
-- [隱私與 API 歷史提案](PRIVACY_AND_ACCOUNT_API_DRAFT.md)：2026-10-13 草稿，其中「尚無刪帳／封鎖／Session version」已被新版程式取代，不能照抄成現行契約；以程式、本文件及本次交接為準。
+- [刪帳移除與政策阻斷](ACCOUNT_DELETION_REMOVED_2026-10-22.md)：本輪決策、無副作用契約與歷史清理維護邊界。
+- [隱私與 API 歷史提案](PRIVACY_AND_ACCOUNT_API_DRAFT.md)：2026-10-13 草稿，不是現行 API；2026-10-22 自助刪帳已退役，不能照抄舊成功契約。
 - 以下盤點只證明欄位／檔案／工具存在，不能代替功能、簽章、真機或政策驗收。
 
     node scripts/check-app-store-readiness.mjs
@@ -76,7 +79,7 @@ Web Session 為 HttpOnly／Secure／SameSite=Lax，mutation 需可信 Origin。�
 ## 必須補齊的功能與營運
 
 1. 公開客服與 HTML 隱私政策，和實際 AWS／SDK／日誌／備份／保留期一致；完成 Apple App Privacy、Google Data safety，不因未見廣告 SDK 就勾「不蒐集」。Google 政策網址需公開可開啟、非 PDF。[Apple App Privacy](https://developer.apple.com/app-store/app-privacy-details/)、[Google User Data](https://support.google.com/googleplay/android-developer/answer/10144311)
-2. App 內可發起並完成本人刪帳，另有不需重裝 App 的外部途徑。現有刪帳阻擋仍持幹部權限／有未來主辦活動者，並保留匿名 Member、共享活動與受限稽核；共享歷史不能自動當合規理由。需逐項決定作者內容刪除／交接、法定保留依據與期限、可完成的刪除路徑；至少六分鐘後才執行的頭像清理也要接可信排程。API 存在不等於要求全部通過。[Apple 刪帳](https://developer.apple.com/help/app-review/guideline-reference/5-1-1-account-deletion)、[Google 外部刪帳](https://support.google.com/googleplay/android-developer/answer/13327111)
+2. 目前沒有自助刪帳，這是明確送審阻斷。Apple 要求可建立帳號的 App 讓使用者在 App 內發起刪除；Google Play 也要求 App 內途徑與外部網頁資源。目前退役說明或一般客服詢問不符合此能力，不能宣稱已驗收；未經新的產品授權不恢復隱藏入口。既有已提交頭像清理工作仍須維護，不因移除功能而取消。[Apple 刪帳](https://developer.apple.com/help/app-review/guideline-reference/5-1-1-account-deletion)、[Google 外部刪帳](https://support.google.com/googleplay/android-developer/answer/13327111)
 3. 已有會員檢舉／封鎖基礎，仍需內容篩選、活動等內容處理、責任人及公開聯絡。獨立合成審查帳號使用強密碼，不用已公開且正式環境停用的舊 demo／短密碼帳號；審查需可操作後端及樣本 QR。[Apple UGC／審查可用性](https://developer.apple.com/app-store/review/guidelines/)
 4. 原生相機／照片只在操作時請求；拒絕、重試、無相機與圖片辨識替代流程都要驗收。現有 Web QR 不等於原生權限已通過。狀態列、返回、鍵盤、安全區、大字、讀屏、日夜與斷線均要真機測。站內通知不是 APNs／FCM，未做就不宣傳背景推播。
 
@@ -86,7 +89,7 @@ Web Session 為 HttpOnly／Secure／SameSite=Lax，mutation 需可信 Origin。�
 | --- | --- | --- | --- |
 | 1 | 收齊輸入、素材與商店文案 | 核對實際資料處理與保留 | 定名、法律實體、品牌授權、發行地區與帳號 |
 | 2 | 原生登入／QR 試作與長者可讀性 | mobile auth、Cookie／CORS／CSRF、撤銷 | 授權工具安裝；本人註冊、驗證、付費與簽協議 |
-| 3 | 政策／客服／外部刪帳頁與入口 | 刪帳交接、保留、清理排程與審核接點 | 確認真客服／隱私聯絡及營運責任人 |
+| 3 | 政策／客服如實揭露無自助刪帳，送審維持 blocked | 維護歷史已提交清理工作、資料保留與稽核 | 確認隱私詢問責任；未授權前不恢復自助刪帳或虛構受理 |
 | 4 | 真機截圖、APK／TestFlight 與審查說明 | 合成資料與故障／撤銷驗收 | 安全角色邀請協作者、核准簽章與送審 |
 
 缺口完成、產物可安裝、真機與隱私驗收通過後，才把 metadata 改 ready。這輪沒有安裝工具、新增原生套件、建立商店 App、讀取簽章或送審。

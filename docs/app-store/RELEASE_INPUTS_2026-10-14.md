@@ -1,5 +1,7 @@
 # 原生發行輸入清單與完成定義
 
+2026-10-22 現況覆蓋：自助刪帳已依使用者要求移除；舊頁僅退役說明、API 固定 410，不建立申請。以下歷史驗收計畫中的刪帳成功案例不是目前能力，App Store／Google Play 送審仍 blocked，見 [最新決策](ACCOUNT_DELETION_REMOVED_2026-10-22.md)。
+
 日期：2026-10-14。供 Hao、Jerry、Tom 與商店帳號所有人填寫；未知項目保持未定，不捏造法律實體、客服、Bundle ID、Team ID 或驗收狀態。這不是商店提交紀錄，網站部署與正式 migration 由主線另行驗證。
 
 R2 最終分工：Jerry 負責正式 AWS 備份、全部 migration、同版 API 部署及正式驗收；Hao 不操作正式 AWS／RDS、不執行 migration，接原生工程、真機與商店上架。不再要求把 AWS／DB 存取交給 Hao，先前接手方案作廢。Jerry 請用 [完成回報表](../JERRY_RETURN_FORM_MIGRATION_MOBILE_2026-10-14.md)交回版本、結果與手機配合事項。本機準備與 GitHub 留存不代表正式環境已更新；目前仍無原生專案、完整工具鏈或可發布產物，尚未送審。

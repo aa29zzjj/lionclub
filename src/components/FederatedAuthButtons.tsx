@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-export type AuthProvider = "google" | "apple";
-type Provider = { id: AuthProvider; name: string; enabled: boolean; reason?: string };
-export type AuthMethods = { hasPassword: boolean; available?: boolean; identities: { provider: AuthProvider; email: string | null; reauthAvailable?: boolean; reauthReason?: string }[]; reauthenticated: boolean; reauthActions?: ("link" | "sessions" | "delete")[] };
+import { useEffect, useRef, useState } from "react";
+import { OAuthClientError, readAuthMethods, readOAuthProviders, startFederatedLogin } from "@/lib/federated-auth-client";
+import type { AuthMethods, AuthProvider, OAuthPurpose, PublicProvider } from "@/lib/federated-auth-client";
+export { oauthErrorMessage } from "@/lib/federated-auth-client";
+export type { AuthMethods, AuthProvider } from "@/lib/federated-auth-client";
 
 export function useAuthMethods() {
   const [methods, setMethods] = useState<AuthMethods | null>(null);
@@ -12,81 +12,64 @@ export function useAuthMethods() {
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    void fetch("/api/me/auth-methods", { cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok || typeof data.hasPassword !== "boolean" || !Array.isArray(data.identities)) throw new Error();
-        if (!controller.signal.aborted) { setMethods(data); setError(""); }
-      }).catch(() => { if (!controller.signal.aborted) setError("無法確認登入方式，請重新載入後再操作。"); });
+    void readAuthMethods(fetch, controller.signal).then((data) => {
+      if (!controller.signal.aborted) { setMethods(data); setError(""); }
+    }).catch(() => { if (!controller.signal.aborted) setError("無法確認登入方式，請重新載入後再操作。"); });
     return () => controller.abort();
   }, [attempt]);
   return { methods, error, reload: () => { setMethods(null); setError(""); setAttempt((value) => value + 1); } };
 }
 
-export const oauthErrorMessage = (code: string | null) => {
-  if (!code) return "";
-  const messages: Record<string, string> = {
-    PROVIDER_DISABLED: "此第三方登入尚未啟用，請使用原有登入方式。",
-    OAUTH_CANCELLED: "您已取消第三方登入，可重新選擇登入方式。",
-    OAUTH_EXPIRED: "第三方驗證已到期，請重新開始。",
-    ACCOUNT_LINK_REQUIRED: "此信箱已有帳號。請先以原有方式登入，再到「我的 → 登入方式」連結，不會自動合併帳號。",
-    IDENTITY_ALREADY_LINKED: "這個第三方身分已連結其他帳號，未變更綁定。",
-    PROVIDER_ALREADY_LINKED: "此帳號已有相同類型的第三方登入，未取代原有連結。",
-    ACCOUNT_UNAVAILABLE: "目前帳號不可登入，請聯絡客服。",
-    OAUTH_NOT_DEPLOYED: "第三方登入尚待部署設定，請使用原有登入方式。",
-  };
-  return messages[code] ?? "第三方驗證未完成，請重新開始。帳號與權限不會因此自動變更。";
-};
-
-export default function FederatedAuthButtons({ purpose = "login", token, password, oauthConsent, allowedProviders, disabled = false }: {
-  purpose?: "login" | "link" | "reauth" | "delete";
-  token?: string; password?: string; oauthConsent?: boolean; allowedProviders?: AuthProvider[]; disabled?: boolean;
+export default function FederatedAuthButtons({ purpose = "login", token, password, oauthConsent, allowedProviders, disabled = false, onBusyChange }: {
+  purpose?: OAuthPurpose; token?: string; password?: string; oauthConsent?: boolean;
+  allowedProviders?: AuthProvider[]; disabled?: boolean; onBusyChange?: (busy: boolean) => void;
 }) {
-  const [providers, setProviders] = useState<Provider[]>([]);
+  const [providers, setProviders] = useState<PublicProvider[]>([]);
   const [busy, setBusy] = useState<AuthProvider | null>(null);
+  const starting = useRef(false);
+  const startController = useRef<AbortController | null>(null);
   const [error, setError] = useState("");
+  const [retryAfterSeconds, setRetryAfterSeconds] = useState<number>();
   const [loaded, setLoaded] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => () => { startController.current?.abort(); startController.current = null; starting.current = false; }, []);
   useEffect(() => {
     const controller = new AbortController();
-    void fetch("/api/auth/providers", { cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok || !Array.isArray(data.providers)) throw new Error();
-        if (!controller.signal.aborted) setProviders(data.providers.filter((item: Provider) => ["google", "apple"].includes(item.id)));
-      }).catch(() => { if (!controller.signal.aborted) setError("第三方登入設定暫時無法確認，請使用原有方式或稍後重試。"); })
+    setLoaded(false); setError("");
+    void readOAuthProviders(fetch, controller.signal).then((data) => {
+      if (!controller.signal.aborted) setProviders(data);
+    }).catch((failure) => { if (!controller.signal.aborted) { setProviders([]); setError(failure instanceof OAuthClientError ? failure.message : "第三方登入設定暫時無法確認。"); } })
       .finally(() => { if (!controller.signal.aborted) setLoaded(true); });
     return () => controller.abort();
-  }, []);
+  }, [attempt]);
 
   async function start(provider: AuthProvider) {
-    if (busy || disabled) return;
-    setBusy(provider); setError("");
+    if (starting.current || disabled || !providers.some((entry) => entry.id === provider && entry.enabled)) return;
+    const controller = new AbortController(); startController.current = controller;
+    starting.current = true; setBusy(provider); onBusyChange?.(true); setError(""); setRetryAfterSeconds(undefined);
     try {
-      const response = await fetch(`/api/auth/oauth/${provider}/start`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
-        body: JSON.stringify({ purpose, ...(token ? { token } : {}), ...(password ? { password } : {}), ...(oauthConsent ? { oauthConsent: true } : {}) }),
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(typeof data?.error === "string" ? data.error : "第三方登入未能開始，請稍後再試。");
-      const url = new URL(data?.authorizationUrl);
-      const expected = provider === "google" ? "accounts.google.com" : "appleid.apple.com";
-      if (url.protocol !== "https:" || url.hostname !== expected || url.username || url.password) throw new Error("第三方登入網址無效，未開啟連結。");
-      window.location.assign(url.toString());
+      const url = await startFederatedLogin(provider, { purpose, ...(token ? { token } : {}), ...(password ? { password } : {}), ...(oauthConsent ? { oauthConsent: true } : {}) }, fetch, controller.signal);
+      if (controller.signal.aborted || startController.current !== controller) return;
+      window.location.assign(url);
     } catch (failure) {
-      setError(failure instanceof Error && !(failure instanceof TypeError) ? failure.message : "連線失敗，請重新嘗試。");
-      setBusy(null);
+      if (controller.signal.aborted || startController.current !== controller) return;
+      setError(failure instanceof OAuthClientError ? failure.message : "連線失敗，請重新嘗試。");
+      if (failure instanceof OAuthClientError) setRetryAfterSeconds(failure.retryAfterSeconds);
+      starting.current = false; startController.current = null; setBusy(null); onBusyChange?.(false);
     }
   }
 
   const visible = providers.filter((provider) => !allowedProviders || allowedProviders.includes(provider.id));
-  return <div className="space-y-2" aria-busy={Boolean(busy)}>
-    {!loaded && <p role="status" className="text-sm text-lion-muted">確認 Apple／Google 登入設定中…</p>}
+  return <div className="space-y-2" aria-busy={!loaded || Boolean(busy)}>
+    {!loaded && <p role="status" className="text-sm text-lion-muted">確認第三方登入設定中…</p>}
     {visible.map((provider) => <div key={provider.id}>
-      <button type="button" disabled={disabled || !provider.enabled || Boolean(busy)} onClick={() => void start(provider.id)} className="min-h-12 w-full rounded-xl border border-lion-border bg-lion-card px-4 py-3 text-base font-semibold disabled:opacity-50">
-        {busy === provider.id ? "正在開啟驗證…" : `${purpose === "link" ? "連結" : purpose === "reauth" || purpose === "delete" ? "重新驗證" : "使用"} ${provider.name}${purpose === "login" ? " 繼續" : ""}`}
+      <button type="button" disabled={disabled || !loaded || !provider.enabled || Boolean(busy)} onClick={() => void start(provider.id)} className="min-h-12 w-full rounded-xl border border-lion-border bg-lion-card px-4 py-3 text-base font-semibold disabled:opacity-50">
+        {busy === provider.id ? "正在開啟驗證…" : `${purpose === "link" ? "連結" : purpose === "reauth" ? "重新驗證" : "使用"} ${provider.name}${purpose === "login" ? " 繼續" : ""}`}
       </button>
-      {!provider.enabled && <p className="mt-1 text-xs text-lion-muted">{provider.name} 尚未啟用；待管理者完成憑證與部署設定。</p>}
+      {!provider.enabled && <p className="mt-1 text-xs leading-relaxed text-lion-muted">{provider.name} 目前未啟用或設定暫不可用；可稍後重新確認，原有密碼登入仍可使用。</p>}
     </div>)}
     {error && <p role="alert" className="text-sm text-lion-danger">{error}</p>}
+    {retryAfterSeconds && <p role="status" className="text-sm text-lion-muted">請至少等待 {retryAfterSeconds} 秒再試；不會自動重送。</p>}
+    {loaded && !busy && (error || visible.some((provider) => !provider.enabled)) && <button type="button" disabled={disabled} onClick={() => setAttempt((value) => value + 1)} className="min-h-12 w-full rounded-xl border border-lion-border px-3 text-sm text-lion-gold disabled:opacity-50">重新確認登入設定</button>}
   </div>;
 }

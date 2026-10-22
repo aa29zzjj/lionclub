@@ -1,24 +1,118 @@
-name: Deploy to EC2
+name: EC2 deployment (explicit opt-in)
 
 on:
   push:
     branches: [main]
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ec2-main-deployment
+  cancel-in-progress: false
+
 jobs:
-  deploy:
+  gate:
+    name: Deployment gate (not a deployment)
     runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.plan.outputs.enabled }}
     steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
-            cd ~/lionclub
-            git fetch origin main
-            git reset --hard origin/main
-            docker compose -f docker-compose.ec2.yml up -d --build
-            docker image prune -f
+      - name: Decide whether EC2 deployment is enabled
+        id: plan
+        shell: bash
+        env:
+          DEPLOY_ENABLED: ${{ vars.EC2_DEPLOY_ENABLED }}
+          DATABASE_READY: ${{ vars.EC2_DATABASE_READY }}
+        run: |
+          set -euo pipefail
+          reason=""
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            reason="Only main can deploy; no host was contacted."
+          elif [ "$DEPLOY_ENABLED" != "true" ]; then
+            reason="EC2_DEPLOY_ENABLED is not true; EC2 deployment is OFF."
+          elif [ "$DATABASE_READY" != "true" ]; then
+            reason="EC2_DATABASE_READY is not true; DB-first approval is required."
+          fi
+          if [ -n "$reason" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SKIPPED / NOT DEPLOYED: $reason"
+            printf '## EC2: skipped / not deployed\n\n%s\n' "$reason" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            printf '## EC2: deployment requested\n\nGate passed; this is not deployment or Google/DB acceptance.\n' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  deploy:
+    name: Deploy approved main revision
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Validate SSH configuration without printing secrets
+        shell: bash
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST_FINGERPRINT: ${{ secrets.EC2_HOST_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in EC2_HOST EC2_USER EC2_SSH_KEY EC2_HOST_FINGERPRINT; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required repository secret: $name. No deployment attempted."
+              missing=1
+            fi
+          done
+          [ "$missing" = 0 ] || exit 1
+          [[ "$EC2_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] || { echo "::error::Use a single DNS name or IPv4 EC2_HOST."; exit 1; }
+          [[ "$EC2_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo "::error::Invalid EC2_USER."; exit 1; }
+          [[ "$EC2_HOST_FINGERPRINT" =~ ^SHA256:[A-Za-z0-9+/]+$ ]] || { echo "::error::Invalid SSH host fingerprint format."; exit 1; }
+
+      - name: Deploy over verified OpenSSH
+        shell: bash
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST_FINGERPRINT: ${{ secrets.EC2_HOST_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          umask 077
+          ssh_dir="$(mktemp -d)"
+          trap 'rm -f "$ssh_dir/key" "$ssh_dir/known_hosts"; rmdir "$ssh_dir"' EXIT
+          printf '%s\n' "$EC2_SSH_KEY" > "$ssh_dir/key"
+          ssh-keyscan -T 10 -t ed25519 "$EC2_HOST" > "$ssh_dir/known_hosts" 2>/dev/null
+          actual_fingerprint="$(ssh-keygen -lf "$ssh_dir/known_hosts" -E sha256 | awk '{print $2}')"
+          if [ "$actual_fingerprint" != "$EC2_HOST_FINGERPRINT" ]; then
+            echo "::error::SSH host fingerprint mismatch. No deployment attempted."
+            exit 1
+          fi
+          ssh -i "$ssh_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$ssh_dir/known_hosts" \
+            -o ConnectTimeout=20 "$EC2_USER@$EC2_HOST" bash -s -- "$GITHUB_SHA" <<'REMOTE'
+          set -euo pipefail
+          expected_commit="$1"
+          [[ "$expected_commit" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid deployment revision."; exit 1; }
+          cd "$HOME/lionclub"
+          [ "$(git rev-parse --show-toplevel)" = "$PWD" ] || { echo "Expected a dedicated lionclub checkout."; exit 1; }
+          [ "$(git symbolic-ref --quiet --short HEAD)" = "main" ] || { echo "Checkout must be on main; nothing overwritten."; exit 1; }
+          if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            echo "Checkout is dirty. Preserve and resolve local/untracked changes manually; nothing overwritten."
+            exit 1
+          fi
+          [ -r .env.docker ] || { echo ".env.docker is missing or unreadable; no deployment attempted."; exit 1; }
+          git fetch --no-tags origin main
+          [ "$(git rev-parse refs/remotes/origin/main)" = "$expected_commit" ] || { echo "main advanced; rerun the workflow for current main. No application deployment attempted."; exit 1; }
+          git merge-base --is-ancestor HEAD "$expected_commit" || { echo "Checkout is ahead or diverged; preserve local commits and resolve manually."; exit 1; }
+          git merge --ff-only "$expected_commit"
+          [ "$(git rev-parse HEAD)" = "$expected_commit" ] || { echo "Checkout revision changed; no application deployment attempted."; exit 1; }
+          docker compose -f docker-compose.ec2.yml config --quiet
+          # No migration, seed, SQL, pruning, git reset or git clean runs here.
+          docker compose -f docker-compose.ec2.yml up -d --build --wait --wait-timeout 180
+          echo "Container HTTP liveness passed. Google sign-in, database and feature acceptance are still separate checks."
+          REMOTE
+          printf '## EC2: container deployment command completed\n\nHTTP liveness only. Database, real Google OAuth and feature acceptance were NOT verified by this workflow.\n' >> "$GITHUB_STEP_SUMMARY"

@@ -1,8 +1,9 @@
 {
   "schemaVersion": 1,
-  "status": "draft",
+  "status": "blocked",
   "ready": false,
-  "reviewedOn": "2026-10-17",
+  "reviewedOn": "2026-10-22",
+  "blockingReasons": ["ACCOUNT_DELETION_REMOVED"],
   "locale": "zh-Hant",
   "app": {
     "name": "LionClubs",
@@ -69,7 +70,7 @@
     "nativeLiveApiAcceptanceComplete": false,
     "order": [
       "Jerry 核對目標環境、備份與 migration，先完成同版資料庫更新",
-      "部署相容的同版 API，驗證登入、Session、QR、刪帳與權限",
+      "部署相容的同版 API，驗證登入、Session、QR、權限與退役刪帳 API 固定 410",
       "原生客戶端接同版 API 完成實機端到端驗收",
       "簽章、商店資料與政策驗收通過後才提交審查"
     ],
@@ -83,6 +84,9 @@
     "privacyLabelsReviewed": false,
     "dataSafetyReviewed": false,
     "accountDeletionImplemented": false,
+    "accountDeletionStatus": "removed_by_product_decision",
+    "accountDeletionRetiredOn": "2026-10-22",
+    "accountDeletionNotes": "依使用者要求移除自助刪帳，舊頁僅退役說明、API 固定 410。一般隱私詢問不代表已受理刪除申請；目前不符合建立帳號 App 的 Apple／Google Play 刪帳要求，阻斷送審。既有已提交清理工作維護保留。",
     "ugcModerationImplemented": false
   },
   "assets": {

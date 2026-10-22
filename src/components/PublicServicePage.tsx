@@ -33,7 +33,6 @@ export default function PublicServicePage({ title, children }: { title: string; 
     <nav aria-label="服務與隱私連結" className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-lion-border pt-4 text-base">
       <Link className="touch-link text-lion-gold underline" href="/privacy">隱私權政策</Link>
       <Link className="touch-link text-lion-gold underline" href="/support">客服與協助</Link>
-      <Link className="touch-link text-lion-gold underline" href="/account/delete">刪除帳號</Link>
     </nav>
   </main></AppShell>;
 }

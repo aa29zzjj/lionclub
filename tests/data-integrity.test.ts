@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+// Historical internal anonymization/cleanup maintenance, not a public self-service
+// feature. The retired public POST is separately required to return 410 unchanged.
 import { test } from "node:test";
 import type { PrismaClient } from "@prisma/client";
 import { anonymizeAccount, AccountDeletionError, AVATAR_CLEANUP_DELAY_MS, processAccountDeletionCleanup } from "../src/lib/account-deletion";

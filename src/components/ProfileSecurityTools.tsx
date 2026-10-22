@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Avatar from "./Avatar";
@@ -21,9 +21,13 @@ export default function ProfileSecurityTools() {
   const [notice, setNotice] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
   const [unblock, setUnblock] = useState<Block | null>(null);
   const { methods, error: methodsError, reload: reloadMethods } = useAuthMethods();
   const canRevoke = methods?.hasPassword ? Boolean(password) : Boolean(methods?.reauthActions?.includes("sessions"));
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("oauth") === "reauthenticated") setOpen("sessions");
+  }, []);
 
   async function loadBlocks() {
     setLoading(true); setError("");
@@ -52,7 +56,7 @@ export default function ProfileSecurityTools() {
   }
 
   async function revoke(event: React.FormEvent) {
-    event.preventDefault(); if (busy || !canRevoke) return;
+    event.preventDefault(); if (busy || oauthBusy || !canRevoke) return;
     setBusy(true); setError(""); setNotice("");
     try {
       const response = await fetch("/api/me/sessions/revoke", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(password ? { password } : {}) });
@@ -69,7 +73,6 @@ export default function ProfileSecurityTools() {
     <h2 className="text-base font-semibold">隱私與登入安全</h2>
     <div className="mt-3 grid gap-2"><button type="button" className="min-h-12 rounded-xl border border-lion-border px-3 text-left text-base" onClick={() => { setOpen(open === "blocks" ? null : "blocks"); setError(""); setNotice(""); if (open !== "blocks") void loadBlocks(); }}>封鎖名單{open === "blocks" ? " · 收合" : " →"}</button><button type="button" className="min-h-12 rounded-xl border border-lion-border px-3 text-left text-base" onClick={() => { setOpen(open === "sessions" ? null : "sessions"); setPassword(""); setError(""); setNotice(""); }}>登出其他裝置{open === "sessions" ? " · 收合" : " →"}</button></div>
     <LinkedIdentitySettings />
-    <Link href="/account/delete" className="mt-3 flex min-h-12 items-center justify-between gap-3 rounded-xl border border-lion-danger/40 px-3 py-3 text-base text-lion-danger"><span><span className="block font-semibold">刪除我的帳號</span><span className="mt-1 block text-sm text-lion-muted">查看資料範圍，再以本人登入方式確認</span></span><span aria-hidden="true">→</span></Link>
     <nav aria-label="隱私與協助" className="mt-3 flex flex-wrap gap-x-4 text-base"><Link href="/privacy" className="touch-link text-lion-gold underline">隱私權政策</Link><Link href="/support" className="touch-link text-lion-gold underline">客服與協助</Link></nav>
     {notice && <p role="status" className="mt-3 text-base leading-relaxed">{notice}</p>}
     {open === "blocks" && <div className="mt-4" aria-busy={loading}>
@@ -83,13 +86,13 @@ export default function ProfileSecurityTools() {
         <label htmlFor="revoke-sessions-password" className="block text-sm font-medium">目前密碼</label>
         <PasswordInput id="revoke-sessions-password" autoComplete="current-password" required value={password} disabled={busy} onChange={(event) => setPassword(event.target.value)} className="min-h-12 w-full rounded-xl border border-lion-border bg-lion-page px-3 text-base" />
       </> : methods ? <>
-        <FederatedAuthButtons purpose="reauth" allowedProviders={methods.identities.filter((identity) => identity.reauthAvailable !== false).map((identity) => identity.provider)} />
+        <FederatedAuthButtons purpose="reauth" disabled={busy || oauthBusy} onBusyChange={setOauthBusy} allowedProviders={methods.identities.filter((identity) => identity.reauthAvailable !== false).map((identity) => identity.provider)} />
         {methods.identities.filter((identity) => identity.reauthAvailable === false).map((identity) => <p key={identity.provider} className="text-sm text-lion-muted">{identity.reauthReason || "此第三方重新驗證暫不可用。"}</p>)}
         <p className="text-sm">{canRevoke ? "第三方本人驗證已完成，請再按下方確認。" : "先重新驗證，再回本頁確認撤銷。驗證本身不會執行撤銷。"}</p>
       </> : <p role="status">確認登入方式中…</p>}
       {methodsError && <><p role="alert" className="text-base text-lion-danger">{methodsError}</p><button type="button" onClick={reloadMethods} className="min-h-12 text-lion-gold underline">重新載入</button></>}
       {error && <p role="alert" className="text-base text-lion-danger">{error}</p>}
-      <button type="submit" disabled={busy || !canRevoke} className="min-h-12 w-full rounded-xl bg-lion-action px-3 text-base font-semibold text-lion-navyDeep disabled:opacity-50">{busy ? "撤銷登入中…" : "確認登出其他裝置"}</button>
+      <button type="submit" disabled={busy || oauthBusy || !canRevoke} className="min-h-12 w-full rounded-xl bg-lion-action px-3 text-base font-semibold text-lion-navyDeep disabled:opacity-50">{busy ? "撤銷登入中…" : "確認登出其他裝置"}</button>
     </form>}
     <AccessibleDialog open={Boolean(unblock)} onClose={() => { if (!busy) setUnblock(null); }} busy={busy} title="解除封鎖確認" description={unblock ? `確定解除對 ${unblock.member.name} 的封鎖嗎？這不會恢復好友關係。` : undefined}>
       {error && <p role="alert" className="mb-3 text-base text-lion-danger">{error}</p>}<button type="button" disabled={busy} onClick={() => void removeBlock()} className="min-h-12 w-full rounded-xl bg-lion-action px-3 text-base font-semibold text-lion-navyDeep disabled:opacity-50">{busy ? "處理中…" : "確認解除封鎖"}</button>

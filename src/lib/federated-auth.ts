@@ -3,7 +3,7 @@ import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT } from "jose";
 import type { JWTVerifyGetKey, JWTPayload } from "jose";
 
 export type AuthProvider = "google" | "apple";
-export type OAuthPurpose = "login" | "link" | "reauth" | "delete";
+export type OAuthPurpose = "login" | "link" | "reauth";
 export class FederatedAuthError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
 }
@@ -13,19 +13,22 @@ export const hashOAuthSecret = (value: string) => crypto.createHash("sha256").up
 export const validOAuthSecret = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
 export const isAuthProvider = (value: string): value is AuthProvider => value === "google" || value === "apple";
 type Environment = Record<string, string | undefined>;
-export type ProviderConfig = { provider: AuthProvider; clientId: string; clientSecret?: string; origin: string; callback: string; teamId?: string; keyId?: string; privateKey?: string };
+export type ProviderConfig = { provider: AuthProvider; clientId: string; clientSecret?: string; origin: string; callback: string; reauthEnabled?: boolean; teamId?: string; keyId?: string; privateKey?: string };
 
 export function providerConfig(provider: AuthProvider, env: Environment = process.env): ProviderConfig | null {
   if (env.FEDERATED_AUTH_ENABLED !== "true") return null;
   let origin: URL;
-  try { origin = new URL(env.NEXT_PUBLIC_APP_URL || ""); } catch { return null; }
-  const local = ["localhost", "127.0.0.1"].includes(origin.hostname);
+  const originValue = env.OAUTH_APP_ORIGIN || env.NEXT_PUBLIC_APP_URL || "";
+  if (originValue.trim() !== originValue) return null;
+  try { origin = new URL(originValue); } catch { return null; }
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
   if (origin.username || origin.password || origin.search || origin.hash || origin.pathname !== "/"
     || (origin.protocol !== "https:" && !(env.NODE_ENV !== "production" && local && origin.protocol === "http:"))) return null;
   const base = { provider, origin: origin.origin, callback: `${origin.origin}/api/auth/oauth/${provider}/callback` };
   if (provider === "google") {
-    if (!env.GOOGLE_OAUTH_CLIENT_ID?.trim() || !env.GOOGLE_OAUTH_CLIENT_SECRET?.trim()) return null;
-    return { ...base, clientId: env.GOOGLE_OAUTH_CLIENT_ID.trim(), clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET };
+    if (!env.GOOGLE_OAUTH_CLIENT_ID?.trim() || !env.GOOGLE_OAUTH_CLIENT_SECRET?.trim()
+      || /[\s\0]/.test(env.GOOGLE_OAUTH_CLIENT_ID) || /[\s\0]/.test(env.GOOGLE_OAUTH_CLIENT_SECRET)) return null;
+    return { ...base, clientId: env.GOOGLE_OAUTH_CLIENT_ID.trim(), clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET, reauthEnabled: env.GOOGLE_OAUTH_FRESH_REAUTH_ENABLED === "true" };
   }
   // Apple uses form_post and requires a public HTTPS domain, not localhost/IP.
   if (env.APPLE_OAUTH_FRESH_REAUTH_ENABLED !== "true" || origin.protocol !== "https:" || local || /^[\d.:]+$/.test(origin.hostname)
@@ -36,10 +39,10 @@ export function providerConfig(provider: AuthProvider, env: Environment = proces
 }
 export function publicProviders(env: Environment = process.env) {
   return (["google", "apple"] as const).map(id => ({ id, name: id === "apple" ? "Apple" : "Google", enabled: Boolean(providerConfig(id, env)),
-    ...(!providerConfig(id, env) ? { reason: "尚未完成服務設定，目前不能使用" } : {}) }));
+    ...(!providerConfig(id, env) ? { reasonCode: id === "apple" ? "APPLE_UNAVAILABLE" : "PROVIDER_NOT_CONFIGURED" } : {}) }));
 }
 export function providerReauthAvailable(provider: string, env: Environment = process.env) {
-  return isAuthProvider(provider) && Boolean(providerConfig(provider, env)) && (provider === "google" || env.APPLE_OAUTH_FRESH_REAUTH_ENABLED === "true");
+  return isAuthProvider(provider) && Boolean(providerConfig(provider, env)?.reauthEnabled);
 }
 export function verifyFreshProviderAuthentication(payload: JWTPayload, startedAt: Date, now = new Date()) {
   const authTime = payload.auth_time;
@@ -58,8 +61,9 @@ export function authorizationUrl(config: ProviderConfig, state: string, nonce: s
     url.searchParams.set("code_challenge", crypto.createHash("sha256").update(verifier).digest("base64url"));
     url.searchParams.set("code_challenge_method", "S256");
     url.searchParams.set("prompt", "select_account");
-    if (purpose === "reauth" || purpose === "delete") {
-      url.searchParams.set("max_age", "0");
+    if (purpose === "reauth") {
+      // Google documents auth_time as optional and requiring console settings.
+      // Do not pretend select_account or an undocumented max_age forces login.
       url.searchParams.set("claims", JSON.stringify({ id_token: { auth_time: { essential: true } } }));
     }
   }
