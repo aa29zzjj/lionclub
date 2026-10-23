@@ -53,7 +53,7 @@ export default function MemberProfilePage() {
   async function toggleBlock() {
     if (!member) return;
     const blocking = !member.blockedByMe;
-    if (blocking && !window.confirm(`確定要封鎖 ${member.name} 嗎？封鎖後會自動解除好友關係。`)) return;
+    if (blocking && !window.confirm(`確定要封鎖 ${member.name} 嗎？將解除好友，互相隱藏檔案及個人活動；官方活動與授權管理紀錄保留。`)) return;
     setBusy(true);
     setError("");
     try {

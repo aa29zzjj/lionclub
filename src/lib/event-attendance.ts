@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { parseFriendQrPayload } from "./friend-qr";
 import type { EventManagementTarget } from "./event-scope";
+import { isPersonalEventHidden } from "./event-visibility";
 
 export const EVENT_ATTENDANCE_ROLES = ["CLUB_OFFICER", "CLUB_VICE_PRESIDENT", "CLUB_PRESIDENT", "CLUB_FINANCE", "ZONE_ADMIN", "REGION_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
 export class AttendanceError extends Error {
@@ -41,7 +42,7 @@ export async function toggleEventRegistration(prisma: PrismaClient, memberId: st
   return transactionRetry(prisma, async tx => {
     const member = await tx.member.findFirst({ where: { id: memberId, status: "ACTIVE", deletedAt: null }, select: { id: true } });
     if (!member) throw new AttendanceError(403, "帳號未啟用，無法變更報名");
-    const event = await tx.event.findUnique({ where: { id: eventId }, select: { capacity: true } });
+    const event = await tx.event.findUnique({ where: { id: eventId }, select: { capacity: true, category: true, createdById: true } });
     if (!event) throw new AttendanceError(404, "找不到此活動");
     const existing = await tx.eventRegistration.findUnique({ where: { eventId_memberId: { eventId, memberId } } });
     if (existing?.checkedInAt) throw new AttendanceError(409, "您已完成報到，不能自行取消或重新報名；請聯絡活動幹部處理");
@@ -51,6 +52,8 @@ export async function toggleEventRegistration(prisma: PrismaClient, memberId: st
       return { ok: true, registered: false };
     }
     if (existing && existing.status !== "CANCELLED") throw new AttendanceError(409, "報名狀態需由活動幹部確認");
+    // A member can still cancel an existing booking, but cannot join/rejoin hidden content.
+    if (await isPersonalEventHidden(tx, memberId, event)) throw new AttendanceError(404, "找不到此活動");
     const count = await tx.eventRegistration.count({ where: { eventId, status: "REGISTERED" } });
     if (event.capacity !== null && count >= event.capacity) throw new AttendanceError(409, "活動名額已滿");
     if (existing) {

@@ -32,6 +32,12 @@ export function shiftCalendarMonth(monthKey: string, offset: number): string {
   return result;
 }
 
+/** Exclusive month end; handles leap years and December rollover without local TZ. */
+export function calendarMonthRange(monthKey: string) {
+  parseMonth(monthKey);
+  return { from: `${monthKey}-01`, to: `${shiftCalendarMonth(monthKey, 1)}-01` };
+}
+
 export type CalendarDay = { dateKey: string; day: number; inMonth: boolean };
 
 /** Six complete Sunday-first weeks keep the controls in a predictable position. */

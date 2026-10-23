@@ -13,6 +13,8 @@ import { PinIcon } from "@/components/icons";
 import { colorFromId } from "@/lib/avatar-color";
 import { EVENT_TIME_ZONE, taipeiEventStartAt } from "@/lib/event-calendar";
 import { EVENT_CATEGORIES, eventCategoryLabels, type EventCategory } from "@/lib/event-category";
+import EventTagPicker from "@/components/EventTagPicker";
+import { eventTagLabels, type EventTag } from "@/lib/event-list";
 import { eventScopeLabels, type EventScope, type EventPublishingOption } from "@/lib/event-scope";
 
 type EventDetail = {
@@ -22,6 +24,7 @@ type EventDetail = {
   location: string;
   capacity?: number;
   category: EventCategory;
+  tags: EventTag[];
   scope: EventScope;
   coverPhotoUrl?: string;
   hostChapter: string;
@@ -70,6 +73,8 @@ export default function EventDetailPage() {
   const [location, setLocation] = useState("");
   const [capacity, setCapacity] = useState("");
   const [description, setDescription] = useState("");
+  const [tags, setTags] = useState<EventTag[]>([]);
+  const [tagsAvailable, setTagsAvailable] = useState(false);
   const [category, setCategory] = useState<EventCategory>("CLUB_OFFICIAL");
   const [scope, setScope] = useState<EventScope>("CLUB");
   const [allowedScopes, setAllowedScopes] = useState<EventScope[]>([]);
@@ -149,6 +154,7 @@ export default function EventDetailPage() {
     setLocation(nextEvent.location);
     setCapacity(nextEvent.capacity ? String(nextEvent.capacity) : "");
     setDescription(nextEvent.description ?? "");
+    setTags(nextEvent.tags ?? []);
     setCategory(nextEvent.category);
     setScope(nextEvent.scope);
     setCoverFile(null);
@@ -190,6 +196,7 @@ export default function EventDetailPage() {
           throw new Error("活動資料格式異常，請返回列表後重試。");
         }
         setEvent(data.event);
+        setTagsAvailable(data.tagsAvailable === true);
         loadForm(data.event);
         setAllowedScopes(Array.isArray(data.allowedScopes) ? data.allowedScopes : []);
         setOfficialHosts(Array.isArray(data.officialHosts) ? data.officialHosts : []);
@@ -298,6 +305,7 @@ export default function EventDetailPage() {
         description: description.trim() || null,
         coverPhotoUrl,
         category,
+        tags,
         scope: category === "CLUB_OFFICIAL" ? scope : undefined,
         hostOrganizationId: category === "CLUB_OFFICIAL" ? officialHosts.find((option) => option.scope === scope)?.hostOrganizationId : undefined,
       }),
@@ -322,6 +330,7 @@ export default function EventDetailPage() {
       description: description.trim() || undefined,
       coverPhotoUrl: coverPhotoUrl ?? undefined,
       category: result.category ?? category,
+      tags,
       scope: result.scope ?? (category === "CLUB_OFFICIAL" ? scope : "CLUB"),
       hostChapter: result.hostChapter ?? current.hostChapter,
       hostOrganizationId: result.hostOrganizationId ?? current.hostOrganizationId,
@@ -422,7 +431,8 @@ export default function EventDetailPage() {
           <div className="h-36 rounded-2xl bg-gradient-to-br from-lion-navyLight to-[#2E4A8A] mb-4" />
         )}
 
-        <div className="flex gap-2 mb-2">
+        <div className="flex flex-wrap gap-2 mb-2">
+          {event.tags?.map((tag) => <span key={tag} className="text-sm text-lion-gold">#{eventTagLabels[tag]}</span>)}
           <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${event.category === "PERSONAL" ? "bg-white/10 text-lion-muted" : "bg-lion-gold/15 text-lion-gold"}`}>
             {eventCategoryLabels[event.category]}
           </span>
@@ -476,6 +486,7 @@ export default function EventDetailPage() {
             <input id="edit-event-capacity" type="number" min={event.registeredCount || 1} step={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className="min-h-12 rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2.5 text-base" placeholder="名額（留白為不限）" />
             <label htmlFor="edit-event-description" className="text-base">活動說明（選填）</label>
             <textarea id="edit-event-description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={3000} rows={3} className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2.5 text-base resize-none" placeholder="活動說明" />
+            <EventTagPicker value={tags} onChange={setTags} disabled={!tagsAvailable} />
             <div>
               <span className="text-base block mb-1">活動類型</span>
               <div className="flex gap-2">

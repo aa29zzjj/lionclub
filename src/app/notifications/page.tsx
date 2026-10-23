@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import { colorFromId } from "@/lib/avatar-color";
 
 type Friend = { id: string; name: string; nickname?: string; photoUrl?: string };
+type FriendInvitation = { friendshipId: string; createdAt: string; requester: Friend };
 type EventOption = { id: string; title: string; startAt: string };
 type SentNotification = { id: string; eventTitle: string; recipients: string[]; message: string; sentAt: string };
 type InboxNotification = { id: string; notificationId: string; eventId: string; eventTitle: string; message: string; sentAt: string; readAt: string | null; sender: { id: string; name: string; nickname: string | null } };
@@ -17,6 +18,9 @@ export default function NotificationsPage() {
   const [events, setEvents] = useState<EventOption[]>([]);
   const [notifications, setNotifications] = useState<SentNotification[]>([]);
   const [inbox, setInbox] = useState<InboxNotification[]>([]);
+  const [friendInvitations, setFriendInvitations] = useState<FriendInvitation[]>([]);
+  const [responding, setResponding] = useState("");
+  const respondLock = useRef(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [tab, setTab] = useState<"received" | "sent">("received");
   const [loading, setLoading] = useState(true);
@@ -39,6 +43,7 @@ export default function NotificationsPage() {
       const notificationsData = results[2];
       if (!responses[2].ok) throw new Error(notificationsData.error ?? "活動通知無法載入");
       setNotifications(notificationsData.notifications ?? []); setInbox(notificationsData.inbox ?? []); setUnreadCount(notificationsData.unreadCount ?? 0);
+      setFriendInvitations(notificationsData.friendInvitations ?? []);
       if (responses[0].ok) setFriends(results[0].friends ?? []);
       if (responses[1].ok) { setEvents(results[1].events ?? []); setEventId((current) => current || results[1].events?.[0]?.id || ""); }
       if (!responses[0].ok || !responses[1].ok) setError("通知已載入，但活動或收件人資料暫時不完整，請重新載入後再發送。");
@@ -46,6 +51,20 @@ export default function NotificationsPage() {
     finally { setLoading(false); }
   }, [router]);
   useEffect(() => { void load(); }, [load]);
+
+  async function respondToFriend(friendshipId: string, action: "accept" | "decline") {
+    if (respondLock.current) return;
+    respondLock.current = true; setResponding(friendshipId); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/friends/${encodeURIComponent(friendshipId)}/respond`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+      const result = await response.json().catch(() => ({}));
+      if (response.status === 401) { router.replace("/login?reason=session-expired"); return; }
+      if (!response.ok) { if ([404, 409].includes(response.status)) await load(); throw new Error(result.error ?? "未能回覆邀請，請重試"); }
+      setNotice(action === "accept" ? "已接受好友邀請，雙方已成為好友。" : "已拒絕好友邀請。");
+      await load();
+    } catch (failure) { setError(failure instanceof Error && !(failure instanceof TypeError) ? failure.message : "連線中斷，請先重新載入確認邀請狀態再操作。"); }
+    finally { respondLock.current = false; setResponding(""); }
+  }
 
   async function markRead(ids: string[]) {
     if (marking || !ids.length) return;
@@ -77,13 +96,22 @@ export default function NotificationsPage() {
   }
 
   return <AppShell><div className="px-5 pb-8 pt-6">
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h1 className="text-xl font-bold">活動通知</h1><button type="button" disabled={sending} onClick={() => { setComposing(true); setError(""); }} className="min-h-12 rounded-xl bg-lion-action px-3 text-sm font-semibold text-lion-navyDeep">＋ 發送通知</button></div>
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h1 className="text-xl font-bold">通知</h1><button type="button" disabled={sending || Boolean(responding)} onClick={() => { setComposing(true); setError(""); }} className="min-h-12 rounded-xl bg-lion-action px-3 text-sm font-semibold text-lion-navyDeep">＋ 發送通知</button></div>
     {notice && <p role="status" className="mb-4 rounded-xl border border-lion-border bg-lion-card p-3 text-base">{notice}</p>}
     {error && <div className="mb-4"><p role="alert" className="text-base text-lion-danger">{error}</p><button type="button" disabled={loading || sending} onClick={() => void load()} className="mt-2 min-h-12 rounded-xl border border-lion-border px-3 text-sm">重新載入通知</button></div>}
     {!composing && <>
       <div role="tablist" aria-label="通知分類" className="mb-4 grid grid-cols-2 gap-1 rounded-xl bg-lion-soft p-1"><button type="button" role="tab" id="notification-received-tab" aria-controls="notification-panel" aria-selected={tab === "received"} onClick={() => setTab("received")} className={`min-h-12 rounded-lg px-2 text-base ${tab === "received" ? "bg-lion-action font-semibold text-lion-navyDeep" : "text-lion-muted"}`}>收到的通知{unreadCount ? `（${unreadCount} 未讀）` : ""}</button><button type="button" role="tab" id="notification-sent-tab" aria-controls="notification-panel" aria-selected={tab === "sent"} onClick={() => setTab("sent")} className={`min-h-12 rounded-lg px-2 text-base ${tab === "sent" ? "bg-lion-action font-semibold text-lion-navyDeep" : "text-lion-muted"}`}>已發送</button></div>
       {loading ? <p role="status" className="py-10 text-center">載入通知中…</p> : <section id="notification-panel" role="tabpanel" aria-labelledby={tab === "received" ? "notification-received-tab" : "notification-sent-tab"} className="space-y-3">
         {tab === "received" ? <>
+          <h2 className="text-lg font-bold">好友邀請（{friendInvitations.length} 待回覆）</h2>
+          {friendInvitations.length === 0 && <p className="text-base text-lion-muted">目前沒有待回覆的好友邀請。</p>}
+          {friendInvitations.map((invitation) => <article key={invitation.friendshipId} className="rounded-2xl border border-lion-gold bg-lion-card p-4">
+            <div className="flex items-center gap-3"><Avatar name={invitation.requester.name} color={colorFromId(invitation.requester.id)} imageUrl={invitation.requester.photoUrl} size={36} /><p className="min-w-0 break-words text-base font-semibold">{invitation.requester.nickname || invitation.requester.name}</p></div>
+            <p className="my-3 text-sm text-lion-muted">邀請您成為好友。僅查看通知不會自動接受。</p>
+            <div className="grid grid-cols-2 gap-2"><button type="button" disabled={Boolean(responding)} onClick={() => void respondToFriend(invitation.friendshipId, "accept")} className="min-h-12 rounded-xl bg-lion-action px-3 text-base font-semibold text-lion-navyDeep disabled:opacity-50">{responding === invitation.friendshipId ? "處理中…" : "接受邀請"}</button>
+              <button type="button" disabled={Boolean(responding)} onClick={() => void respondToFriend(invitation.friendshipId, "decline")} className="min-h-12 rounded-xl border border-lion-border px-3 text-base disabled:opacity-50">拒絕邀請</button></div>
+          </article>)}
+          <h2 className="pt-3 text-lg font-bold">活動通知</h2>
           {unreadCount > 0 && <button type="button" disabled={marking} onClick={() => void markRead(inbox.filter((entry) => !entry.readAt).map((entry) => entry.notificationId))} className="min-h-12 rounded-xl border border-lion-border px-3 text-sm disabled:opacity-50">{marking ? "更新中…" : "將這些通知全部標為已讀"}</button>}
           {inbox.length === 0 && <p className="py-10 text-center text-base text-lion-muted">目前沒有收到活動通知</p>}
           {inbox.map((entry) => <article key={entry.id} className={`rounded-2xl border bg-lion-card p-4 ${entry.readAt ? "border-lion-border" : "border-lion-gold"}`}>

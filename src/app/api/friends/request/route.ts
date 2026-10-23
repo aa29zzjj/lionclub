@@ -3,10 +3,12 @@ import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 import { isBlockedEitherWay } from "@/lib/member-block";
+import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 
 const bodySchema = z.object({ memberId: z.string().min(1) });
 
 export async function POST(req: NextRequest) {
+  if (!isTrustedBrowserMutation(req)) return NextResponse.json({ error: "請從網站操作" }, { status: 403 });
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
 

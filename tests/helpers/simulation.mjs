@@ -123,7 +123,7 @@ function resolveRoute(path) {
   if (existsSync(join(ROOT, "src/app/api", pathname, "route.ts"))) return { file: pathname, params: {} };
   const candidates = [
     [/^auth\/oauth\/([^/]+)\/(start|callback)$/, m => ({ file: `auth/oauth/[provider]/${m[2]}`, params: { provider: m[1] } })],
-    [/^events\/([^/]+)\/(check-in|register|registrations)$/, m => ({ file: `events/[id]/${m[2]}`, params: { id: m[1] } })],
+    [/^events\/([^/]+)\/(check-in|register|registrations|report)$/, m => ({ file: `events/[id]/${m[2]}`, params: { id: m[1] } })],
     [/^events\/([^/]+)$/, m => ({ file: "events/[id]", params: { id: m[1] } })],
     [/^members\/([^/]+)\/(block|report)$/, m => ({ file: `members/[memberId]/${m[2]}`, params: { memberId: m[1] } })],
     [/^members\/([^/]+)$/, m => ({ file: "members/[memberId]", params: { memberId: m[1] } })],

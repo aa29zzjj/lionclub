@@ -5,6 +5,7 @@ import { getCurrentMember } from "@/lib/current-member";
 import { hasAdminRoleForOrganization } from "@/lib/current-member";
 import { getBlockedMemberIds } from "@/lib/member-block";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
+import { isPersonalEventHidden, visibleEventsWhere } from "@/lib/event-visibility";
 
 export async function GET() {
   const me = await getCurrentMember();
@@ -12,15 +13,17 @@ export async function GET() {
 
   const prisma = await getPrisma();
   const blocked = await getBlockedMemberIds(prisma, me.id);
-  const [notifications, received, unreadCount] = await Promise.all([prisma.eventNotification.findMany({
-    where: { senderId: me.id },
+  const visibleEvent = await visibleEventsWhere(prisma, me.id);
+  const receivedWhere = { recipientId: me.id, notification: { senderId: { notIn: blocked }, event: visibleEvent } };
+  const [notifications, received, unreadCount, invitations] = await Promise.all([prisma.eventNotification.findMany({
+    where: { senderId: me.id, event: visibleEvent },
     include: {
       event: { select: { title: true } },
       recipients: { include: { recipient: { select: { name: true } } } },
     },
     orderBy: { sentAt: "desc" },
   }), prisma.eventNotificationRecipient.findMany({
-    where: { recipientId: me.id, notification: { senderId: { notIn: blocked } } },
+    where: receivedWhere,
     include: { notification: { include: {
       event: { select: { id: true, title: true } },
       sender: { select: { id: true, name: true, nickname: true } },
@@ -28,7 +31,11 @@ export async function GET() {
     orderBy: { notification: { sentAt: "desc" } },
     take: 100,
   }), prisma.eventNotificationRecipient.count({
-    where: { recipientId: me.id, readAt: null, notification: { senderId: { notIn: blocked } } },
+    where: { ...receivedWhere, readAt: null },
+  }), prisma.friendship.findMany({
+    where: { addresseeId: me.id, status: "PENDING", requesterId: { notIn: blocked }, requester: { status: "ACTIVE", deletedAt: null } },
+    select: { id: true, createdAt: true, requester: { select: { id: true, name: true, nickname: true, photoUrl: true } } },
+    orderBy: { createdAt: "desc" },
   })]);
 
   return NextResponse.json({
@@ -38,6 +45,9 @@ export async function GET() {
       sentAt: row.notification.sentAt, readAt: row.readAt, sender: row.notification.sender,
     })),
     unreadCount,
+    // A pending request is actionable, not an event read receipt. Viewing it never accepts it.
+    friendInvitations: invitations.map(({ id, createdAt, requester }) => ({ friendshipId: id, createdAt, requester })),
+    pendingFriendCount: invitations.length,
     notifications: notifications.map((n) => ({
       id: n.id,
       eventTitle: n.event.title,
@@ -86,7 +96,7 @@ export async function POST(req: NextRequest) {
   // the deletion transaction boundary; a deleted sender cannot write PII back.
   if (!await prisma.member.findFirst({ where: { id: me.id, status: "ACTIVE", deletedAt: null } })) return NextResponse.json({ error: "帳號狀態已更新，請重新登入" }, { status: 409 });
   const event = await prisma.event.findUnique({ where: { id: eventId } });
-  if (!event) return NextResponse.json({ error: "找不到此活動" }, { status: 404 });
+  if (!event || await isPersonalEventHidden(prisma, me.id, event)) return NextResponse.json({ error: "找不到此活動" }, { status: 404 });
 
   let memberIds: string[];
   if (recipientType === "organization") {
@@ -135,6 +145,7 @@ export async function POST(req: NextRequest) {
   }
 
   const blocked = await getBlockedMemberIds(prisma, me.id);
+  if (event.category === "PERSONAL") blocked.push(...await getBlockedMemberIds(prisma, event.createdById));
   const beforeFiltering = memberIds.length;
   const recipients = await prisma.member.findMany({ where: { id: { in: memberIds, notIn: blocked }, status: "ACTIVE", deletedAt: null }, select: { id: true } });
   memberIds = recipients.map((member) => member.id);

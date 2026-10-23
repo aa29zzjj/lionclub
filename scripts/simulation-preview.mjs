@@ -12,8 +12,8 @@ const css = "body{max-width:700px;margin:auto;padding:30px 20px;font:18px/1.7 sy
 const html = body => `<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>隔離模擬驗收</title><style>${css}</style><body>${body}</body></html>`;
 const banner = `<script>addEventListener('load',()=>{let b=document.createElement('aside');b.textContent='隔離模擬：不寄真信／不寫正式資料　';let a=document.createElement('a');a.href='/__simulation';a.textContent='切換角色／假信箱';a.style.color='#fff3b0';b.append(a);b.style.cssText='position:sticky;top:0;z-index:9999;padding:10px;background:#153954;color:white;font:14px/1.6 system-ui;text-align:center';document.body.prepend(b)})</script>`;
 
-export async function createSimulationPreview({ port = 3196, frontendPort = 3195 } = {}) {
-  const sim = await createSimulation(); const data = await seedScenario(sim);
+export async function createSimulationPreview({ port = 3196, frontendPort = 3195, fetcher } = {}) {
+  const sim = await createSimulation({ fetcher }); const data = await seedScenario(sim);
   await sim.prisma.member.update({ where: { id: data.chair.id }, data: { joinYear: 2026, joinMonth: 6 } });
   await sim.prisma.member.update({ where: { id: data.member.id }, data: { joinYear: 2026, joinMonth: 7 } });
   await sim.prisma.memberExperience.createMany({ data: [

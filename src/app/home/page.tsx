@@ -10,6 +10,8 @@ import { BellIcon, QrIcon, PinIcon } from "@/components/icons";
 import { colorFromId } from "@/lib/avatar-color";
 import { createFriendQrPayload } from "@/lib/friend-qr";
 import { formatJoinDate } from "@/lib/experience-data";
+import { partitionEvents } from "@/lib/event-list";
+import { EVENT_TIME_ZONE } from "@/lib/event-calendar";
 
 const eventGradients = [
   "from-lion-navyLight to-[#2E4A8A]",
@@ -38,6 +40,9 @@ export default function HomePage() {
   const [events, setEvents] = useState<EventCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [showQr, setShowQr] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(timer); }, []);
+  const upcomingEvents = partitionEvents(events, now).upcoming;
 
   useEffect(() => {
     Promise.all([
@@ -64,6 +69,7 @@ export default function HomePage() {
 
   function formatDate(iso: string) {
     return new Date(iso).toLocaleString("zh-TW", {
+      timeZone: EVENT_TIME_ZONE,
       month: "2-digit",
       day: "2-digit",
       weekday: "short",
@@ -170,7 +176,7 @@ export default function HomePage() {
             <p className="text-[11px] text-lion-muted mt-0.5">待確認邀請</p>
           </Link>
           <Link href="/events" className="rounded-xl bg-white/[0.04] border border-white/[0.06] py-3 text-center">
-            <p className="text-lion-gold font-bold text-lg leading-tight">{events.length}</p>
+            <p className="text-lion-gold font-bold text-lg leading-tight">{upcomingEvents.length}</p>
             <p className="text-[11px] text-lion-muted mt-0.5">即將舉辦</p>
           </Link>
         </div>
@@ -182,7 +188,8 @@ export default function HomePage() {
           </Link>
         </div>
         <div className="flex flex-col gap-4 mb-6">
-          {events.slice(0, 2).map((ev, i) => (
+          {upcomingEvents.length === 0 && <p className="text-sm text-lion-muted">目前沒有即將舉辦的活動。</p>}
+          {upcomingEvents.slice(0, 2).map((ev, i) => (
             <Link
               key={ev.id}
               href={`/events/${ev.id}`}

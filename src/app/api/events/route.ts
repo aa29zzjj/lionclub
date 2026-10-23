@@ -5,6 +5,9 @@ import { getCurrentMember } from "@/lib/current-member";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 import { hasAcceptedCurrentTerms, termsRequiredResponse } from "@/lib/terms-gate";
 import { EVENT_CATEGORIES } from "@/lib/event-category";
+import { eventTagsSchema } from "@/lib/event-list";
+import { EventTagsUnavailableError, readEventTags, writeEventTags } from "@/lib/event-tags";
+import { visibleEventsWhere } from "@/lib/event-visibility";
 import { EVENT_SCOPES, EventScopeError, getEventPublishingOptions, resolveEventPublication } from "@/lib/event-scope";
 
 export async function GET() {
@@ -13,6 +16,7 @@ export async function GET() {
 
   const prisma = await getPrisma();
   const events = await prisma.event.findMany({
+    where: await visibleEventsWhere(prisma, me.id),
     include: {
       hostOrganization: { select: { name: true } },
       registrations: { where: { memberId: me.id, status: "REGISTERED" }, select: { id: true } },
@@ -23,10 +27,12 @@ export async function GET() {
 
   const officialHosts = await getEventPublishingOptions(prisma, me.id, me.organizationId);
   const allowedScopes = officialHosts.map((option) => option.scope);
+  const tagData = await readEventTags(prisma, events.map((event) => event.id));
 
   return NextResponse.json({
     allowedScopes,
     officialHosts,
+    tagsAvailable: tagData.tagsAvailable,
     events: events.map((ev) => ({
       id: ev.id,
       title: ev.title,
@@ -34,6 +40,7 @@ export async function GET() {
       location: ev.location ?? "",
       capacity: ev.capacity ?? undefined,
       category: ev.category,
+      tags: tagData.byId.get(ev.id) ?? [],
       scope: ev.scope,
       coverPhotoUrl: ev.coverPhotoUrl ?? undefined,
       hostChapter: ev.hostOrganization.name,
@@ -53,6 +60,7 @@ const bodySchema = z.object({
   description: z.string().trim().max(3000).optional(),
   coverPhotoUrl: z.union([z.string().url(), z.literal("")]).optional(),
   category: z.enum(EVENT_CATEGORIES).optional(),
+  tags: eventTagsSchema.default([]),
   scope: z.enum(EVENT_SCOPES).optional(),
   hostOrganizationId: z.string().trim().min(1).max(200).optional(),
 });
@@ -77,7 +85,7 @@ export async function POST(req: NextRequest) {
       const publication = await resolveEventPublication(tx, me.id, me.organizationId, {
         category: effectiveCategory, scope: effectiveScope, hostOrganizationId: parsed.data.hostOrganizationId,
       });
-      return tx.event.create({ data: {
+      const created = await tx.event.create({ data: {
       title,
       startAt: new Date(startAt),
       location,
@@ -87,10 +95,13 @@ export async function POST(req: NextRequest) {
       ...publication,
       createdById: me.id,
       } });
+      await writeEventTags(tx, created.id, parsed.data.tags);
+      return created;
     }, { isolationLevel: "Serializable" });
 
     return NextResponse.json({ ok: true, eventId: event.id });
   } catch (error) {
+    if (error instanceof EventTagsUnavailableError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof EventScopeError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error && typeof error === "object" && "code" in error && error.code === "P2034") return NextResponse.json({ error: "帳號或活動同時更新，請重新載入後再試" }, { status: 409 });
     throw error;

@@ -5,6 +5,9 @@ import { getCurrentMember } from "@/lib/current-member";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 import { hasAcceptedCurrentTerms, termsRequiredResponse } from "@/lib/terms-gate";
 import { EVENT_CATEGORIES } from "@/lib/event-category";
+import { eventTagsSchema } from "@/lib/event-list";
+import { EventTagsUnavailableError, readEventTags, writeEventTags } from "@/lib/event-tags";
+import { isPersonalEventHidden } from "@/lib/event-visibility";
 import { EVENT_SCOPES, EventScopeError, canManageEvent, getEventPublishingOptions, resolveEventPublication } from "@/lib/event-scope";
 
 const updateSchema = z.object({
@@ -15,6 +18,7 @@ const updateSchema = z.object({
   description: z.string().trim().max(3000).nullable().optional(),
   coverPhotoUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
   category: z.enum(EVENT_CATEGORIES).optional(),
+  tags: eventTagsSchema.optional(),
   scope: z.enum(EVENT_SCOPES).optional(),
   hostOrganizationId: z.string().trim().min(1).max(200).optional(),
 });
@@ -24,7 +28,7 @@ class EventMutationError extends Error {
 }
 
 function mutationErrorResponse(error: unknown) {
-  if (error instanceof EventMutationError || error instanceof EventScopeError) return NextResponse.json({ error: error.message }, { status: error.status });
+  if (error instanceof EventMutationError || error instanceof EventScopeError || error instanceof EventTagsUnavailableError) return NextResponse.json({ error: error.message }, { status: error.status });
   if (error && typeof error === "object" && "code" in error && ["P2034", "P2003"].includes(String(error.code))) {
     return NextResponse.json({ error: "活動、報名或報到資料同時更新，請重新載入確認後再操作。" }, { status: 409 });
   }
@@ -46,14 +50,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     },
   });
 
-  if (!event) return NextResponse.json({ error: "找不到此活動" }, { status: 404 });
+  if (!event || await isPersonalEventHidden(prisma, me.id, event)) return NextResponse.json({ error: "找不到此活動" }, { status: 404 });
 
   const officialHosts = await getEventPublishingOptions(prisma, me.id, me.organizationId, event.hostOrganizationId);
   const allowedScopes = officialHosts.map((option) => option.scope);
+  const tagData = await readEventTags(prisma, [event.id]);
 
   return NextResponse.json({
     allowedScopes,
     officialHosts,
+    tagsAvailable: tagData.tagsAvailable,
     event: {
       id: event.id,
       title: event.title,
@@ -61,6 +67,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       location: event.location ?? "",
       capacity: event.capacity ?? undefined,
       category: event.category,
+      tags: tagData.byId.get(event.id) ?? [],
       scope: event.scope,
       coverPhotoUrl: event.coverPhotoUrl ?? undefined,
       hostChapter: event.hostOrganization.name,
@@ -108,6 +115,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         ...(parsed.data.coverPhotoUrl !== undefined ? { coverPhotoUrl: parsed.data.coverPhotoUrl || null } : {}),
         ...publication,
       } });
+      if (parsed.data.tags !== undefined) await writeEventTags(tx, id, parsed.data.tags);
       const host = await tx.organization.findUnique({ where: { id: publication.hostOrganizationId }, select: { name: true } });
       return { ...publication, hostChapter: host?.name ?? "" };
     }, { isolationLevel: "Serializable" });

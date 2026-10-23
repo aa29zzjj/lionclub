@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import TermsConsentPrompt from "@/components/TermsConsentPrompt";
+import EventTagPicker from "@/components/EventTagPicker";
+import { EVENT_TAGS, eventTagLabels, partitionEvents, type EventTag } from "@/lib/event-list";
 import Avatar from "@/components/Avatar";
 import { CalendarIcon, PinIcon, PlusIcon } from "@/components/icons";
 import { EVENT_TIME_ZONE, taipeiEventStartAt } from "@/lib/event-calendar";
@@ -24,6 +26,7 @@ type EventCard = {
   description?: string;
   capacity?: number;
   category: EventCategory;
+  tags: EventTag[];
   scope: EventScope;
   coverPhotoUrl?: string;
   registeredCount: number;
@@ -50,6 +53,10 @@ export default function EventsPage() {
   const [location, setLocation] = useState("");
   const [capacity, setCapacity] = useState("");
   const [description, setDescription] = useState("");
+  const [tags, setTags] = useState<EventTag[]>([]);
+  const [tagsAvailable, setTagsAvailable] = useState(false);
+  const [tagFilter, setTagFilter] = useState<EventTag | "ALL">("ALL");
+  const [now, setNow] = useState(() => Date.now());
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [category, setCategory] = useState<EventCategory>("PERSONAL");
@@ -92,6 +99,7 @@ export default function EventsPage() {
       if (!res.ok) throw new Error(data.error ?? "無法載入活動，請重試。");
       if (!Array.isArray(data.events)) throw new Error("活動資料格式異常，請重新載入。");
       setEvents(data.events);
+      setTagsAvailable(data.tagsAvailable === true);
       setAllowedScopes(Array.isArray(data.allowedScopes) ? data.allowedScopes : []);
       setOfficialHosts(Array.isArray(data.officialHosts) ? data.officialHosts : []);
     } catch (caught) {
@@ -106,6 +114,9 @@ export default function EventsPage() {
     return () => requestRef.current?.abort();
   }, [loadEvents]);
 
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(timer); }, []);
+  const groups = partitionEvents(events.filter((ev) => (filter === "ALL" || ev.category === filter) && (tagFilter === "ALL" || ev.tags?.includes(tagFilter))), now);
+
   useEffect(() => () => {
     if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
   }, [coverPreview]);
@@ -117,6 +128,7 @@ export default function EventsPage() {
     setLocation("");
     setCapacity("");
     setDescription("");
+    setTags([]);
     setCoverFile(null);
     setCoverPreview(null);
     setCategory("PERSONAL");
@@ -191,6 +203,7 @@ export default function EventsPage() {
           capacity: capacity ? Number(capacity) : undefined,
           coverPhotoUrl,
           category,
+          tags,
           scope: category === "CLUB_OFFICIAL" ? scope : undefined,
           hostOrganizationId: category === "CLUB_OFFICIAL" ? officialHosts.find((option) => option.scope === scope)?.hostOrganizationId : undefined,
         }),
@@ -273,10 +286,18 @@ export default function EventsPage() {
                 </button>
               ))}
             </div>
+            <div><label htmlFor="event-tag-filter" className="mb-1 block text-sm">標籤篩選</label>
+              <select id="event-tag-filter" value={tagFilter} onChange={(e) => setTagFilter(e.target.value as EventTag | "ALL")} className="min-h-12 w-full rounded-xl border border-lion-border bg-lion-card px-3 text-base">
+                <option value="ALL">全部標籤</option>{EVENT_TAGS.map((tag) => <option key={tag} value={tag}>{eventTagLabels[tag]}</option>)}
+              </select>
+            </div>
+            <p className="text-sm text-lion-muted">依開始時間分組（台灣時間）；已開始不代表已結束。個人活動遵守雙向封鎖，組織官方活動仍可查看。</p>
             {loading && <p role="status" className="text-base text-lion-muted text-center py-8">正在載入活動…</p>}
             {loadError && <div role="alert" className="rounded-xl border border-lion-danger/40 bg-lion-card p-4"><p className="text-base text-lion-danger">{loadError}</p><button type="button" onClick={() => void loadEvents()} disabled={loading} className="mt-3 min-h-12 rounded-xl bg-lion-action px-5 text-base font-semibold text-lion-navyDeep disabled:opacity-50">重新載入活動</button></div>}
-            {!loading && !loadError && events.filter((ev) => filter === "ALL" || ev.category === filter).length === 0 && <p className="text-base text-lion-muted text-center py-8">目前沒有符合的活動，也可從行事曆查看不同月份。</p>}
-            {!loading && !loadError && events.filter((ev) => filter === "ALL" || ev.category === filter).map((ev, i) => (
+            {!loading && !loadError && ([['upcoming', '即將舉辦'], ['past', '已開始／過往活動']] as const).map(([key, heading]) => <section key={key} className="space-y-4" aria-label={heading}>
+            <h2 className="text-lg font-bold">{heading}（{groups[key].length}）</h2>
+            {groups[key].length === 0 && <p className="text-base text-lion-muted">目前沒有符合的活動。</p>}
+            {groups[key].map((ev, i) => (
               <Link
                 key={ev.id}
                 href={`/events/${ev.id}`}
@@ -297,6 +318,7 @@ export default function EventsPage() {
                     )}
                   </div>
                 </div>
+                {ev.tags?.length > 0 && <p className="flex flex-wrap gap-2 px-3.5 pt-2 text-sm text-lion-gold">{ev.tags.map((tag) => <span key={tag}>#{eventTagLabels[tag]}</span>)}</p>}
                 {ev.coverPhotoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={ev.coverPhotoUrl} alt="" className="mx-3.5 mt-3 h-24 w-[calc(100%-1.75rem)] rounded-xl object-cover" />
@@ -315,7 +337,7 @@ export default function EventsPage() {
                   </div>
                 )}
               </Link>
-            ))}
+            ))}</section>)}
           </div>
         )}
 
@@ -323,6 +345,7 @@ export default function EventsPage() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-4" aria-busy={submitting}>
             <p className="text-base text-lion-muted">日期與時間皆以台灣時間發布。</p>
             <fieldset disabled={submitting} className="flex min-w-0 flex-col gap-4 disabled:opacity-70">
+            <EventTagPicker value={tags} onChange={setTags} disabled={!tagsAvailable} />
             <div>
               <span className="text-base text-lion-muted mb-1 block">活動分類</span>
               <div className="grid grid-cols-2 gap-2">
@@ -339,7 +362,7 @@ export default function EventsPage() {
                   </button>
                 ))}
               </div>
-              <p className="mt-1 text-sm text-lion-muted">官方獅子會活動須持有效且對應範圍的管理角色；個人／工商活動不代表分會立場。活動皆維持全平台可查看與報名。</p>
+              <p className="mt-1 text-sm text-lion-muted">官方獅子會活動須持有效且對應範圍的管理角色；個人／工商活動不代表分會立場。會員可查看與報名，但雙向封鎖會隱藏對方的個人活動，官方活動不受影響。</p>
               {officialHosts.length === 0 && <p className="mt-2 text-sm text-lion-muted">您目前可發布個人／工商活動；資料職稱與區級資歷查核角色不等於官方發布權限。</p>}
             </div>
             {category === "CLUB_OFFICIAL" && allowedScopes.length > 0 && (

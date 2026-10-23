@@ -509,6 +509,8 @@ model Event {
   capacity    Int?
   scope       String   @default("CLUB")
   category    String   @default("CLUB_OFFICIAL")
+  // Rolling deployment: accessed via capability-gated event-tags.ts until all DBs migrate.
+  tags        String[] @default([]) @ignore
   coverPhotoUrl String?
 
   hostOrganizationId String
