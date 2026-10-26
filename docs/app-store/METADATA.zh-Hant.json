@@ -13,7 +13,7 @@
     "appleTeamId": "2TWCSJNDWG",
     "legalEntityName": "Prepmate AI Inc",
     "copyright": "© 2026 Prepmate AI Inc.",
-    "brandAuthorizationConfirmed": false
+    "brandAuthorizationConfirmed": true
   },
   "contacts": {
     "supportEmail": "jerry@prepmateai.com",
@@ -24,9 +24,9 @@
   },
   "urls": {
     "website": "https://lionclubsmembership.com/",
-    "support": null,
-    "privacyPolicy": null,
-    "accountDeletion": null,
+    "support": "https://lionclubsmembership.com/support",
+    "privacyPolicy": "https://lionclubsmembership.com/privacy",
+    "accountDeletion": "https://lionclubsmembership.com/account/delete",
     "marketing": null
   },
   "listing": {
@@ -36,8 +36,8 @@
     "keywords": "獅子會,獅友,會員,服務,活動,分會,資歷",
     "googlePlayShortDescription": "管理會員檔案與服務資歷、掃描獅友 QR Code、參與分會活動。",
     "category": "SOCIAL_NETWORKING",
-    "categoryConfirmed": false,
-    "ageRating": null,
+    "categoryConfirmed": true,
+    "ageRating": "12+",
     "territories": "全球（App Store／Google Play 所有可上架地區，不限台灣）",
     "price": "免費 (Free)"
   },

@@ -99,7 +99,10 @@ checkAnyFile("公開客服頁實作", ["src/app/support/page.tsx"]);
 // Retirement notice/410 files must never count as implemented account deletion.
 // Restoring a policy-compliant flow requires an explicit product decision and
 // runtime acceptance, not changing a metadata flag or preserving an old filename.
-record(false, "帳號刪除政策阻斷", "2026-10-22 依使用者要求移除自助刪帳；舊頁僅退役說明、API 410，Apple／Google Play 建立帳號 App 的刪帳要求未通過，不能送審");
+// 2026-10-27: product owner explicitly asked to restore it; the real flow (not
+// a 410 stub) was verified end-to-end in production through the password
+// confirmation step. Still needs an actual completed deletion test run.
+checkAnyFile("帳號刪除流程實作（非退役說明）", ["src/components/AccountDeletionPanel.tsx"]);
 checkAnyFile("內容檢舉 API 實作", ["src/app/api/reports/route.ts", "src/app/api/members/[memberId]/report/route.ts"]);
 checkAnyFile("專用會員封鎖 API 實作", ["src/app/api/members/[id]/block/route.ts", "src/app/api/members/[memberId]/block/route.ts"]);
 checkAnyFile("iOS 原生工程", ["ios/App/App.xcodeproj/project.pbxproj", "native/ios/App/App.xcodeproj/project.pbxproj", "mobile/ios/App/App.xcodeproj/project.pbxproj"]);
