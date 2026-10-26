@@ -1,49 +1,71 @@
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
 import { test } from "node:test";
-import { POST } from "../src/app/api/me/account-deletion/route";
+import { deleteOwnAccount, loginForDeletion, readDeletionIdentity } from "../src/app/account/delete/client";
 
-const root = new URL("../", import.meta.url);
-const source = (file: string) => readFileSync(new URL(file, root), "utf8");
+const json = (value: unknown, status = 200, headers?: HeadersInit) => new Response(JSON.stringify(value), { status, headers });
 
-test("retired deletion POST never inspects body, auth, origin or proof; every call is 410", async () => {
-  const invoke = POST as (request?: unknown) => Promise<Response>;
-  const poison = new Proxy({}, { get() { throw Error("retired route must not inspect a request"); } });
-  for (const request of [undefined, null, poison, new Request("https://example.test/api/me/account-deletion", { method: "POST", body: "not JSON", headers: { Origin: "https://hostile.example.test", Cookie: "lionclub_session=old; oauth_reauth=old" } })]) {
-    const result = await invoke(request);
-    assert.equal(result.status, 410); assert.equal(result.headers.get("Cache-Control"), "no-store");
-    assert.equal(result.headers.has("Set-Cookie"), false);
-    const data = await result.json();
-    assert.equal(data.code, "ACCOUNT_DELETION_REMOVED"); assert.equal(data.accountDeleted, false); assert.equal(data.requestCreated, false);
-    assert.match(data.error, /功能已移除/); assert.doesNotMatch(data.error, /已受理|已排程|刪除成功/);
+test("external page identity comes from the current Session and allows legacy missing profile email", async () => {
+  let request: RequestInit | undefined;
+  const identity = await readDeletionIdentity(async (url, init) => { assert.equal(url, "/api/me"); request = init; return json({ id: "member-synthetic", name: "合成會員", email: null, adminRoles: ["not exposed"] }); });
+  assert.deepEqual(identity, { id: "member-synthetic", name: "合成會員", email: null });
+  assert.equal(request?.cache, "no-store"); assert.equal(request?.credentials, "same-origin");
+  assert.equal(await readDeletionIdentity(async () => json({}, 401)), null);
+  await assert.rejects(readDeletionIdentity(async () => json({ error: "FAKE_PRIVATE_DATABASE_MESSAGE" }, 500)), error => error instanceof Error && !error.message.includes("DATABASE"));
+  await assert.rejects(readDeletionIdentity(async () => json({ ok: true })));
+});
+
+test("external login stays in the deletion workflow and is not itself a delete operation", async () => {
+  const calls: string[] = [];
+  await loginForDeletion(" Legacy@Example.test ", "synthetic-password", async (url, init) => {
+    calls.push(String(url)); assert.equal(init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(init?.body)), { email: "Legacy@Example.test", password: "synthetic-password" });
+    return json({ ok: true, memberId: "member-synthetic" });
+  });
+  assert.deepEqual(calls, ["/api/auth/login"]);
+  await assert.rejects(loginForDeletion("synthetic@example.test", "0204", async () => json({ error: "請先設定新密碼", code: "PASSWORD_RESET_REQUIRED" }, 403)), /設定新密碼/);
+});
+
+test("delete submits password only, never a target member ID, and requires explicit completion", async () => {
+  let count = 0;
+  const result = await deleteOwnAccount("synthetic-password", async (url, init) => {
+    count++; assert.equal(url, "/api/me/account-deletion"); assert.equal(init?.method, "POST"); assert.equal(init?.credentials, "same-origin");
+    assert.deepEqual(JSON.parse(String(init?.body)), { password: "synthetic-password" });
+    return json({ ok: true, accountDeleted: true, cleanupPending: true, cleanupId: "private-job-not-shown" });
+  });
+  assert.equal(count, 1); assert.deepEqual(result, { kind: "deleted", cleanupPending: true });
+  assert.equal((await deleteOwnAccount("synthetic-password", async () => json({ ok: true }))).kind, "unknown");
+  assert.equal((await deleteOwnAccount("synthetic-password", async () => json({ ok: true, accountDeleted: true }))).kind, "unknown");
+});
+
+test("wrong password and live-role/activity conflicts are rejections, never a queued request or success", async () => {
+  for (const [status, message] of [[401, "密碼不正確"], [409, "仍有有效或預定的幹部權限"], [409, "仍有未來主辦活動"]] as const) {
+    let count = 0;
+    const result = await deleteOwnAccount("synthetic-password", async () => { count++; return json({ error: message }, status); });
+    assert.deepEqual(result, { kind: "rejected", status, message }); assert.equal(count, 1);
   }
 });
 
-test("retired route has zero runtime dependencies or executable side-effect facilities", () => {
-  const route = source("src/app/api/me/account-deletion/route.ts");
-  assert.doesNotMatch(route, /^\s*import\b|\brequire\s*\(|\bimport\s*\(/m);
-  assert.doesNotMatch(route, /getPrisma|getCurrentMember|getSession|consumeOAuth|revokeLinked|destroySession|fetch\s*\(|cookies\s*\(|process\.env|\.json\s*\(\s*\)/);
-  assert.match(route, /status:\s*410/);
-});
-
-test("former destructive UI/client are removed; profile keeps linked identities and sessions only", () => {
-  assert.equal(existsSync(new URL("src/components/AccountDeletionPanel.tsx", root)), false);
-  assert.equal(existsSync(new URL("src/app/account/delete/client.ts", root)), false);
-  const profile = source("src/components/ProfileSecurityTools.tsx");
-  assert.match(profile, /<LinkedIdentitySettings\s*\/>/); assert.match(profile, /\/api\/me\/sessions\/revoke/);
-  for (const file of ["src/components/ProfileSecurityTools.tsx", "src/components/PublicServicePage.tsx", "src/app/support/page.tsx", "src/app/privacy/page.tsx"]) {
-    assert.doesNotMatch(source(file), /href=["']\/account\/delete|\/api\/me\/account-deletion|AccountDeletionPanel|deleteOwnAccount/);
+test("transport/5xx/malformed-success results stay unknown without destructive retries", async () => {
+  for (const behavior of [async () => { throw new Error("SYNTHETIC_NETWORK_FAILURE"); }, async () => json({ error: "SYNTHETIC_FAILURE_AFTER_COMMIT" }, 500), async () => new Response("not-json", { status: 200 })]) {
+    let count = 0;
+    const result = await deleteOwnAccount("synthetic-password", async () => { count++; return behavior(); });
+    assert.equal(result.kind, "unknown"); assert.equal(count, 1);
+    if (result.kind === "unknown") assert.match(result.message, /尚無法確認/);
   }
-  const retiredPage = source("src/app/account/delete/page.tsx");
-  assert.doesNotMatch(retiredPage, /["']use client["']|<form\b|<input\b|<button\b|fetch\s*\(|onClick|onSubmit|FederatedAuthButtons|AccountDeletionPanel/);
-  assert.match(retiredPage, /此功能已移除/);
 });
 
-test("store readiness explicitly blocks retirement instead of passing existing filenames", () => {
-  const metadata = JSON.parse(source("docs/app-store/METADATA.zh-Hant.json"));
-  assert.equal(metadata.status, "blocked"); assert.equal(metadata.ready, false); assert.equal(metadata.release.submissionReady, false);
-  assert.equal(metadata.review.accountDeletionImplemented, false); assert.ok(metadata.blockingReasons.includes("ACCOUNT_DELETION_REMOVED"));
-  const checker = source("scripts/check-app-store-readiness.mjs");
-  assert.match(checker, /record\(false, "帳號刪除政策阻斷"/);
-  assert.doesNotMatch(checker, /checkAnyFile\("(?:外部帳號刪除頁實作|本人再驗證刪帳介面|帳號刪除 API 實作)"/);
+test("empty passwords never send and Retry-After remains visible without an automatic retry", async () => {
+  assert.equal((await deleteOwnAccount("", async () => { throw new Error("MUST_NOT_CALL"); })).kind, "rejected");
+  const result = await deleteOwnAccount("synthetic-password", async () => json({ error: "稍後再試" }, 429, { "Retry-After": "60" }));
+  assert.deepEqual(result, { kind: "rejected", status: 429, message: "稍後再試", retryAfterSeconds: 60 });
+});
+
+test("federated deletion sends no browser identity or token and still needs explicit successful completion", async () => {
+  let calls = 0;
+  const result = await deleteOwnAccount("", async (url, init) => {
+    calls++; assert.equal(url, "/api/me/account-deletion"); assert.deepEqual(JSON.parse(String(init?.body)), {});
+    assert.equal(init?.credentials, "same-origin");
+    return json({ ok: true, accountDeleted: true, cleanupPending: false });
+  }, { federatedReauthenticated: true });
+  assert.equal(calls, 1); assert.deepEqual(result, { kind: "deleted", cleanupPending: false });
 });

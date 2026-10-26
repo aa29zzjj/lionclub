@@ -97,17 +97,19 @@ test("methods preserve password and linked providers, minimize identity fields a
     ], reauthenticated: true, reauthActions: ["link", "delete", "sessions", "unknown", null] });
   });
   assert.equal(result.hasPassword, true); assert.equal(result.available, true); assert.equal(result.reauthenticated, true);
-  assert.deepEqual(result.reauthActions, ["link", "sessions"]);
+  assert.deepEqual(result.reauthActions, ["link", "delete", "sessions"]);
   assert.equal(result.identities[0].reauthReason?.length, 200); assert.equal(result.identities[1].reauthAvailable, false);
   assert.equal(JSON.stringify(result).includes("MUST_NOT_RETURN"), false);
 });
 
-test("legacy delete proofs never authorize sessions or linking; legacy/malformed flags fail closed", async () => {
+test("delete proofs authorize account deletion; malformed/legacy flags still fail closed", async () => {
   const base = { hasPassword: false, identities: [], reauthenticated: true };
-  for (const reauthActions of [undefined, null, "delete", ["delete"], ["DELETE", 1, {}]]) {
+  for (const reauthActions of [undefined, null, "delete", ["DELETE", 1, {}]]) {
     const result = await readAuthMethods(returns({ ...base, reauthActions }));
     assert.deepEqual(result.reauthActions, []); assert.equal(result.reauthenticated, false); assert.equal(result.available, false);
   }
+  const deleteResult = await readAuthMethods(returns({ ...base, reauthActions: ["delete"] }));
+  assert.deepEqual(deleteResult.reauthActions, ["delete"]); assert.equal(deleteResult.reauthenticated, true);
   const result = await readAuthMethods(returns({ ...base, reauthenticated: "true", reauthActions: ["sessions"], available: "true" }));
   assert.equal(result.reauthenticated, false); assert.equal(result.available, false);
   for (const data of [{}, { hasPassword: "true", identities: [] }, { hasPassword: false, identities: null },

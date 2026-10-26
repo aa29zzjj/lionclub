@@ -1,11 +1,11 @@
 // Browser-only transport contract. No environment variables, server settings or tokens.
 export type AuthProvider = "google" | "apple";
-export type OAuthPurpose = "login" | "link" | "reauth";
+export type OAuthPurpose = "login" | "link" | "reauth" | "delete";
 export type PublicProvider = { id: AuthProvider; name: string; enabled: boolean; reasonCode?: string };
 export type AuthMethods = {
   hasPassword: boolean; available: boolean;
   identities: { provider: AuthProvider; email: string | null; reauthAvailable: boolean; reauthReason?: string }[];
-  reauthenticated: boolean; reauthActions: ("link" | "sessions")[];
+  reauthenticated: boolean; reauthActions: ("link" | "sessions" | "delete")[];
 };
 export type PendingFederatedProfile = { pending: false } | { pending: true; provider: AuthProvider; email: string; name?: string; hasInvite: boolean };
 type Transport = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -85,7 +85,7 @@ export async function readAuthMethods(transport: Transport = fetch, signal?: Abo
       ...(typeof entry.reauthReason === "string" ? { reauthReason: entry.reauthReason.slice(0, 200) } : {}) };
   });
   if (identities.length > 2 || new Set(identities.map((entry) => entry.provider)).size !== identities.length) throw new OAuthClientError("OAUTH_RESPONSE_INVALID");
-  const reauthActions = (Array.isArray(data.reauthActions) ? data.reauthActions : []).filter((value): value is "link" | "sessions" => value === "link" || value === "sessions");
+  const reauthActions = (Array.isArray(data.reauthActions) ? data.reauthActions : []).filter((value): value is "link" | "sessions" | "delete" => value === "link" || value === "sessions" || value === "delete");
   return { hasPassword: data.hasPassword, identities, available: data.available === true,
     reauthenticated: data.reauthenticated === true && reauthActions.length > 0, reauthActions };
 }

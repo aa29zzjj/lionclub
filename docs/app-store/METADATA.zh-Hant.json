@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "status": "blocked",
   "ready": false,
-  "reviewedOn": "2026-10-22",
-  "blockingReasons": ["ACCOUNT_DELETION_REMOVED"],
+  "reviewedOn": "2026-10-27",
+  "blockingReasons": [],
   "locale": "zh-Hant",
   "app": {
     "name": "LionClubs",
@@ -17,7 +17,7 @@
   },
   "contacts": {
     "supportEmail": "jerry@prepmateai.com",
-    "privacyEmail": null,
+    "privacyEmail": "jerry@prepmateai.com",
     "reviewContactName": null,
     "reviewContactEmail": null,
     "reviewContactPhone": null
@@ -83,10 +83,9 @@
     "notes": "尚未提交審查。需建立可直接登入的獨立合成審查帳號與第二名合成會員 QR Code，不能使用正式會員個資或公開舊 demo／短密碼帳號。原生包須接已完成同版 migration 與部署驗收的 API；一般會員及幹部權限需清楚說明。",
     "privacyLabelsReviewed": false,
     "dataSafetyReviewed": false,
-    "accountDeletionImplemented": false,
-    "accountDeletionStatus": "removed_by_product_decision",
-    "accountDeletionRetiredOn": "2026-10-22",
-    "accountDeletionNotes": "依使用者要求移除自助刪帳，舊頁僅退役說明、API 固定 410。一般隱私詢問不代表已受理刪除申請；目前不符合建立帳號 App 的 Apple／Google Play 刪帳要求，阻斷送審。既有已提交清理工作維護保留。",
+    "accountDeletionImplemented": true,
+    "accountDeletionStatus": "restored_2026-10-27",
+    "accountDeletionNotes": "2026-10-22 曾依使用者要求移除，2026-10-27 已還原自助刪帳流程（本人登入＋密碼或第三方重新驗證確認）。尚待實機與正式環境重新驗收，不代表已完成上架驗收。",
     "ugcModerationImplemented": false
   },
   "assets": {

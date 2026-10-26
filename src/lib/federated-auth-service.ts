@@ -2,7 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import type { SessionPayload } from "./auth-session";
 import { isProductionDemoUser } from "./auth-session";
 import { authorizationUrl, encryptProviderToken, exchangeProviderCode, FederatedAuthError, hashOAuthSecret, isAuthProvider,
-  providerConfig, randomOAuthSecret, validOAuthSecret, verifyFreshProviderAuthentication, verifyProviderToken } from "./federated-auth";
+  providerConfig, randomOAuthSecret, revokeAppleToken, validOAuthSecret, verifyFreshProviderAuthentication, verifyProviderToken } from "./federated-auth";
 import type { AuthProvider, OAuthPurpose, ProviderConfig } from "./federated-auth";
 import type { OAuthRuntimeSettings } from "./runtime-secrets";
 import { OAUTH_DATA_VERSION } from "./federated-auth";
@@ -141,8 +141,8 @@ async function claimCompleted(prisma: PrismaClient, id: string, extra = {}) {
   const claimed = await prisma.oAuthTransaction.updateMany({ where: { id, completedAt: null, expiresAt: { gt: new Date() } }, data: { completedAt: new Date(), ...completedScrub, ...extra } });
   if (claimed.count !== 1) throw invalid();
 }
-export async function consumeOAuthReauth(prisma: PrismaClient, session: SessionPayload, proof: string | undefined, _action: "link" | "sessions", consume = true) {
-  if (!["link", "sessions"].includes(_action)) return false;
+export async function consumeOAuthReauth(prisma: PrismaClient, session: SessionPayload, proof: string | undefined, _action: "link" | "sessions" | "delete", consume = true) {
+  if (!["link", "sessions", "delete"].includes(_action)) return false;
   if (!validOAuthSecret(proof)) return false;
   const row = await prisma.oAuthTransaction.findUnique({ where: { reauthHash: hashOAuthSecret(proof) } });
   if (!row || !row.completedAt || row.userId !== session.userId || row.sessionVersion !== session.sessionVersion || row.reauthUsedAt
@@ -151,6 +151,18 @@ export async function consumeOAuthReauth(prisma: PrismaClient, session: SessionP
   if (!consume) return true;
   const claimed = await prisma.oAuthTransaction.updateMany({ where: { id: row.id, reauthUsedAt: null, reauthExpiresAt: { gt: new Date() } }, data: { reauthUsedAt: new Date() } });
   return claimed.count === 1;
+}
+export async function revokeLinkedAppleBeforeDeletion(prisma: PrismaClient, userId: string, revoke = revokeAppleToken) {
+  let identities;
+  try { identities = await prisma.federatedIdentity.findMany({ where: { userId }, select: { id: true, provider: true, refreshTokenCiphertext: true, updatedAt: true } }); }
+  catch (error) { if (isMissingFederatedTable(error)) return undefined; throw error; }
+  for (const identity of identities.filter(item => item.provider === "apple")) {
+    const config = providerConfig("apple");
+    if (!config || !identity.refreshTokenCiphertext) throw new FederatedAuthError(503, "APPLE_REVOCATION_UNAVAILABLE", "Apple 授權撤銷服務尚未可用，尚未刪除帳號；請稍後再試");
+    try { await revoke(identity.refreshTokenCiphertext, config); }
+    catch { throw new FederatedAuthError(503, "APPLE_REVOCATION_FAILED", "Apple 授權撤銷暫時失敗，尚未刪除帳號；請重新驗證後再試"); }
+  }
+  return identities.map(({ id, updatedAt }) => ({ id, updatedAt }));
 }
 /** Cancels only this browser's pending states and proof, never identities/users. */
 export async function cancelOAuthBrowser(prisma: PrismaClient, browserSecret?: string, proof?: string, now = new Date()) {
