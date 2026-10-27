@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "mobile-app-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["mobile-app/serve.mjs", "3138"],
+      "port": 3138
     }
   ]
 }
