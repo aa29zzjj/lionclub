@@ -2,11 +2,9 @@ import { getPrisma } from "./prisma";
 import { getSession } from "./session";
 import type { Prisma } from "@prisma/client";
 import { activeAdminRoleWhere } from "./active-admin-role";
+import type { SessionPayload } from "./auth-session";
 
-export async function getCurrentMember() {
-  const session = await getSession();
-  if (!session) return null;
-
+export async function getMemberForSession(session: SessionPayload) {
   const prisma = await getPrisma();
   const now = new Date();
   const member = await prisma.member.findUnique({
@@ -23,6 +21,12 @@ export async function getCurrentMember() {
 
   if (!member || member.status !== "ACTIVE" || member.deletedAt || member.user?.id !== session.userId) return null;
   return member;
+}
+
+export async function getCurrentMember() {
+  const session = await getSession();
+  if (!session) return null;
+  return getMemberForSession(session);
 }
 
 /** 檢查目前會員是否對指定分會（或其上層組織）有指定的管理角色 */
