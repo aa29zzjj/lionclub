@@ -63,7 +63,7 @@ export default function LoginPage() {
         <div className="flex flex-col items-center mb-10">
           <div className="w-20 h-20 rounded-full bg-white border-2 border-lion-gold flex items-center justify-center p-2 mb-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/lions-logo.svg" alt="Lions Clubs International" className="w-full h-full object-contain" />
+            <img src="/lions-logo.png" alt="Lions Clubs International" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-lion-cream tracking-wide">LionClubs</h1>
           <p className="text-lion-cream/50 text-sm mt-1">LIONS CLUB MEMBER PORTAL</p>

@@ -95,7 +95,7 @@ export default function HomePage() {
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-white border border-lion-gold flex items-center justify-center p-1">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/lions-logo.svg" alt="Lions Clubs International" className="w-full h-full object-contain" />
+              <img src="/lions-logo.png" alt="Lions Clubs International" className="w-full h-full object-contain" />
             </div>
             <span className="font-bold tracking-wide">獅子會</span>
           </div>
@@ -121,7 +121,7 @@ export default function HomePage() {
           <div className="flex items-center gap-2 mb-4">
             <span className="w-6 h-6 rounded-full bg-white border border-lion-gold flex items-center justify-center p-0.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/lions-logo.svg" alt="Lions Clubs International" className="w-full h-full object-contain" />
+              <img src="/lions-logo.png" alt="Lions Clubs International" className="w-full h-full object-contain" />
             </span>
             <span className="text-xs tracking-widest text-lion-gold font-medium">LIONS CLUBS · 數位會員證</span>
           </div>

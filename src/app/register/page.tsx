@@ -298,7 +298,7 @@ function RegisterForm() {
         <div className="mb-6 flex items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white p-1">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/lions-logo.svg" alt="Lions Clubs International" className="h-full w-full object-contain" />
+            <img src="/lions-logo.png" alt="Lions Clubs International" className="h-full w-full object-contain" />
           </span>
           <div><h1 className="text-lg font-bold">獅子會新會員註冊</h1><p className="mt-0.5 text-xs text-lion-muted">{step === "invite" ? "使用共同邀請加入" : step === "profile" ? "填寫個人資料" : "註冊完成"}</p></div>
         </div>
