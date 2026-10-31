@@ -155,13 +155,11 @@ test("isolated real-route / real-SQL acceptance", { timeout: 180000 }, async t =
       status(await sim.call(`/api/admin/pending-members/${pending.id}`, "POST", { action: "reject" }, chair), 409);
       assert.equal((await sim.prisma.member.findUnique({ where: { id: pending.id } })).status, "ACTIVE");
     });
-    await t.test("historical internal anonymization/cleanup maintenance preserves other attendees (not a public feature)", async () => {
+    await t.test("self-service account deletion via the public route anonymizes the account; internal cleanup maintenance preserves other attendees", async () => {
       const data = await seedScenario(sim, "deletion"); const a = await login(sim, data.member), b = await login(sim, data.member);
       const past = await sim.prisma.event.create({ data: { title: "共享歷史", startAt: new Date("2020-01-01"), createdById: data.member.id, hostOrganizationId: data.ai.id } });
       await sim.prisma.eventRegistration.create({ data: { eventId: past.id, memberId: data.friend.id, checkedInAt: new Date() } });
-      status(await sim.call("/api/me/account-deletion", "POST", { password: data.password }, a), 410);
-      const { anonymizeAccount } = sim.load("src/lib/account-deletion.ts");
-      const result = await anonymizeAccount(sim.prisma, { memberId: data.member.id, userId: data.member.user.id, expectedPasswordHash: data.member.user.passwordHash, bucket: "synthetic-avatar-bucket", region: "ap-northeast-1" });
+      const result = status(await sim.call("/api/me/account-deletion", "POST", { password: data.password }, a), 200);
       assert.equal(result.cleanupPending, true); status(await sim.call("/api/me", "GET", undefined, b), 401);
       const tombstone = await sim.prisma.member.findUnique({ where: { id: data.member.id } }); assert.equal(tombstone.name, "已刪除會員"); assert.equal(tombstone.email, null); assert.ok(tombstone.deletedAt);
       assert.ok(await sim.prisma.event.findUnique({ where: { id: past.id } })); assert.equal(await sim.prisma.eventRegistration.count({ where: { eventId: past.id } }), 1);
@@ -172,7 +170,6 @@ test("isolated real-route / real-SQL acceptance", { timeout: 180000 }, async t =
       assert.equal((await processAccountDeletionCleanup(sim.prisma, result.cleanupId, storage, later)).retryable, true);
       fail = false; assert.equal((await processAccountDeletionCleanup(sim.prisma, result.cleanupId, storage, later)).completed, true); assert.deepEqual(keys, []);
       assert.equal((await processAccountDeletionCleanup(sim.prisma, result.cleanupId, storage, later)).alreadyCompleted, true);
-      status(await sim.call("/api/me/account-deletion", "POST", { password: s.password }, chair), 410);
     });
     await t.test("event create/edit routes enforce origin, input, live capacity and owner permission", async () => {
       const body = { title: "真路由建立模擬活動", location: "合成地點", startAt: "2026-11-01T04:00:00.000Z", capacity: 2 };

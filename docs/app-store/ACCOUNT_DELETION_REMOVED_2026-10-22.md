@@ -1,5 +1,9 @@
 # 自助刪帳移除與上架阻斷（2026-10-22）
 
+**本文件已於 2026-10-27 被取代，僅保留作歷史記錄。** 自助刪帳已還原並持續強化（commit `222879a`、`82c8fbb`），`/account/delete` 與 `POST /api/me/account-deletion` 現為可操作的刪除流程，非下文所述的固定 410／靜態退役說明。現況見 [README](README.md) 與 [METADATA.zh-Hant.json](METADATA.zh-Hant.json) 的 `review.accountDeletionStatus`／`accountDeletionNotes`。以下內容描述的是 2026-10-22 當時的決策與理由，不是目前行為。
+
+---
+
 使用者明確要求「不要再有刪除我的帳號的功能」。本次依此移除整條自助操作流程，不以商店要求為由保留隱藏 API，也不新增人工申請、假排隊或自動刪除。
 
 ## 目前行為
