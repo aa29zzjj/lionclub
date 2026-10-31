@@ -12,9 +12,10 @@ test("federated identities, central signup and security reauthentication are iso
     const seed = await seedScenario(sim, "federated"); sim.env.ONBOARDING_ORGANIZATION_ID = seed.ai.id;
     const protocol = sim.load("src/lib/federated-auth.ts"), service = sim.load("src/lib/federated-auth-service.ts");
     const auth = member => ({ userId: member.user.id, memberId: member.id, email: member.email, sessionVersion: member.user.sessionVersion });
-    async function challenge({ provider = "google", purpose = "login", session = null, confirmed = false, email = "oauth-new@example.test", subject = "provider-new", invite, fresh = true } = {}) {
+    async function challenge({ provider = "google", purpose = "login", session = null, confirmed = false, email = "oauth-new@example.test", subject = "provider-new", invite, fresh = true, reauthAction } = {}) {
       const browser = protocol.randomOAuthSecret();
-      const result = await service.beginOAuth(sim.prisma, provider, purpose, browser, session, confirmed, new Date(), invite);
+      const result = await service.beginOAuth(sim.prisma, provider, purpose, browser, session, confirmed, new Date(), invite, undefined, undefined,
+        purpose === "reauth" ? (reauthAction || "sessions") : undefined);
       const state = new URL(result.authorizationUrl).searchParams.get("state");
       const callback = () => service.acceptOAuthCallback(sim.prisma, provider, state, browser, { code: "synthetic-code", idToken: provider === "apple" ? "synthetic-front-token" : undefined }, {
         exchange: async () => ({ idToken: "synthetic-back-token", refreshToken: provider === "apple" ? "synthetic-apple-refresh" : undefined }),
@@ -152,19 +153,34 @@ test("federated identities, central signup and security reauthentication are iso
         sessionVersion: session.sessionVersion, expiresAt: new Date(Date.now() + 60_000), completedAt: new Date(), reauthHash: protocol.hashOAuthSecret(legacyProof), reauthExpiresAt: new Date(Date.now() + 60_000) } });
       assert.equal(await service.consumeOAuthReauth(sim.prisma, session, legacyProof, "sessions"), false, "retired delete proof cannot authorize another security action");
     });
-    await t.test("OAuth-only forgot-password never creates a reset token; fresh proof revokes sessions without enabling retired deletion", async () => {
+    await t.test("OAuth-only forgot-password never creates a reset token; a sessions-scoped proof does not also authorize account deletion", async () => {
       assert.equal((await sim.call("/api/auth/forgot-password", "POST", { email: oauthUser.email })).status, 200);
       assert.equal(await sim.prisma.passwordResetToken.count({ where: { userId: oauthUser.id } }), 0);
-      assert.equal((await sim.call("/api/me/account-deletion", "POST", {}, jar)).status, 410);
+      const beforeAny = await sim.call("/api/me/account-deletion", "POST", {}, jar);
+      assert.equal(beforeAny.status, 401); assert.equal(beforeAny.data.code, "REAUTH_REQUIRED");
       assert.equal((await sim.call("/api/me/sessions/revoke", "POST", {}, jar)).status, 401);
       const session = { userId: oauthUser.id, memberId: oauthUser.member.id, email: oauthUser.email, sessionVersion: oauthUser.sessionVersion };
-      const flow = await challenge({ purpose: "reauth", session, subject: "provider-new" }); await flow.callback();
+      const flow = await challenge({ purpose: "reauth", reauthAction: "sessions", session, subject: "provider-new" }); await flow.callback();
       const result = await service.finishOAuth(sim.prisma, flow.state, flow.browser, session); jar.set("lionclub_oauth_reauth", result.proof);
       const revoked = await sim.call("/api/me/sessions/revoke", "POST", {}, jar);
       assert.equal(revoked.status, 200); assert.equal(revoked.data.currentSessionRetained, true);
       assert.equal((await sim.prisma.user.findUnique({ where: { id: oauthUser.id } })).sessionVersion, session.sessionVersion + 1);
       assert.equal(await sim.prisma.federatedIdentity.count({ where: { userId: oauthUser.id } }), 1);
-      assert.equal((await sim.call("/api/me/account-deletion", "POST", {}, jar)).status, 410);
+      // The proof above was minted for "sessions" (and already single-use consumed); it must
+      // not also unlock deletion, whether reused or replayed via this same cookie.
+      const afterSessionsRevoke = await sim.call("/api/me/account-deletion", "POST", {}, jar);
+      assert.equal(afterSessionsRevoke.status, 401); assert.equal(afterSessionsRevoke.data.code, "REAUTH_REQUIRED");
+      // Sanity check the other direction too: a proof minted specifically for "delete" does
+      // authorize it. Inserted directly (post-revoke sessionVersion already moved on from the
+      // `session` snapshot above) rather than re-running the full challenge/session dance.
+      const deleteProofSecret = protocol.randomOAuthSecret();
+      const currentVersion = (await sim.prisma.user.findUnique({ where: { id: oauthUser.id } })).sessionVersion;
+      await sim.prisma.oAuthTransaction.create({ data: { provider: "google", purpose: "reauth", reauthAction: "delete",
+        stateHash: protocol.hashOAuthSecret(protocol.randomOAuthSecret()), browserHash: "", nonce: "", userId: session.userId, sessionVersion: currentVersion,
+        expiresAt: new Date(Date.now() + 60_000), completedAt: new Date(), verifiedAt: new Date(),
+        reauthHash: protocol.hashOAuthSecret(deleteProofSecret), reauthExpiresAt: new Date(Date.now() + 60_000) } });
+      assert.equal(await service.consumeOAuthReauth(sim.prisma, { ...session, sessionVersion: currentVersion }, deleteProofSecret, "delete", false), true,
+        "a proof minted specifically for delete does authorize it");
     });
     await t.test("Apple remains unavailable through runtime even if legacy Apple env flags were set", async () => {
       await sim.prisma.federatedIdentity.create({ data: { userId: seed.member.user.id, provider: "apple", subject: "apple-member", email: seed.member.email, refreshTokenCiphertext: protocol.encryptProviderToken("synthetic-token") } });

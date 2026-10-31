@@ -87,7 +87,7 @@ export default function ProfileSecurityTools() {
         <label htmlFor="revoke-sessions-password" className="block text-sm font-medium">目前密碼</label>
         <PasswordInput id="revoke-sessions-password" autoComplete="current-password" required value={password} disabled={busy} onChange={(event) => setPassword(event.target.value)} className="min-h-12 w-full rounded-xl border border-lion-border bg-lion-page px-3 text-base" />
       </> : methods ? <>
-        <FederatedAuthButtons purpose="reauth" disabled={busy || oauthBusy} onBusyChange={setOauthBusy} allowedProviders={methods.identities.filter((identity) => identity.reauthAvailable !== false).map((identity) => identity.provider)} />
+        <FederatedAuthButtons purpose="reauth" reauthAction="sessions" disabled={busy || oauthBusy} onBusyChange={setOauthBusy} allowedProviders={methods.identities.filter((identity) => identity.reauthAvailable !== false).map((identity) => identity.provider)} />
         {methods.identities.filter((identity) => identity.reauthAvailable === false).map((identity) => <p key={identity.provider} className="text-sm text-lion-muted">{identity.reauthReason || "此第三方重新驗證暫不可用。"}</p>)}
         <p className="text-sm">{canRevoke ? "第三方本人驗證已完成，請再按下方確認。" : "先重新驗證，再回本頁確認撤銷。驗證本身不會執行撤銷。"}</p>
       </> : <p role="status">確認登入方式中…</p>}

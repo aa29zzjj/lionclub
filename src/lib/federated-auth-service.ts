@@ -28,15 +28,17 @@ async function activeUser(prisma: PrismaClient, session: SessionPayload) {
     || user.member.status !== "ACTIVE" || user.member.deletedAt || isProductionDemoUser(user)) throw new FederatedAuthError(401, "SESSION_CHANGED", "登入狀態已更新，請重新登入");
   return user;
 }
+export type ReauthAction = "link" | "sessions" | "delete";
 export async function beginOAuth(prisma: PrismaClient, provider: AuthProvider, purpose: OAuthPurpose, browserSecret: string,
   session: SessionPayload | null, confirmedExisting = false, now = new Date(), inviteToken?: string, configuration?: ProviderConfig | null,
-  nativeRedirectUri?: string) {
+  nativeRedirectUri?: string, reauthAction?: ReauthAction) {
   const config = configuration === undefined ? await resolveProviderConfig(provider) : configuration;
   if (!config) throw new FederatedAuthError(503, "PROVIDER_DISABLED", "此第三方登入尚未完成設定");
   if (!validOAuthSecret(browserSecret)) throw invalid();
   if (!["login", "link", "reauth"].includes(purpose)) throw invalid();
   // Native completion is only wired up for the login purpose; link/reauth stay web-only for now.
   if (nativeRedirectUri !== undefined && purpose !== "login") throw invalid();
+  if (purpose !== "reauth" && reauthAction !== undefined) throw invalid();
   await cleanupExpiredOAuthTransactions(prisma);
   if (inviteToken) {
     const invite = await prisma.clubInvite.findFirst({ where: { token: inviteToken, revokedAt: null, validFrom: { lte: now }, validUntil: { gte: now }, organization: { level: "club", isActive: true } } });
@@ -50,13 +52,17 @@ export async function beginOAuth(prisma: PrismaClient, provider: AuthProvider, p
       if (!config.reauthEnabled) throw new FederatedAuthError(503, "PROVIDER_REAUTH_UNAVAILABLE", "此供應商的近期本人再驗證尚未驗收，暫不能用於安全操作；不會要求您設定假密碼");
       const linked = await prisma.federatedIdentity.findUnique({ where: { userId_provider: { userId: session.userId, provider } } });
       if (!linked) throw new FederatedAuthError(400, "IDENTITY_NOT_LINKED", "請選擇已連結的第三方帳號重新驗證");
+      // The proof this transaction eventually mints must say up front which single sensitive
+      // action it may unlock - otherwise a proof obtained for one action (e.g. revoking other
+      // devices) could be replayed against a different one (e.g. deleting the account).
+      if (!["link", "sessions", "delete"].includes(reauthAction || "")) throw invalid();
     }
   }
   const state = randomOAuthSecret(), nonce = randomOAuthSecret(), verifier = randomOAuthSecret();
   await prisma.oAuthTransaction.create({ data: { provider, purpose, stateHash: hashOAuthSecret(state), browserHash: hashOAuthSecret(browserSecret),
     nonce, codeVerifier: provider === "google" ? verifier : null, inviteToken: purpose === "login" ? inviteToken : null, userId: purpose === "login" ? null : session!.userId,
     sessionVersion: purpose === "login" ? null : session!.sessionVersion, expiresAt: new Date(now.getTime() + 10 * 60_000),
-    nativeRedirectUri: nativeRedirectUri ?? null } });
+    nativeRedirectUri: nativeRedirectUri ?? null, reauthAction: purpose === "reauth" ? reauthAction : null } });
   return { authorizationUrl: authorizationUrl(config, state, nonce, verifier, purpose) };
 }
 export async function readOAuthTransaction(prisma: PrismaClient, state: string, browserSecret: string, now = new Date()) {
@@ -146,12 +152,12 @@ async function claimCompleted(prisma: PrismaClient, id: string, extra = {}) {
   const claimed = await prisma.oAuthTransaction.updateMany({ where: { id, completedAt: null, expiresAt: { gt: new Date() } }, data: { completedAt: new Date(), ...completedScrub, ...extra } });
   if (claimed.count !== 1) throw invalid();
 }
-export async function consumeOAuthReauth(prisma: PrismaClient, session: SessionPayload, proof: string | undefined, _action: "link" | "sessions" | "delete", consume = true) {
-  if (!["link", "sessions", "delete"].includes(_action)) return false;
+export async function consumeOAuthReauth(prisma: PrismaClient, session: SessionPayload, proof: string | undefined, action: ReauthAction, consume = true) {
+  if (!["link", "sessions", "delete"].includes(action)) return false;
   if (!validOAuthSecret(proof)) return false;
   const row = await prisma.oAuthTransaction.findUnique({ where: { reauthHash: hashOAuthSecret(proof) } });
   if (!row || !row.completedAt || row.userId !== session.userId || row.sessionVersion !== session.sessionVersion || row.reauthUsedAt
-    || !row.reauthExpiresAt || row.reauthExpiresAt <= new Date() || row.purpose !== "reauth") return false;
+    || !row.reauthExpiresAt || row.reauthExpiresAt <= new Date() || row.purpose !== "reauth" || row.reauthAction !== action) return false;
   await activeUser(prisma, session);
   if (!consume) return true;
   const claimed = await prisma.oAuthTransaction.updateMany({ where: { id: row.id, reauthUsedAt: null, reauthExpiresAt: { gt: new Date() } }, data: { reauthUsedAt: new Date() } });

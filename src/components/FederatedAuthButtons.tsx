@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { OAuthClientError, readAuthMethods, readOAuthProviders, startFederatedLogin } from "@/lib/federated-auth-client";
-import type { AuthMethods, AuthProvider, OAuthPurpose, PublicProvider } from "@/lib/federated-auth-client";
+import type { AuthMethods, AuthProvider, OAuthPurpose, PublicProvider, ReauthAction } from "@/lib/federated-auth-client";
 export { oauthErrorMessage } from "@/lib/federated-auth-client";
 export type { AuthMethods, AuthProvider } from "@/lib/federated-auth-client";
 
@@ -20,8 +20,8 @@ export function useAuthMethods() {
   return { methods, error, reload: () => { setMethods(null); setError(""); setAttempt((value) => value + 1); } };
 }
 
-export default function FederatedAuthButtons({ purpose = "login", token, password, oauthConsent, allowedProviders, disabled = false, onBusyChange }: {
-  purpose?: OAuthPurpose; token?: string; password?: string; oauthConsent?: boolean;
+export default function FederatedAuthButtons({ purpose = "login", reauthAction, token, password, oauthConsent, allowedProviders, disabled = false, onBusyChange }: {
+  purpose?: OAuthPurpose; reauthAction?: ReauthAction; token?: string; password?: string; oauthConsent?: boolean;
   allowedProviders?: AuthProvider[]; disabled?: boolean; onBusyChange?: (busy: boolean) => void;
 }) {
   const [providers, setProviders] = useState<PublicProvider[]>([]);
@@ -48,7 +48,7 @@ export default function FederatedAuthButtons({ purpose = "login", token, passwor
     const controller = new AbortController(); startController.current = controller;
     starting.current = true; setBusy(provider); onBusyChange?.(true); setError(""); setRetryAfterSeconds(undefined);
     try {
-      const url = await startFederatedLogin(provider, { purpose, ...(token ? { token } : {}), ...(password ? { password } : {}), ...(oauthConsent ? { oauthConsent: true } : {}) }, fetch, controller.signal);
+      const url = await startFederatedLogin(provider, { purpose, ...(reauthAction ? { reauthAction } : {}), ...(token ? { token } : {}), ...(password ? { password } : {}), ...(oauthConsent ? { oauthConsent: true } : {}) }, fetch, controller.signal);
       if (controller.signal.aborted || startController.current !== controller) return;
       window.location.assign(url);
     } catch (failure) {

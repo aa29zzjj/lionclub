@@ -15,8 +15,12 @@ export async function GET() {
     if (!providerConfig("google", settings)) return oauthJson(base);
     const identities = await prisma.federatedIdentity.findMany({ where: { userId: session.userId }, select: { provider: true, email: true } });
     const proof = await readOAuthCookie(OAUTH_REAUTH_COOKIE);
-    const reauthenticated = await consumeOAuthReauth(prisma, session, proof, "sessions", false);
-    const reauthActions = reauthenticated ? ["link", "sessions", "delete"] : [];
+    // Check each action independently - a proof is bound to exactly one action at creation
+    // (see beginOAuth's reauthAction), so it must not be reported as satisfying the others.
+    const reauthActions = (
+      await Promise.all((["link", "sessions", "delete"] as const).map(async (action) => ((await consumeOAuthReauth(prisma, session, proof, action, false)) ? action : null)))
+    ).filter((action): action is "link" | "sessions" | "delete" => action !== null);
+    const reauthenticated = reauthActions.length > 0;
     return oauthJson({ hasPassword: base.hasPassword, identities: identities.map(identity => ({ ...identity, reauthAvailable: providerReauthAvailable(identity.provider, settings),
       ...(!providerReauthAvailable(identity.provider, settings) ? { reauthReason: "近期本人再驗證尚未完成供應商驗收，暫不支援安全操作", reauthReasonCode: "PROVIDER_REAUTH_UNAVAILABLE" } : {}) })), reauthenticated, reauthActions, available: true });
   } catch (error) {

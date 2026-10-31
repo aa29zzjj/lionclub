@@ -1,6 +1,7 @@
 // Browser-only transport contract. No environment variables, server settings or tokens.
 export type AuthProvider = "google" | "apple";
-export type OAuthPurpose = "login" | "link" | "reauth" | "delete";
+export type OAuthPurpose = "login" | "link" | "reauth";
+export type ReauthAction = "link" | "sessions" | "delete";
 export type PublicProvider = { id: AuthProvider; name: string; enabled: boolean; reasonCode?: string };
 export type AuthMethods = {
   hasPassword: boolean; available: boolean;
@@ -98,7 +99,7 @@ export async function readPendingFederatedProfile(transport: Transport = fetch, 
     ...(typeof data.name === "string" ? { name: data.name.slice(0, 100) } : {}) };
 }
 
-export async function startFederatedLogin(provider: AuthProvider, input: { purpose: OAuthPurpose; token?: string; password?: string; oauthConsent?: boolean }, transport: Transport = fetch, signal?: AbortSignal): Promise<string> {
+export async function startFederatedLogin(provider: AuthProvider, input: { purpose: OAuthPurpose; token?: string; password?: string; oauthConsent?: boolean; reauthAction?: ReauthAction }, transport: Transport = fetch, signal?: AbortSignal): Promise<string> {
   const data = await jsonRequest(`/api/auth/oauth/${provider}/start`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }, transport, signal) as Record<string, unknown>;
   if (typeof data.authorizationUrl !== "string") throw new OAuthClientError("OAUTH_RESPONSE_INVALID");
   let url: URL;

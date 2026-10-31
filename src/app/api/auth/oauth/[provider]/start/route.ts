@@ -9,7 +9,8 @@ import { beginOAuth, consumeOAuthReauth } from "@/lib/federated-auth-service";
 import { FederatedAuthError, isAuthProvider, randomOAuthSecret, validOAuthSecret } from "@/lib/federated-auth";
 import { resolveProviderConfig } from "@/lib/federated-auth-runtime";
 import { oauthErrorResponse, oauthJson, OAUTH_BROWSER_COOKIE, OAUTH_REAUTH_COOKIE, readOAuthCookie, setOAuthCookie } from "@/lib/federated-auth-http";
-const schema = z.object({ purpose: z.enum(["login", "link", "reauth"]).default("login"), password: z.string().max(200).optional(), token: z.string().min(1).max(200).optional(), oauthConsent: z.literal(true).optional() });
+const schema = z.object({ purpose: z.enum(["login", "link", "reauth"]).default("login"), password: z.string().max(200).optional(), token: z.string().min(1).max(200).optional(), oauthConsent: z.literal(true).optional(),
+  reauthAction: z.enum(["link", "sessions", "delete"]).optional() });
 export async function POST(request: NextRequest, { params }: { params: Promise<{ provider: string }> }) {
   if (!request.headers.get("origin")) return oauthJson({ error: "請從網站操作第三方登入" }, 403);
   const { provider } = await params;
@@ -33,7 +34,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       confirmed = Boolean(user?.passwordHash && parsed.data.password && await bcrypt.compare(parsed.data.password, user.passwordHash));
       if (!confirmed) confirmed = await consumeOAuthReauth(prisma, session, await readOAuthCookie(OAUTH_REAUTH_COOKIE), "link");
     }
-    const result = await beginOAuth(prisma, provider, parsed.data.purpose, browserSecret, session, confirmed, new Date(), parsed.data.token, config);
+    const result = await beginOAuth(prisma, provider, parsed.data.purpose, browserSecret, session, confirmed, new Date(), parsed.data.token, config,
+      undefined, parsed.data.purpose === "reauth" ? parsed.data.reauthAction : undefined);
     await setOAuthCookie(OAUTH_BROWSER_COOKIE, browserSecret, 15 * 60, true, config.origin);
     return oauthJson(result);
   } catch (error) { return oauthErrorResponse(error); }
