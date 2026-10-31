@@ -1,5 +1,5 @@
 import { CapacitorHttp } from "@capacitor/core";
-import { Preferences } from "@capacitor/preferences";
+import { SecureStorage } from "@aparajita/capacitor-secure-storage";
 import { Browser } from "@capacitor/browser";
 import { App, type URLOpenListenerEvent } from "@capacitor/app";
 
@@ -36,26 +36,26 @@ const ACCESS_TOKEN_KEY = "lionclubs.mobile.accessToken";
 const REFRESH_TOKEN_KEY = "lionclubs.mobile.refreshToken";
 
 /**
- * @capacitor/preferences is sandboxed app storage (UserDefaults on iOS,
- * SharedPreferences on Android) — NOT Keychain/Keystore-backed secure storage.
- * Acceptable for this first vertical-slice spike, but NATIVE_SPIKE_ACCEPTANCE_2026-10-17.md
- * (A06,冷啟動持久化) requires this to move to a Keychain/Keystore-backed plugin, with a real
- * device audit confirming the refresh token isn't readable via JS bridge or backup, before shipping.
+ * Keychain-backed (iOS) / Keystore-backed (Android) secure storage, per
+ * NATIVE_SPIKE_ACCEPTANCE_2026-10-17.md (A06, 冷啟動持久化). Writes are
+ * synchronous to the OS secure store, unlike UserDefaults/SharedPreferences
+ * (the previous @capacitor/preferences approach), which could lose a write
+ * made just before the process is terminated.
  */
 async function getToken(key: string) {
-  return (await Preferences.get({ key })).value;
+  return await SecureStorage.getItem(key);
 }
 async function setToken(key: string, value: string) {
-  await Preferences.set({ key, value });
+  await SecureStorage.setItem(key, value);
 }
 async function clearTokens() {
-  await Promise.all([Preferences.remove({ key: ACCESS_TOKEN_KEY }), Preferences.remove({ key: REFRESH_TOKEN_KEY })]);
+  await Promise.all([SecureStorage.removeItem(ACCESS_TOKEN_KEY), SecureStorage.removeItem(REFRESH_TOKEN_KEY)]);
 }
 
 export function createApiClient(baseUrl: string) {
   const origin = baseUrl.replace(/\/$/, "");
 
-  async function request(path: string, init: { method: string; body?: unknown; accessToken?: string }) {
+  async function request(path: string, init: { method: string; body?: unknown; accessToken?: string | null }) {
     try {
       return await CapacitorHttp.request({
         method: init.method,
