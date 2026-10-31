@@ -21,9 +21,10 @@ async function callback(request: NextRequest, provider: string, body: URLSearchP
       // Apple name is an untrusted one-time display hint, NOT an identity/email.
       try { const user = JSON.parse(body.get("user")!); appleName = [user?.name?.lastName, user?.name?.firstName].filter(value => typeof value === "string").join(" ").slice(0, 100); } catch { /* optional */ }
     }
-    await acceptOAuthCallback(await getPrisma(), provider, body.get("state") || "", await readOAuthCookie(OAUTH_BROWSER_COOKIE) || "",
+    const result = await acceptOAuthCallback(await getPrisma(), provider, body.get("state") || "", await readOAuthCookie(OAUTH_BROWSER_COOKIE) || "",
       { code: body.get("code") || "", idToken: body.get("id_token") || undefined, appleName }, { config });
-    const next = new URL("/api/auth/oauth/complete", origin); next.searchParams.set("state", body.get("state")!);
+    const completePath = result.nativeRedirectUri ? "/api/mobile/auth/oauth/complete" : "/api/auth/oauth/complete";
+    const next = new URL(completePath, origin); next.searchParams.set("state", body.get("state")!);
     return NextResponse.redirect(next, { status: 303, headers: oauthNoStore });
   } catch (error) {
     if (!origin) return new NextResponse(null, { status: 503, headers: oauthNoStore });

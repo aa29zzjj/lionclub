@@ -52,3 +52,52 @@ export function bearerToken(authorizationHeader: string | null): string | null {
   const match = authorizationHeader ? /^Bearer\s+(.+)$/i.exec(authorizationHeader) : null;
   return match ? match[1] : null;
 }
+
+/** Native OAuth: the app's bearer-token /start call and the ASWebAuthenticationSession's own
+ * cookie jar are two different storage contexts, so the OAUTH_BROWSER_COOKIE binding can't reach
+ * the browser session directly. This short-lived, single-purpose token carries the browserSecret
+ * and the real provider authorizationUrl through one redirect hop (the "bootstrap" route) that
+ * runs INSIDE that browser session, where it can set the cookie before continuing to the provider. */
+const OAUTH_BOOTSTRAP_DURATION_SECONDS = 2 * 60;
+export async function signOAuthBootstrapToken(payload: { provider: string; browserSecret: string; authorizationUrl: string }, key: Uint8Array) {
+  return new SignJWT({ ...payload, typ: "oauth_bootstrap" })
+    .setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime(`${OAUTH_BOOTSTRAP_DURATION_SECONDS}s`).sign(key);
+}
+export async function readOAuthBootstrapToken(token: string, key: Uint8Array) {
+  try {
+    const { payload } = await jwtVerify(token, key, { algorithms: ["HS256"] });
+    if (payload.typ !== "oauth_bootstrap") return null;
+    if (typeof payload.provider !== "string" || typeof payload.browserSecret !== "string" || typeof payload.authorizationUrl !== "string") return null;
+    return { provider: payload.provider, browserSecret: payload.browserSecret, authorizationUrl: payload.authorizationUrl };
+  } catch {
+    return null;
+  }
+}
+
+/** Handoff from the browser session back to the app: the OAuth completion redirect carries this
+ * one-time, 60-second code via the custom URL scheme instead of putting real tokens in a URL
+ * (which can leak through history/logs). The app immediately exchanges it for mobile tokens. */
+const OAUTH_HANDOFF_DURATION_SECONDS = 60;
+export async function signOAuthHandoffCode(payload: SessionPayload, key: Uint8Array) {
+  return new SignJWT({ ...payload, typ: "oauth_handoff" })
+    .setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime(`${OAUTH_HANDOFF_DURATION_SECONDS}s`).sign(key);
+}
+export async function readOAuthHandoffCode(token: string, dependencies: {
+  key: Uint8Array;
+  findUser: (id: string) => Promise<SessionUser | null>;
+  production?: boolean;
+}): Promise<SessionPayload | null> {
+  try {
+    const { payload } = await jwtVerify(token, dependencies.key, { algorithms: ["HS256"] });
+    if (payload.typ !== "oauth_handoff") return null;
+    if (typeof payload.userId !== "string" || typeof payload.memberId !== "string" || typeof payload.email !== "string") return null;
+    const version = payload.sessionVersion === undefined ? 0 : payload.sessionVersion;
+    if (!Number.isSafeInteger(version) || Number(version) < 0) return null;
+    if (isProductionDemoEmail(payload.email, dependencies.production)) return null;
+    const user = await dependencies.findUser(payload.userId);
+    if (!user || user.memberId !== payload.memberId || user.sessionVersion !== version || isProductionDemoUser(user, dependencies.production)) return null;
+    return { userId: user.id, memberId: user.memberId, email: user.email, sessionVersion: user.sessionVersion };
+  } catch {
+    return null;
+  }
+}

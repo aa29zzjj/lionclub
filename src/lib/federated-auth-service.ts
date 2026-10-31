@@ -29,11 +29,14 @@ async function activeUser(prisma: PrismaClient, session: SessionPayload) {
   return user;
 }
 export async function beginOAuth(prisma: PrismaClient, provider: AuthProvider, purpose: OAuthPurpose, browserSecret: string,
-  session: SessionPayload | null, confirmedExisting = false, now = new Date(), inviteToken?: string, configuration?: ProviderConfig | null) {
+  session: SessionPayload | null, confirmedExisting = false, now = new Date(), inviteToken?: string, configuration?: ProviderConfig | null,
+  nativeRedirectUri?: string) {
   const config = configuration === undefined ? await resolveProviderConfig(provider) : configuration;
   if (!config) throw new FederatedAuthError(503, "PROVIDER_DISABLED", "此第三方登入尚未完成設定");
   if (!validOAuthSecret(browserSecret)) throw invalid();
   if (!["login", "link", "reauth"].includes(purpose)) throw invalid();
+  // Native completion is only wired up for the login purpose; link/reauth stay web-only for now.
+  if (nativeRedirectUri !== undefined && purpose !== "login") throw invalid();
   await cleanupExpiredOAuthTransactions(prisma);
   if (inviteToken) {
     const invite = await prisma.clubInvite.findFirst({ where: { token: inviteToken, revokedAt: null, validFrom: { lte: now }, validUntil: { gte: now }, organization: { level: "club", isActive: true } } });
@@ -52,7 +55,8 @@ export async function beginOAuth(prisma: PrismaClient, provider: AuthProvider, p
   const state = randomOAuthSecret(), nonce = randomOAuthSecret(), verifier = randomOAuthSecret();
   await prisma.oAuthTransaction.create({ data: { provider, purpose, stateHash: hashOAuthSecret(state), browserHash: hashOAuthSecret(browserSecret),
     nonce, codeVerifier: provider === "google" ? verifier : null, inviteToken: purpose === "login" ? inviteToken : null, userId: purpose === "login" ? null : session!.userId,
-    sessionVersion: purpose === "login" ? null : session!.sessionVersion, expiresAt: new Date(now.getTime() + 10 * 60_000) } });
+    sessionVersion: purpose === "login" ? null : session!.sessionVersion, expiresAt: new Date(now.getTime() + 10 * 60_000),
+    nativeRedirectUri: nativeRedirectUri ?? null } });
   return { authorizationUrl: authorizationUrl(config, state, nonce, verifier, purpose) };
 }
 export async function readOAuthTransaction(prisma: PrismaClient, state: string, browserSecret: string, now = new Date()) {
@@ -92,6 +96,7 @@ export async function acceptOAuthCallback(prisma: PrismaClient, provider: AuthPr
     data: { verifiedAt, subject: identity.subject, email: identity.email,
       providerName: identity.name || input.appleName?.slice(0, 100), refreshTokenCiphertext: ciphertext, codeVerifier: null } });
   if (verified.count !== 1) throw invalid();
+  return { nativeRedirectUri: row.nativeRedirectUri };
 }
 /** Same-site GET after Apple's form_post restores normal Lax application cookies. */
 export async function finishOAuth(prisma: PrismaClient, state: string, browserSecret: string, session: SessionPayload | null, configuration?: OAuthRuntimeSettings) {

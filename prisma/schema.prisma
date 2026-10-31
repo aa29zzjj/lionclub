@@ -232,6 +232,7 @@ model OAuthTransaction {
   reauthHash String? @unique
   reauthExpiresAt DateTime?
   reauthUsedAt DateTime?
+  nativeRedirectUri String? // set only for native-app flows; web flows stay null and keep today's cookie-session completion
   createdAt DateTime @default(now())
 
   @@index([expiresAt])
