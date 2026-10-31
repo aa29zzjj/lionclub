@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { createApiClient, ApiError, type Member } from "./contract";
+import { createApiClient, ApiError, type Member, type OAuthProvider } from "./contract";
+import logoAsset from "./lions-logo.png";
+// Next.js's repo-wide "*.png" ambient type says StaticImageData, but esbuild's
+// dataurl loader actually emits a plain string at runtime.
+const logo = logoAsset as unknown as string;
 
 declare const API_BASE_URL: string;
 const api = createApiClient(API_BASE_URL);
@@ -12,6 +16,7 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState<OAuthProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadMe = useCallback(async () => {
@@ -48,6 +53,22 @@ export default function App() {
     }
   }
 
+  async function handleOAuthLogin(provider: OAuthProvider) {
+    if (busy || oauthBusy) return;
+    setOauthBusy(provider);
+    setError(null);
+    try {
+      await api.loginWithProvider(provider);
+      await loadMe();
+    } catch (failure) {
+      if (!(failure instanceof ApiError && failure.code === "UNAUTHENTICATED" && failure.message === "OAUTH_CANCELLED")) {
+        setError(failure instanceof ApiError ? failure.message : `${provider === "google" ? "Google" : "Apple"} 登入失敗，請稍後再試`);
+      }
+    } finally {
+      setOauthBusy(null);
+    }
+  }
+
   async function handleLogout() {
     if (busy) return;
     setBusy(true);
@@ -60,9 +81,20 @@ export default function App() {
     }
   }
 
+  const brand = (
+    <div className="brand">
+      <span className="logo-badge">
+        <img src={logo} alt="Lions Clubs International" />
+      </span>
+      <h1>LionClubs</h1>
+      <p className="subtitle">LIONS CLUB MEMBER PORTAL</p>
+    </div>
+  );
+
   if (phase === "checking") {
     return (
       <main className="screen" aria-busy="true">
+        {brand}
         <p>確認登入狀態中…</p>
       </main>
     );
@@ -71,7 +103,7 @@ export default function App() {
   if (phase === "signed-in" && member) {
     return (
       <main className="screen">
-        <h1>LionClubs</h1>
+        {brand}
         <p className="member-name">{member.name}</p>
         {member.memberNo ? <p className="member-meta">會員編號：{member.memberNo}</p> : null}
         <button type="button" className="primary" onClick={handleLogout} disabled={busy}>
@@ -83,25 +115,51 @@ export default function App() {
 
   return (
     <main className="screen">
-      <h1>LionClubs</h1>
+      {brand}
       <form onSubmit={handleLogin}>
-        <label>
-          Email
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required />
-        </label>
-        <label>
-          密碼
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
-        </label>
+        <div>
+          <label htmlFor="login-email">會員信箱</label>
+          <input
+            type="email"
+            id="login-email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            autoCapitalize="none"
+            placeholder="you@lions.tw"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="login-password">密碼</label>
+          <input
+            type="password"
+            id="login-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            placeholder="••••••••"
+            required
+          />
+        </div>
         {error ? (
           <p className="error" role="alert">
             {error}
           </p>
         ) : null}
-        <button type="submit" className="primary" disabled={busy}>
+        <button type="submit" className="primary" disabled={busy || Boolean(oauthBusy)}>
           {busy ? "登入中…" : "登入"}
         </button>
       </form>
+      <div className="oauth-block">
+        <p className="divider-text">或使用第三方帳號</p>
+        <button type="button" className="secondary" onClick={() => handleOAuthLogin("google")} disabled={busy || Boolean(oauthBusy)}>
+          {oauthBusy === "google" ? "正在開啟驗證…" : "使用 Google 繼續"}
+        </button>
+        <button type="button" className="secondary" onClick={() => handleOAuthLogin("apple")} disabled={busy || Boolean(oauthBusy)}>
+          {oauthBusy === "apple" ? "正在開啟驗證…" : "使用 Apple 繼續"}
+        </button>
+      </div>
     </main>
   );
 }

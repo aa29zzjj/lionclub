@@ -1,5 +1,10 @@
 import { CapacitorHttp } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
+import { Browser } from "@capacitor/browser";
+import { App, type URLOpenListenerEvent } from "@capacitor/app";
+
+export type OAuthProvider = "google" | "apple";
+const OAUTH_REDIRECT_URI = "com.lionclubsmembership.app://oauth-callback";
 
 export type Member = {
   id: string;
@@ -74,6 +79,39 @@ export function createApiClient(baseUrl: string) {
     await Promise.all([setToken(ACCESS_TOKEN_KEY, response.data.accessToken), setToken(REFRESH_TOKEN_KEY, response.data.refreshToken)]);
   }
 
+  async function loginWithProvider(provider: OAuthProvider): Promise<void> {
+    const start = await request(`/api/mobile/auth/oauth/${provider}/start`, { method: "POST", body: { redirectUri: OAUTH_REDIRECT_URI } });
+    if (start.status !== 200 || !start.data?.bootstrapUrl) {
+      throw new ApiError("UNKNOWN", start.data?.error ?? `無法開始 ${provider} 登入`, start.status);
+    }
+
+    const result = await new Promise<{ code?: string; error?: string }>((resolve) => {
+      let settled = false;
+      const finish = (value: { code?: string; error?: string }) => {
+        if (settled) return;
+        settled = true;
+        urlListener.then((handle) => handle.remove());
+        finishedListener.then((handle) => handle.remove());
+        void Browser.close().catch(() => {});
+        resolve(value);
+      };
+      const urlListener = App.addListener("appUrlOpen", (event: URLOpenListenerEvent) => {
+        if (!event.url.startsWith(OAUTH_REDIRECT_URI)) return;
+        const params = new URL(event.url).searchParams;
+        finish({ code: params.get("code") ?? undefined, error: params.get("error") ?? undefined });
+      });
+      // User dismissed the browser sheet without finishing (e.g. tapped "Cancel").
+      const finishedListener = Browser.addListener("browserFinished", () => finish({ error: "OAUTH_CANCELLED" }));
+      void Browser.open({ url: start.data.bootstrapUrl, presentationStyle: "popover" });
+    });
+
+    if (!result.code) throw new ApiError(result.error === "OAUTH_CANCELLED" ? "UNAUTHENTICATED" : "UNKNOWN", result.error ?? `${provider} 登入未完成`);
+
+    const exchange = await request("/api/mobile/auth/oauth/exchange", { method: "POST", body: { code: result.code } });
+    if (exchange.status !== 200) throw new ApiError("UNAUTHENTICATED", exchange.data?.error ?? "登入連結已過期，請重新開始", exchange.status);
+    await Promise.all([setToken(ACCESS_TOKEN_KEY, exchange.data.accessToken), setToken(REFRESH_TOKEN_KEY, exchange.data.refreshToken)]);
+  }
+
   async function refresh(): Promise<boolean> {
     const refreshToken = await getToken(REFRESH_TOKEN_KEY);
     if (!refreshToken) return false;
@@ -119,5 +157,5 @@ export function createApiClient(baseUrl: string) {
     return (await getToken(REFRESH_TOKEN_KEY)) !== null;
   }
 
-  return { login, me, logout, hasStoredSession };
+  return { login, loginWithProvider, me, logout, hasStoredSession };
 }

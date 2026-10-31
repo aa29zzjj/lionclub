@@ -30,6 +30,7 @@
     "@aws-sdk/credential-provider-node": "^3.972.85",
     "@aws-sdk/s3-request-presigner": "^3.1149.0",
     "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
     "@capacitor/cli": "^8.5.3",
     "@capacitor/core": "^8.5.3",
     "@capacitor/ios": "^8.5.3",

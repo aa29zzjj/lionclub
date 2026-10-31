@@ -26,6 +26,7 @@ await build({
   minify: true,
   sourcemap: false,
   legalComments: "eof",
+  loader: { ".png": "dataurl" },
   define: {
     "process.env.NODE_ENV": '"production"',
     API_BASE_URL: JSON.stringify(API_BASE_URL),
