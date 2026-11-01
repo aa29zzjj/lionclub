@@ -18,9 +18,9 @@
   "contacts": {
     "supportEmail": "jerry@prepmateai.com",
     "privacyEmail": "jerry@prepmateai.com",
-    "reviewContactName": null,
-    "reviewContactEmail": null,
-    "reviewContactPhone": null
+    "reviewContactName": "Jerry Huang",
+    "reviewContactEmail": "jerry@prepmateai.com",
+    "reviewContactPhone": "+886963821809"
   },
   "urls": {
     "website": "https://lionclubsmembership.com/",
@@ -38,21 +38,21 @@
     "category": "SOCIAL_NETWORKING",
     "categoryConfirmed": true,
     "ageRating": "12+",
-    "territories": "全球（App Store／Google Play 所有可上架地區，不限台灣）",
+    "territories": ["全球（App Store／Google Play 所有可上架地區，不限台灣）"],
     "price": "免費 (Free)"
   },
   "release": {
-    "version": null,
-    "buildNumber": null,
-    "nativeArchitecture": null,
+    "version": "1.0",
+    "buildNumber": "1",
+    "nativeArchitecture": "Capacitor 8 + React/TypeScript 原生殼，接專用 bearer-token 行動 API（/api/mobile/*），非 Web 的 HttpOnly Session；Token 存放於 iOS Keychain（@aparajita/capacitor-secure-storage）。",
     "appleAccountReportedAvailable": true,
     "appleDeveloperEnrollmentReportedActive": true,
     "appleDeveloperEnrollmentConfirmed": false,
     "appStoreConnectAppCreated": false,
     "googlePlayAccountCreated": false,
     "googlePlayAccountType": "organization",
-    "nativeProjectCreated": false,
-    "iosBuildEnvironmentVerified": false,
+    "nativeProjectCreated": true,
+    "iosBuildEnvironmentVerified": true,
     "androidBuildEnvironmentVerified": false,
     "releaseArtifactGenerated": false,
     "signingConfigured": false,
@@ -89,7 +89,7 @@
     "ugcModerationImplemented": false
   },
   "assets": {
-    "appIcon1024": null,
+    "appIcon1024": "ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png",
     "iphoneScreenshots": [],
     "ipadScreenshots": [],
     "googlePlayIcon512": null,
