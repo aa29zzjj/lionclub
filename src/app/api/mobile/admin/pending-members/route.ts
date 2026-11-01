@@ -1,0 +1,40 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireMobileMember } from "@/lib/mobile-request-auth";
+import { APPROVER_ROLES, getAdministeredOrganizationIds } from "@/lib/admin-scope";
+import { activeAdminRoleWhere } from "@/lib/active-admin-role";
+
+export async function GET(req: NextRequest) {
+  const auth = await requireMobileMember(req);
+  if (!auth) return NextResponse.json({ error: "未登入或登入已過期" }, { status: 401 });
+  const { prisma, member: me } = auth;
+
+  const roles = await prisma.adminRole.findMany({
+    where: { memberId: me.id, role: { in: APPROVER_ROLES }, ...activeAdminRoleWhere() },
+  });
+  if (roles.length === 0) {
+    return NextResponse.json({ error: "您沒有審核權限" }, { status: 403 });
+  }
+
+  const orgIds = await getAdministeredOrganizationIds(prisma, roles);
+  if (orgIds && !orgIds.length) return NextResponse.json({ error: "管理權限尚未設定組織範圍，請聯絡管理者" }, { status: 403 });
+
+  const members = await prisma.member.findMany({
+    where: {
+      status: "PENDING",
+      ...(orgIds ? { organizationId: { in: orgIds } } : {}),
+    },
+    orderBy: { createdAt: "asc" },
+    include: { organization: { select: { id: true, name: true } } },
+  });
+
+  return NextResponse.json({
+    members: members.map((m) => ({
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      phone: m.phone,
+      organization: m.organization,
+      createdAt: m.createdAt,
+    })),
+  });
+}

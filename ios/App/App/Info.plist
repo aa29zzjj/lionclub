@@ -26,6 +26,8 @@
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>掃描會員 QR Code 以加好友或活動報到時需要使用相機</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
