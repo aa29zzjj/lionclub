@@ -28,6 +28,8 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>掃描會員 QR Code 以加好友或活動報到時需要使用相機</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>上傳大頭貼或活動封面照片時需要存取您的照片</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
