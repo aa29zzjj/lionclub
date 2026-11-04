@@ -10,10 +10,26 @@
   font-family: "PingFang TC", -apple-system, BlinkMacSystemFont, "Heiti TC", "Segoe UI", sans-serif;
 }
 
-body {
+html, body {
+  height: 100%;
   margin: 0;
+  /* The WKWebView's content area can be a hair taller than 100% resolves to;
+     without a background here too, that sliver shows the browser's default
+     white instead of the page color (seen as a white strip below the tab
+     bar, over the home-indicator safe area). */
   background: rgb(var(--lion-page));
+  /* Only .shell-content scrolls internally; without this the whole document
+     scrolls once content overflows, dragging the fixed .tab-bar along with it
+     (and leaving stale scrollTop behind when switching tabs). */
+  overflow: hidden;
+}
+
+body {
   color: rgb(var(--lion-text));
+}
+
+#root {
+  height: 100%;
 }
 
 /* Form controls don't inherit font-family from the page by default (UA stylesheet),
@@ -90,7 +106,10 @@ label {
   margin-bottom: 0.25rem;
 }
 
-input {
+/* Excludes checkbox/radio — the full-width/min-height text-field sizing
+   below would otherwise stretch them into giant squares (seen on the
+   "目前仍具會籍" checkbox in the experience form). */
+input:not([type="checkbox"]):not([type="radio"]) {
   box-sizing: border-box;
   width: 100%;
   min-height: 48px;
@@ -100,6 +119,12 @@ input {
   border: 1px solid rgb(255 255 255 / 0.08);
   background: rgb(255 255 255 / 0.04);
   color: rgb(var(--lion-text));
+}
+
+input[type="checkbox"], input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 input::placeholder {
@@ -179,7 +204,7 @@ button.secondary:disabled {
 
 .shell {
   box-sizing: border-box;
-  min-height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -401,6 +426,22 @@ select:focus, textarea:focus {
   padding: 0.75rem 1rem;
 }
 
+/* .list-card is also used as a <button> for selectable rows (e.g. picking
+   notification recipients); reset button-specific UA styling so it still
+   looks like the plain card. */
+button.list-card {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.list-card-selected {
+  border-color: rgb(var(--lion-gold));
+  background: rgb(var(--lion-gold) / 0.12);
+}
+
 .list-card-title {
   font-weight: 600;
   margin: 0;
@@ -422,6 +463,19 @@ select:focus, textarea:focus {
   min-height: 40px;
   padding: 0 0.75rem;
   font-size: 0.8rem;
+}
+
+.list-card-unread {
+  border-color: rgb(var(--lion-gold) / 0.6);
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.list-card-message {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .search-row {
@@ -477,4 +531,527 @@ select:focus, textarea:focus {
 .event-card button {
   margin-top: 0.6rem;
   min-height: 44px;
+}
+
+.event-card-poster {
+  margin-top: 0.3rem;
+  height: 120px;
+  width: 100%;
+  border-radius: 0.65rem;
+  object-fit: cover;
+  display: block;
+}
+
+.event-card-poster-fallback {
+  margin-top: 0.3rem;
+  height: 120px;
+  border-radius: 0.65rem;
+}
+
+/* Home dashboard — mirrors src/app/home/page.tsx's card layout on the website. */
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.dashboard-brand-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 1px solid rgb(var(--lion-gold));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.dashboard-brand-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.dashboard-bell {
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.05);
+  border: 1px solid rgb(255 255 255 / 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(var(--lion-text) / 0.7);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.dashboard-greeting {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  width: 100%;
+}
+
+.dashboard-greeting-hi {
+  font-size: 0.875rem;
+  color: rgb(var(--lion-muted));
+  line-height: 1.2;
+  margin: 0;
+}
+
+.dashboard-greeting-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0.1rem 0 0;
+  color: rgb(var(--lion-text));
+}
+
+.member-card {
+  position: relative;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, #141b30, #232c4a 60%, #2a3660);
+  border: 1px solid rgb(255 255 255 / 0.06);
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.member-card-glow {
+  position: absolute;
+  right: -1.5rem;
+  top: -2.5rem;
+  width: 128px;
+  height: 128px;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.04);
+}
+
+.member-card-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  position: relative;
+}
+
+.member-card-label-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 1px solid rgb(var(--lion-gold));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.member-card-label-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.member-card-label-text {
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  color: rgb(var(--lion-gold));
+  font-weight: 600;
+}
+
+.member-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  position: relative;
+}
+
+.member-card-identity-name {
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.2;
+  color: rgb(var(--lion-text));
+}
+
+.member-card-identity-meta {
+  font-size: 0.75rem;
+  color: rgb(var(--lion-muted));
+  margin: 0.15rem 0 0;
+}
+
+.member-card-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 1rem;
+  border-top: 1px solid rgb(255 255 255 / 0.1);
+  padding-top: 0.75rem;
+  margin: 0;
+  font-size: 0.75rem;
+  position: relative;
+}
+
+.member-card-facts dt {
+  color: rgb(var(--lion-muted));
+  margin: 0 0 0.1rem;
+}
+
+.member-card-facts dd {
+  margin: 0;
+  font-weight: 500;
+  color: rgb(var(--lion-text));
+}
+
+.member-card-qr-button {
+  margin-top: 0.75rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 0.75rem;
+  border: none;
+  background: rgb(0 0 0 / 0.2);
+  padding: 0.65rem 0.75rem;
+  cursor: pointer;
+  position: relative;
+}
+
+.member-card-qr-text {
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: rgb(var(--lion-muted));
+  text-align: left;
+  margin: 0;
+}
+
+.member-card-qr-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 0.5rem;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: rgb(var(--lion-navy-deep));
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-tile {
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 0.04);
+  border: 1px solid rgb(255 255 255 / 0.06);
+  padding: 0.75rem 0;
+  text-align: center;
+  display: block;
+  cursor: pointer;
+}
+
+.stat-tile-value {
+  color: rgb(var(--lion-gold));
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.stat-tile-label {
+  font-size: 0.7rem;
+  color: rgb(var(--lion-muted));
+  margin: 0.15rem 0 0;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.section-header h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: rgb(var(--lion-text));
+}
+
+.section-header button {
+  font-size: 0.75rem;
+  color: rgb(var(--lion-gold));
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.event-tile {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 0.04);
+  border: 1px solid rgb(255 255 255 / 0.06);
+  overflow: hidden;
+  padding: 0;
+  cursor: pointer;
+}
+
+.event-tile-head {
+  padding: 0.875rem 0.875rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.event-tile-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgb(var(--lion-text));
+}
+
+.event-tile-when {
+  font-size: 0.7rem;
+  color: rgb(var(--lion-muted));
+  margin: 0.1rem 0 0;
+}
+
+.event-tile-poster {
+  margin: 0.75rem 0.875rem 0;
+  height: 96px;
+  width: calc(100% - 1.75rem);
+  border-radius: 0.75rem;
+  object-fit: cover;
+  display: block;
+}
+
+.event-tile-poster-fallback {
+  margin: 0.75rem 0.875rem 0;
+  height: 96px;
+  border-radius: 0.75rem;
+}
+
+.event-tile-poster-fallback.g0, .event-card-poster-fallback.g0 { background: linear-gradient(135deg, #232c4a, #2e4a8a); }
+.event-tile-poster-fallback.g1, .event-card-poster-fallback.g1 { background: linear-gradient(135deg, #4a3a1e, #8a6a2e); }
+.event-tile-poster-fallback.g2, .event-card-poster-fallback.g2 { background: linear-gradient(135deg, #1e3a3a, #2e6a5a); }
+
+.event-tile-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.875rem;
+}
+
+.event-tile-location {
+  font-size: 0.7rem;
+  color: rgb(var(--lion-muted));
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+}
+
+.event-tile-link {
+  font-size: 0.75rem;
+  color: rgb(var(--lion-gold));
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.friend-strip {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.friend-strip-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  width: 64px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.friend-strip-name {
+  font-size: 0.7rem;
+  color: rgb(var(--lion-text) / 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  text-align: center;
+  margin: 0;
+}
+
+.avatar-circle {
+  border-radius: 9999px;
+  object-fit: cover;
+  flex-shrink: 0;
+  display: block;
+}
+
+.avatar-circle-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: #fff;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.profile-back {
+  background: none;
+  border: none;
+  color: rgb(var(--lion-gold));
+  font-size: 0.875rem;
+  padding: 0;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
+
+.icon-14 { width: 14px; height: 14px; }
+.icon-18 { width: 18px; height: 18px; }
+.icon-20 { width: 20px; height: 20px; }
+
+/* "我的" tab — mirrors src/app/profile/page.tsx combining identity, security
+   tools and (for officers) admin tool links on one page. */
+
+.my-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.my-screen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.my-screen-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+  color: rgb(var(--lion-text));
+}
+
+.my-screen-edit-button {
+  min-height: 40px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 9999px;
+  background: rgb(var(--lion-gold));
+  color: rgb(var(--lion-navy-deep));
+  padding: 0 0.9rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.my-screen-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 0.04);
+  border: 1px solid rgb(255 255 255 / 0.06);
+  padding: 1rem;
+}
+
+.my-screen-section {
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+  padding-top: 1rem;
+}
+
+/* Shared page/section headers for screens outside the dashboard (活動, 通知…). */
+
+.screen-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+  color: rgb(var(--lion-text));
+}
+
+.screen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+  color: rgb(var(--lion-text));
+}
+
+.compose-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.compose-form label {
+  font-size: 0.875rem;
+  color: rgb(var(--lion-muted));
+  display: block;
+  margin-bottom: 0.25rem;
 }

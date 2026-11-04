@@ -23,6 +23,7 @@ export type Member = {
   organization: { name: string } | null;
   tags: { name: string }[];
   adminRoles: { role: string }[];
+  emailVerifiedAt: string | null;
 };
 
 export type FriendStatus = "friend" | "pending-in" | "pending-out" | "none";
@@ -36,7 +37,7 @@ export type MemberDetail = {
   photoUrl: string | null; memberNo: string | null; joinYear: number | null; joinMonth: number | null;
   organization: { id: string; name: string; districtCode: string | null };
   tags: { id: string; name: string; category: string | null }[];
-  experiences: unknown[];
+  experiences: MemberExperience[];
   blockedByMe: boolean;
 };
 
@@ -46,13 +47,46 @@ export type EventCard = {
   registeredCount: number; isRegistered: boolean; isFull: boolean;
 };
 export type EventDetail = EventCard & { isCheckedIn: boolean; canManage: boolean; canConvertToPersonal: boolean; hostOrganizationId: string };
+export type Registration = {
+  id: string; registeredAt: string; checkedInAt: string | null;
+  member: { id: string; name: string; nickname: string | null; email: string | null; phone: string | null; title: string | null; photoUrl: string | null; organization: { name: string } };
+};
 
 export type NotificationItem = {
   id: string; notificationId: string; eventId: string; eventTitle: string; message: string;
   sentAt: string; readAt: string | null; sender: { id: string; name: string; nickname: string | null };
 };
 export type FriendInvitation = { friendshipId: string; createdAt: string; requester: { id: string; name: string; nickname: string | null; photoUrl: string | null } };
-export type NotificationsResponse = { inbox: NotificationItem[]; unreadCount: number; friendInvitations: FriendInvitation[]; pendingFriendCount: number };
+export type SentNotification = { id: string; eventTitle: string; message: string; sentAt: string; recipients: string[] };
+export type NotificationsResponse = {
+  inbox: NotificationItem[]; unreadCount: number; friendInvitations: FriendInvitation[]; pendingFriendCount: number;
+  notifications: SentNotification[];
+};
+
+export type EventPublishingOption = { scope: string; hostOrganizationId: string; hostOrganizationName: string };
+export type EventsFullResponse = { allowedScopes: string[]; officialHosts: EventPublishingOption[]; tagsAvailable: boolean; events: EventCard[] };
+export type CreateEventInput = {
+  title: string; startAt: string; location: string; capacity?: number; description?: string;
+  coverPhotoUrl?: string; category?: "PERSONAL" | "CLUB_OFFICIAL"; tags?: string[];
+  scope?: "CLUB" | "ZONE" | "REGION" | "DISTRICT"; hostOrganizationId?: string;
+};
+
+export type MemberExperience = {
+  id: string; kind: string; level: string; positionCode: string; positionName: string;
+  organizationName: string; organizationIsUnlisted: boolean;
+  multipleDistrictCode?: string; districtCode?: string;
+  startYear: number; startMonth: number | null; endYear?: number;
+  datePrecision: string; isCurrent: boolean; verificationStatus: string; visibility: string; note?: string;
+};
+export type ExperienceInput = {
+  kind: "membership" | "position" | "honorary" | "advisor" | "other";
+  level: "international" | "md" | "district" | "region" | "zone" | "club" | "foundation";
+  positionCode: string; organizationName: string; organizationIsUnlisted?: boolean;
+  multipleDistrictCode?: string; districtCode?: string;
+  startYear: number; startMonth?: number | null; endYear?: number;
+  datePrecision: "month" | "lions-year" | "approximate";
+  isCurrent: boolean; visibility: "public" | "members" | "only-me"; note?: string;
+};
 
 export type BlockedMember = { member: { id: string; name: string; nickname: string | null; photoUrl: string | null }; createdAt: string };
 
@@ -91,6 +125,19 @@ async function setToken(key: string, value: string) {
 }
 async function clearTokens() {
   await Promise.all([SecureStorage.removeItem(ACCESS_TOKEN_KEY), SecureStorage.removeItem(REFRESH_TOKEN_KEY)]);
+}
+
+/**
+ * Uploads straight to the presigned S3 URL with plain `fetch`, not
+ * CapacitorHttp — this request goes directly to S3, not through
+ * createApiClient's origin-prefixed JSON wrapper, and needs a raw binary
+ * body (CapacitorHttp's `data` field is JSON-oriented). The WebView's own
+ * fetch behaves like a browser's here, so it works the same as the
+ * website's identical upload step.
+ */
+export async function uploadToPresignedUrl(url: string, contentType: string, blob: Blob): Promise<void> {
+  const response = await fetch(url, { method: "PUT", headers: { "Content-Type": contentType }, body: blob });
+  if (!response.ok) throw new ApiError("UNKNOWN", "封面照片上傳失敗，請稍後再試");
 }
 
 export function createApiClient(baseUrl: string) {
@@ -194,6 +241,11 @@ export function createApiClient(baseUrl: string) {
     return response.data as Member;
   }
 
+  async function resendVerificationEmail(): Promise<void> {
+    const response = await authedRequest("/api/mobile/me/resend-verification", { method: "POST" });
+    if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `寄送失敗（HTTP ${response.status}）`, response.status);
+  }
+
   async function logout(): Promise<void> {
     const accessToken = await getToken(ACCESS_TOKEN_KEY);
     await clearTokens();
@@ -266,6 +318,27 @@ export function createApiClient(baseUrl: string) {
     return response.data.events;
   }
 
+  async function getEventsFull(): Promise<EventsFullResponse> {
+    const response = await authedRequest("/api/mobile/events", { method: "GET" });
+    if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `讀取活動失敗（HTTP ${response.status}）`, response.status);
+    return response.data as EventsFullResponse;
+  }
+
+  async function createEvent(input: CreateEventInput): Promise<{ eventId: string }> {
+    const response = await authedRequest("/api/mobile/events", { method: "POST", body: input });
+    if (response.status !== 200) {
+      if (response.data?.code === "TERMS_REQUIRED") throw new ApiError("UNKNOWN", "發布內容前，請先到網站閱讀並同意使用條款", response.status);
+      throw new ApiError("UNKNOWN", response.data?.error ?? `發布活動失敗（HTTP ${response.status}）`, response.status);
+    }
+    return response.data;
+  }
+
+  async function createEventCoverUpload(contentType: string, size: number): Promise<{ uploadUrl: string; coverPhotoUrl: string }> {
+    const response = await authedRequest("/api/mobile/events/cover-upload", { method: "POST", body: { contentType, size } });
+    if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `準備封面照片上傳失敗（HTTP ${response.status}）`, response.status);
+    return response.data;
+  }
+
   async function getEvent(eventId: string): Promise<EventDetail> {
     const response = await authedRequest(`/api/mobile/events/${eventId}`, { method: "GET" });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `讀取活動失敗（HTTP ${response.status}）`, response.status);
@@ -283,6 +356,17 @@ export function createApiClient(baseUrl: string) {
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `報到失敗（HTTP ${response.status}）`, response.status);
   }
 
+  async function getEventRegistrations(eventId: string): Promise<{ registrations: Registration[]; checkedInCount: number; registeredCount: number }> {
+    const response = await authedRequest(`/api/mobile/events/${eventId}/registrations`, { method: "GET" });
+    if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `讀取報名名單失敗（HTTP ${response.status}）`, response.status);
+    return response.data;
+  }
+
+  async function reportEvent(eventId: string, reason: string, details?: string): Promise<void> {
+    const response = await authedRequest(`/api/mobile/events/${eventId}/report`, { method: "POST", body: { reason, details } });
+    if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `檢舉失敗（HTTP ${response.status}）`, response.status);
+  }
+
   async function getNotifications(): Promise<NotificationsResponse> {
     const response = await authedRequest("/api/mobile/notifications", { method: "GET" });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `讀取通知失敗（HTTP ${response.status}）`, response.status);
@@ -292,6 +376,12 @@ export function createApiClient(baseUrl: string) {
   async function markNotificationsRead(ids: string[]): Promise<void> {
     const response = await authedRequest("/api/mobile/notifications", { method: "PATCH", body: { ids } });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `標記已讀失敗（HTTP ${response.status}）`, response.status);
+  }
+
+  async function sendNotification(input: { eventId: string; recipientType: "selected" | "organization"; memberIds?: string[]; message?: string }): Promise<{ recipientCount: number }> {
+    const response = await authedRequest("/api/mobile/notifications", { method: "POST", body: input });
+    if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `發送失敗（HTTP ${response.status}）`, response.status);
+    return response.data;
   }
 
   async function getBlockedMembers(): Promise<BlockedMember[]> {
@@ -379,15 +469,40 @@ export function createApiClient(baseUrl: string) {
     return response.data.members;
   }
 
+  async function getMyExperiences(): Promise<MemberExperience[]> {
+    const response = await authedRequest("/api/mobile/me/experiences", { method: "GET" });
+    if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `讀取資歷失敗（HTTP ${response.status}）`, response.status);
+    return response.data.experiences;
+  }
+
+  async function createExperience(input: ExperienceInput): Promise<MemberExperience> {
+    const response = await authedRequest("/api/mobile/me/experiences", { method: "POST", body: input });
+    if (response.status !== 201) throw new ApiError("UNKNOWN", response.data?.error ?? `新增資歷失敗（HTTP ${response.status}）`, response.status);
+    return response.data.experience;
+  }
+
+  async function updateExperience(experienceId: string, input: ExperienceInput): Promise<MemberExperience> {
+    const response = await authedRequest(`/api/mobile/me/experiences/${experienceId}`, { method: "PATCH", body: input });
+    if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `更新資歷失敗（HTTP ${response.status}）`, response.status);
+    return response.data.experience;
+  }
+
+  async function deleteExperience(experienceId: string): Promise<void> {
+    const response = await authedRequest(`/api/mobile/me/experiences/${experienceId}`, { method: "DELETE" });
+    if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `刪除資歷失敗（HTTP ${response.status}）`, response.status);
+  }
+
   return {
-    login, loginWithProvider, me, updateProfile, logout, hasStoredSession,
+    login, loginWithProvider, me, updateProfile, resendVerificationEmail, logout, hasStoredSession,
     getFriends, searchMembers, addFriendByQr, requestFriend, respondFriend,
     getMember, blockMember, unblockMember, reportMember,
-    getEvents, getEvent, toggleEventRegistration, checkInToEvent,
-    getNotifications, markNotificationsRead,
+    getEvents, getEventsFull, createEvent, createEventCoverUpload, getEvent, toggleEventRegistration, checkInToEvent,
+    getEventRegistrations, reportEvent,
+    getNotifications, markNotificationsRead, sendNotification,
     getBlockedMembers, revokeOtherSessions,
     getInvites, createInvite, getPendingMembers, reviewPendingMember,
     getPendingExperiences, reviewPendingExperience, getRoles, grantRole, revokeRole,
     getReports, moderateReport, searchAssignableMembers,
+    getMyExperiences, createExperience, updateExperience, deleteExperience,
   };
 }

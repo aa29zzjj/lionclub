@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { createApiClient, ApiError, type Member, type OAuthProvider } from "./contract";
 import Shell from "./Shell";
-import ProfileScreen from "./ProfileScreen";
+import HomeScreen from "./HomeScreen";
 import FriendsScreen from "./FriendsScreen";
 import EventsScreen from "./EventsScreen";
 import NotificationsScreen from "./NotificationsScreen";
-import SecurityScreen from "./SecurityScreen";
-import AdminScreen from "./AdminScreen";
+import MyScreen from "./MyScreen";
 import logoAsset from "./lions-logo.png";
 // Next.js's repo-wide "*.png" ambient type says StaticImageData, but esbuild's
 // dataurl loader actually emits a plain string at runtime.
@@ -111,15 +110,20 @@ export default function App() {
     return (
       <Shell
         member={member}
-        onLogout={handleLogout}
-        busy={busy}
-        renderTab={(tab, m) => {
-          if (tab === "home") return <ProfileScreen member={m} onUpdated={setMember} />;
+        renderTab={(tab, m, setTab) => {
+          if (tab === "home") return (
+            <HomeScreen
+              member={m}
+              onOpenProfile={() => setTab("security")}
+              onOpenNotifications={() => setTab("notifications")}
+              onOpenFriends={() => setTab("friends")}
+              onOpenEvents={() => setTab("events")}
+            />
+          );
           if (tab === "friends") return <FriendsScreen member={m} />;
           if (tab === "events") return <EventsScreen member={m} />;
           if (tab === "notifications") return <NotificationsScreen />;
-          if (tab === "security") return <SecurityScreen />;
-          if (tab === "admin") return <AdminScreen member={m} />;
+          if (tab === "security") return <MyScreen member={m} onUpdated={setMember} onLogout={handleLogout} busy={busy} />;
           return null;
         }}
       />

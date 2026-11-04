@@ -60,7 +60,7 @@ export default function SecurityScreen() {
       {error ? <p className="error" role="alert">{error}</p> : null}
 
       <section>
-        <p className="list-card-title" style={{ marginBottom: "0.5rem" }}>登出其他裝置</p>
+        <h2 className="section-title">登出其他裝置</h2>
         <form onSubmit={handleRevoke} className="profile-form" style={{ gap: "0.6rem" }}>
           <input type="password" placeholder="輸入目前密碼確認" value={password} onChange={(e) => setPassword(e.target.value)} />
           <button type="submit" className="primary" disabled={revoking || !password}>{revoking ? "處理中…" : "登出所有其他裝置"}</button>
@@ -68,8 +68,8 @@ export default function SecurityScreen() {
         <p className="member-meta" style={{ marginTop: "0.4rem" }}>此帳號若使用第三方登入（無密碼），請改到網站操作。</p>
       </section>
 
-      <section>
-        <p className="list-card-title" style={{ marginBottom: "0.5rem" }}>封鎖名單</p>
+      <section style={{ marginTop: "1rem" }}>
+        <h2 className="section-title">封鎖名單</h2>
         {loading ? <p className="member-meta">載入中…</p> : null}
         {!loading && blocked.length === 0 ? <p className="member-meta">目前沒有封鎖任何會員。</p> : null}
         <div className="list-stack">

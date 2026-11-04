@@ -9,7 +9,7 @@ type SerializableMember = {
   id: string; name: string; nickname: string | null; email: string | null; title: string | null;
   bio: string | null; phone: string | null; photoUrl: string | null; memberNo: string | null;
   joinYear: number | null; joinMonth: number | null; birthday: Date | null; status: string;
-  organization: unknown; tags: unknown; adminRoles: unknown;
+  organization: unknown; tags: unknown; adminRoles: unknown; emailVerifiedAt?: Date | null;
 };
 
 function serializeMember(member: SerializableMember) {
@@ -30,6 +30,7 @@ function serializeMember(member: SerializableMember) {
     organization: member.organization,
     tags: member.tags,
     adminRoles: member.adminRoles,
+    emailVerifiedAt: member.emailVerifiedAt ?? null,
   };
 }
 

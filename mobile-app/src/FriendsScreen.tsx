@@ -4,6 +4,7 @@ import jsQR from "jsqr";
 import { QRCodeSVG } from "qrcode.react";
 import { createApiClient, ApiError, type FriendCard, type Member } from "./contract";
 import { createFriendQrPayload, parseFriendQrPayload } from "../../src/lib/friend-qr";
+import MemberDetailScreen from "./MemberDetailScreen";
 
 /** Decodes a QR code from a captured photo. No live camera preview plugin is
  * installed (the obvious candidate, @capacitor-mlkit/barcode-scanning, ships
@@ -36,13 +37,13 @@ const api = createApiClient(API_BASE_URL);
 
 type Tab = "friends" | "incoming" | "search";
 
-function Card({ card, action }: { card: FriendCard; action?: { label: string; onClick: () => void; busy?: boolean }[] }) {
+function Card({ card, action, onOpen }: { card: FriendCard; action?: { label: string; onClick: () => void; busy?: boolean }[]; onOpen?: () => void }) {
   return (
     <div className="list-card">
-      <div className="list-card-main">
+      <button type="button" className="list-card-main" style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: onOpen ? "pointer" : "default" }} onClick={onOpen} disabled={!onOpen}>
         <p className="list-card-title">{card.nickname || card.name}</p>
         <p className="list-card-meta">{card.chapter} · {card.title ?? "會員"}</p>
-      </div>
+      </button>
       {action ? (
         <div className="list-card-actions">
           {action.map((a) => (
@@ -66,6 +67,7 @@ export default function FriendsScreen({ member }: { member: Member }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showMyQr, setShowMyQr] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [openMemberId, setOpenMemberId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -133,8 +135,13 @@ export default function FriendsScreen({ member }: { member: Member }) {
     }
   }
 
+  if (openMemberId) {
+    return <MemberDetailScreen memberId={openMemberId} onBack={() => setOpenMemberId(null)} />;
+  }
+
   return (
     <div className="friends-screen">
+      <h1 className="screen-title">好友</h1>
       {toast ? <div className="toast" role="status">{toast}</div> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}
 
@@ -162,7 +169,7 @@ export default function FriendsScreen({ member }: { member: Member }) {
       {tab === "friends" && (
         <div className="list-stack">
           {friends.length === 0 ? <p className="member-meta">還沒有好友，去掃 QR Code 或搜尋認識的獅友吧。</p> : null}
-          {friends.map((f) => <Card key={f.id} card={f} />)}
+          {friends.map((f) => <Card key={f.id} card={f} onOpen={() => setOpenMemberId(f.id)} />)}
         </div>
       )}
 

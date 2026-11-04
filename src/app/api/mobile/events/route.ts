@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { requireMobileMember } from "@/lib/mobile-request-auth";
-import { readEventTags } from "@/lib/event-tags";
+import { hasAcceptedCurrentTerms, termsRequiredResponse } from "@/lib/terms-gate";
+import { EVENT_CATEGORIES } from "@/lib/event-category";
+import { eventTagsSchema } from "@/lib/event-list";
+import { EventTagsUnavailableError, readEventTags, writeEventTags } from "@/lib/event-tags";
 import { visibleEventsWhere } from "@/lib/event-visibility";
-import { getEventPublishingOptions } from "@/lib/event-scope";
+import { EVENT_SCOPES, EventScopeError, getEventPublishingOptions, resolveEventPublication } from "@/lib/event-scope";
 
 export async function GET(req: NextRequest) {
   const auth = await requireMobileMember(req);
@@ -44,4 +48,60 @@ export async function GET(req: NextRequest) {
       isFull: ev.capacity !== null && ev._count.registrations >= ev.capacity,
     })),
   });
+}
+
+const bodySchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  startAt: z.string().datetime(),
+  location: z.string().trim().min(1).max(240),
+  capacity: z.number().int().positive().optional(),
+  description: z.string().trim().max(3000).optional(),
+  coverPhotoUrl: z.union([z.string().url(), z.literal("")]).optional(),
+  category: z.enum(EVENT_CATEGORIES).optional(),
+  tags: eventTagsSchema.default([]),
+  scope: z.enum(EVENT_SCOPES).optional(),
+  hostOrganizationId: z.string().trim().min(1).max(200).optional(),
+});
+
+export async function POST(req: NextRequest) {
+  const auth = await requireMobileMember(req);
+  if (!auth) return NextResponse.json({ error: "未登入或登入已過期" }, { status: 401 });
+  const me = auth.member;
+  if (!hasAcceptedCurrentTerms(me)) return termsRequiredResponse();
+
+  const parsed = bodySchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "欄位格式錯誤" }, { status: 400 });
+  }
+  const { title, startAt, location, capacity, description, coverPhotoUrl, category } = parsed.data;
+  const effectiveCategory = category ?? "PERSONAL";
+  const effectiveScope = parsed.data.scope ?? "CLUB";
+
+  const prisma = auth.prisma;
+  try {
+    const event = await prisma.$transaction(async tx => {
+      const publication = await resolveEventPublication(tx, me.id, me.organizationId, {
+        category: effectiveCategory, scope: effectiveScope, hostOrganizationId: parsed.data.hostOrganizationId,
+      });
+      const created = await tx.event.create({ data: {
+      title,
+      startAt: new Date(startAt),
+      location,
+      capacity,
+      description,
+      coverPhotoUrl: coverPhotoUrl || null,
+      ...publication,
+      createdById: me.id,
+      } });
+      await writeEventTags(tx, created.id, parsed.data.tags);
+      return created;
+    }, { isolationLevel: "Serializable" });
+
+    return NextResponse.json({ ok: true, eventId: event.id });
+  } catch (error) {
+    if (error instanceof EventTagsUnavailableError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    if (error instanceof EventScopeError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error && typeof error === "object" && "code" in error && error.code === "P2034") return NextResponse.json({ error: "帳號或活動同時更新，請重新載入後再試" }, { status: 409 });
+    throw error;
+  }
 }
