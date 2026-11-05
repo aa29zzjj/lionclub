@@ -2,6 +2,6 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@android:color/white" />
     <item>
-        <inset android:drawable="@drawable/lionclubs_logo" android:inset="14%" />
+        <inset android:drawable="@drawable/lionclubs_logo" android:inset="7dp" />
     </item>
 </layer-list>

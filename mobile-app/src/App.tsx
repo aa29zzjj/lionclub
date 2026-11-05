@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { App as NativeApp } from "@capacitor/app";
-import { createApiClient, ApiError, type Member, type OAuthProvider } from "./contract";
+import { createApiClient, ApiError, nativeOAuthAvailable, type Member, type OAuthProvider } from "./contract";
 import Shell from "./Shell";
 import HomeScreen from "./HomeScreen";
 import FriendsScreen from "./FriendsScreen";
@@ -29,6 +29,7 @@ export default function App() {
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
   const [signedOutNotice, setSignedOutNotice] = useState<string | null>(null);
   const [notificationNavigationRevision, setNotificationNavigationRevision] = useState(0);
+  const oauthAvailable = nativeOAuthAvailable();
   const loadGeneration = useRef(0);
   const openPushNotifications = useCallback(() => setNotificationNavigationRevision(value => value + 1), []);
   const push = useMobilePush(phase === "signed-in" ? member?.id ?? null : null, api, openPushNotifications);
@@ -83,6 +84,7 @@ export default function App() {
   }
 
   async function handleOAuthLogin(provider: OAuthProvider) {
+    if (!oauthAvailable) { setError("第三方登入尚未開放，請使用會員信箱與密碼登入。"); return; }
     if (busy || oauthBusy) return;
     loadGeneration.current++;
     setOauthBusy(provider);
@@ -210,7 +212,7 @@ export default function App() {
           {busy ? "登入中…" : "登入"}
         </button>
       </form>
-      <div className="oauth-block">
+      {oauthAvailable ? <div className="oauth-block">
         <p className="divider-text">或使用第三方帳號</p>
         <button type="button" className="secondary" onClick={() => handleOAuthLogin("google")} disabled={busy || Boolean(oauthBusy)}>
           {oauthBusy === "google" ? "正在開啟驗證…" : "使用 Google 繼續"}
@@ -218,7 +220,7 @@ export default function App() {
         <button type="button" className="secondary" onClick={() => handleOAuthLogin("apple")} disabled={busy || Boolean(oauthBusy)}>
           {oauthBusy === "apple" ? "正在開啟驗證…" : "使用 Apple 繼續"}
         </button>
-      </div>
+      </div> : <p className="member-meta" role="status">第三方登入尚未開放，請使用會員信箱與密碼登入。</p>}
     </main>
   );
 }

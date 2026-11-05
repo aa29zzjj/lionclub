@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
+    <!-- CameraUtils writes temporary captures to getExternalFilesDir(Pictures). -->
+    <external-files-path name="my_images" path="Pictures/" />
+    <!-- Current Camera legacy/edit flows also pass files from the app cache. -->
     <cache-path name="my_cache_images" path="." />
 </paths>

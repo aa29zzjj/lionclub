@@ -1,4 +1,4 @@
-import { CapacitorHttp } from "@capacitor/core";
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { SecureStorage } from "@aparajita/capacitor-secure-storage";
 import { Browser } from "@capacitor/browser";
 import { App, type URLOpenListenerEvent } from "@capacitor/app";
@@ -8,6 +8,10 @@ import { createMobileSessionCoordinator } from "./mobile-session";
 
 export type OAuthProvider = "google" | "apple";
 const OAUTH_REDIRECT_URI = "com.lionclubsmembership.app://oauth-callback";
+// Android is a new release candidate: do not expose the existing custom-scheme
+// flow until app-bound PKCE/single-use exchange acceptance is complete. This
+// gate does not change or claim acceptance of the existing iOS flow.
+export function nativeOAuthAvailable() { return Capacitor.getPlatform() !== "android"; }
 
 export type Member = {
   id: string;
@@ -105,7 +109,7 @@ export type MemberReport = { id: string; reason: string; details: string | null;
 export type EventReport = { id: string; reason: string; details: string | null; reporter: { id: string; name: string }; event: { id: string; title: string } | null };
 export type ReportsResponse = { reports: MemberReport[]; eventReports: EventReport[] };
 
-export type ApiErrorCode = "UNAUTHENTICATED" | "INVALID_CREDENTIALS" | "RATE_LIMITED" | "NETWORK_ERROR" | "UNKNOWN";
+export type ApiErrorCode = "UNAUTHENTICATED" | "INVALID_CREDENTIALS" | "RATE_LIMITED" | "NETWORK_ERROR" | "PROVIDER_DISABLED" | "UNKNOWN";
 export class ApiError extends Error {
   constructor(public readonly code: ApiErrorCode, message: string, public readonly status?: number) {
     super(message);
@@ -172,6 +176,9 @@ export function createApiClient(baseUrl: string) {
   }
 
   async function loginWithProvider(provider: OAuthProvider): Promise<void> {
+    // Refuse even direct calls before changing a session, touching secure
+    // storage, installing listeners, opening a browser or making a request.
+    if (!nativeOAuthAvailable()) throw new ApiError("PROVIDER_DISABLED", "第三方登入尚未開放，請使用會員信箱與密碼登入。", 503);
     const epoch = mobileSession.beginChange();
     await mobileSession.clear(epoch); mobileSession.assertCurrent(epoch);
     const start = await request(`/api/mobile/auth/oauth/${provider}/start`, { method: "POST", body: { redirectUri: OAUTH_REDIRECT_URI } });

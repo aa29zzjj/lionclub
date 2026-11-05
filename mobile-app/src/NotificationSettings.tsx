@@ -36,7 +36,7 @@ export type MobilePushUi = ReturnType<typeof useMobilePush>;
 
 const descriptions: Record<PushStatus, string> = {
   checking: "正在確認通知設定…",
-  unavailable: "手機推播尚未由服務端啟用；App 內的通知仍可正常查看。",
+  unavailable: "此裝置的手機推播尚未開放；App 內的通知仍可正常查看。",
   off: "未開啟手機推播。你仍可以在 App 內查看通知。",
   denied: "系統未允許通知。你可以在 iPhone「設定 → 通知 → LionClubs」調整，不會反覆要求授權。",
   registering: "正在連接手機通知服務，尚未確認開啟完成…",

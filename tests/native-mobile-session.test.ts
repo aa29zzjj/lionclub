@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { createRequire } from "node:module";
 import { runInNewContext } from "node:vm";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { createMobileSessionCoordinator, MOBILE_ACCESS_TOKEN_KEY as ACCESS, MOBILE_REFRESH_TOKEN_KEY as REFRESH } from "../mobile-app/src/mobile-session";
 
@@ -13,22 +14,62 @@ function source() {
     format: "cjs", platform: "node", target: "node22", plugins: [{ name: "synthetic-native", setup(builder) {
       builder.onResolve({ filter: /^@(?:capacitor|aparajita)\// }, () => ({ path: "native", namespace: "test-stub" }));
       builder.onLoad({ filter: /.*/, namespace: "test-stub" }, () => ({ contents: `const h=globalThis.__nativeTest;
+        export const Capacitor={getPlatform:()=>h.platform};
         export const CapacitorHttp={request:o=>h.request(o)};
-        export const SecureStorage={getItem:async k=>h.storage.get(k)??null,setItem:async(k,v)=>{h.storage.set(k,v)},removeItem:async k=>{h.storage.delete(k)}};
-        export const Browser={open:async()=>{},close:async()=>{},addListener:async()=>({remove:async()=>{}})};
-        export const App={addListener:async()=>({remove:async()=>{}})};`, loader: "js" }));
+        export const SecureStorage={getItem:async k=>{h.operations.push('storage:get');return h.storage.get(k)??null},setItem:async(k,v)=>{h.operations.push('storage:set');h.storage.set(k,v)},removeItem:async k=>{h.operations.push('storage:remove');h.storage.delete(k)}};
+        export const Browser={open:async()=>{h.operations.push('browser:open')},close:async()=>{h.operations.push('browser:close')},addListener:async()=>{h.operations.push('browser:listener');return {remove:async()=>{}}}};
+        export const App={addListener:async()=>{h.operations.push('app:listener');return {remove:async()=>{}}}};`, loader: "js" }));
     } }] }).then(result => result.outputFiles[0].text);
 }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(r => { resolve = r; }); return { promise, resolve }; }
-async function harness(handler: (options: any) => Promise<any>) {
+async function harness(handler: (options: any) => Promise<any>, platform = "ios") {
   const storage = new Map<string, string>([[ACCESS, "access-A"], [REFRESH, "refresh-A"]]);
-  const context = { module: { exports: {} as any }, exports: {}, require: createRequire(import.meta.url), __nativeTest: { storage, request: handler }, URL, setTimeout, clearTimeout };
+  const operations: string[] = [];
+  const context = { module: { exports: {} as any }, exports: {}, require: createRequire(import.meta.url), __nativeTest: { storage, request: handler, platform, operations }, URL, setTimeout, clearTimeout };
   runInNewContext(await source(), context);
   const create = context.module.exports.createApiClient as (origin: string) => any;
-  return { storage, client: create("https://native.example.invalid"), anotherClient: create("https://native.example.invalid") };
+  return { storage, operations, nativeOAuthAvailable: context.module.exports.nativeOAuthAvailable as () => boolean,
+    client: create("https://native.example.invalid"), anotherClient: create("https://native.example.invalid") };
 }
 const pair = (account: string) => ({ accessToken: `access-${account}`, refreshToken: `refresh-${account}` });
 const response = (status: number, data: unknown = {}) => ({ status, data });
+
+test("Android login UI gates both third-party buttons and uses plain unavailable copy", () => {
+  const app = readFileSync(new URL("../mobile-app/src/App.tsx", import.meta.url), "utf8");
+  assert.match(app, /const oauthAvailable = nativeOAuthAvailable\(\)/);
+  assert.match(app, /\{oauthAvailable \? <div className="oauth-block">[\s\S]*?handleOAuthLogin\("google"\)[\s\S]*?handleOAuthLogin\("apple"\)[\s\S]*?<\/div> : <p[^>]*>第三方登入尚未開放，請使用會員信箱與密碼登入。<\/p>\}/);
+  assert.match(app, /async function handleOAuthLogin[^]*?if \(!oauthAvailable\) \{[^]*?return; \}[^]*?loadGeneration\.current\+\+/);
+});
+
+test("Android direct Google/Apple calls fail before network, browser, listeners or secure-storage changes", async () => {
+  let requests = 0;
+  const h = await harness(async () => { requests++; throw Error("Unexpected Android OAuth request"); }, "android");
+  assert.equal(h.nativeOAuthAvailable(), false);
+  for (const provider of ["google", "apple"] as const) await assert.rejects(h.client.loginWithProvider(provider), {
+    code: "PROVIDER_DISABLED", status: 503, message: "第三方登入尚未開放，請使用會員信箱與密碼登入。",
+  });
+  assert.equal(requests, 0); assert.deepEqual(h.operations, []);
+  assert.equal(h.storage.get(ACCESS), "access-A"); assert.equal(h.storage.get(REFRESH), "refresh-A");
+});
+test("Android OAuth refusal cannot supersede an existing session or a pending authenticated response", async () => {
+  const started = deferred<void>(), late = deferred<any>();
+  const h = await harness(async options => {
+    assert.ok(options.url.endsWith("/mobile/me")); started.resolve(); return late.promise;
+  }, "android");
+  const me = h.client.me(); await started.promise;
+  await assert.rejects(h.client.loginWithProvider("google"), { code: "PROVIDER_DISABLED" });
+  late.resolve(response(200, { id: "synthetic-A" }));
+  assert.equal((await me).id, "synthetic-A"); assert.equal(h.storage.get(ACCESS), "access-A");
+});
+test("iOS keeps the existing provider-start behavior; the Android gate does not claim iOS OAuth acceptance", async () => {
+  const requests: string[] = [];
+  const h = await harness(async options => { requests.push(options.url); return response(503, { error: "synthetic provider not configured" }); }, "ios");
+  assert.equal(h.nativeOAuthAvailable(), true);
+  await assert.rejects(h.client.loginWithProvider("apple"), { message: "synthetic provider not configured" });
+  assert.deepEqual(requests, ["https://native.example.invalid/api/mobile/auth/oauth/apple/start"]);
+  assert.ok(h.operations.includes("storage:remove"));
+  assert.equal(h.operations.includes("browser:open"), false);
+});
 
 for (const lateStatus of [200, 401]) test(`late account-A refresh ${lateStatus} cannot overwrite or clear account B after logout`, async () => {
   const started = deferred<void>(), late = deferred<any>();

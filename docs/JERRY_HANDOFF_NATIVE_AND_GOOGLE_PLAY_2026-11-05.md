@@ -1,6 +1,6 @@
 # LionClubs 原生 App 與 Google Play 交接文件
 
-收件人 Jerry　整理日期 2026 年 11 月 5 日　台灣時間
+收件人 Jerry　更新版 v2　2026 年 11 月 5 日　台灣時間
 
 Jerry，iOS 1.0 已於 11 月 3 日在台灣 App Store 公開。本次交接涵蓋下一版原生 UI、三類手機通知及 Android 新工程；下一版尚未部署或提交商店。請先確認發行簽章、後端執行位置與資料保留安排，再進入專用帳號及真機驗收。Android 已開始準備，不能將 iOS 上架或模擬器結果當作 Google Play 已通過。
 
@@ -14,13 +14,13 @@ Jerry，iOS 1.0 已於 11 月 3 日在台灣 App Store 公開。本次交接涵�
 | 背景隱私 | iOS 不透明遮罩與回前景身分重查 | 原生編譯通過，實機切換器驗收待做 |
 | 三類通知 | 活動公告、好友邀請、審核結果的 App 設定及後端 outbox | 預設關閉，尚未部署或正式發送 |
 | Apple 設定 | LionClubs 推播能力開啟；APNs 正式專用金鑰建立及下載 | 已經使用者逐項確認，金鑰僅存本機私有位置 |
-| Android 起步 | Capacitor 8.5.3 工程、API 36、登入返回、HTTPS 與備份保護 | 尚需建置環境、編譯、真機與商店驗收 |
+| Android 起步 | Capacitor 8.5.3、API 36、備份及背景保護，Debug APK 與 unsigned AAB | 編譯通過；發行簽章、裝置及商店驗收待做 |
 
 ## 已取得的驗證證據
 
-原有候選的單元測試 285 項、整合與 demo 198 項、隔離預覽 5 項通過，共 488 項。TypeScript、Prisma schema、Next production build、iOS Simulator 及 unsigned iPhone SDK Release 已通過。這些結果沒有使用正式會員、正式 DB 或 APNs 發送。
+最新單元測試 289 項通過，包含 Android 第三方登入的零副作用檢查；先前完整整合與 demo 198 項、隔離預覽 5 項通過。TypeScript、Prisma schema、Next production build、iOS Simulator 及 unsigned iPhone SDK Release 已通過。未使用正式會員、正式 DB 或 APNs 發送。
 
-並行整合重跑曾在既有 OAuth 測試結束時出現 PGlite 非同步清理錯誤；最後完整改為逐檔執行，198 項通過。未忽略錯誤或修改斷言。Android 新工程的 XML 與設定檢查已做；尚未有 Android APK 或 AAB 編譯成功證據。
+並行整合重跑曾在既有 OAuth 測試結束時出現 PGlite 非同步清理錯誤；最後完整改為逐檔執行，198 項通過。未忽略錯誤或修改斷言。Android 的 XML、設定與登入 gate 已檢查；APK 與 AAB 的最新編譯結果見 Android 章節。
 
 <!-- page -->
 
@@ -84,17 +84,37 @@ Apple 開啟推播能力時提示，相關舊 provisioning profiles 需要為後
 | 版本 | versionName 1.0，versionCode 1；上傳前再核對既有套件歷史 |
 | 系統與工具 | minSdk 24，compileSdk 36，targetSdk 36，Java 21 |
 | 工程 | Gradle 8.14.3，Android Gradle Plugin 8.13.0 |
-| 登入返回 | 限既有自訂 scheme 與 oauth-callback host；實機回流仍待測 |
+| 登入 | 候選先使用信箱密碼；原生第三方入口及 API client 皆暫停，待一次性 PKCE 流程驗收後開放 |
 | 傳輸與備份 | 禁止 cleartext，關閉備份並排除雲端及裝置移轉資料 |
-| 權限 | 網路與主動拍照所需相機，未新增通訊錄、定位或廣泛相簿讀取 |
+| 權限 | 合併後含網路、相機、網路狀態、通知、喚醒、FCM 接收及 App signature 權限；無聯絡人、定位、麥克風或廣泛儲存權限 |
 | 品牌 | Launcher 引用既有 iOS 品牌 PNG，以 Android 資源排版；仍需實機目視 |
+| 背景隱私 | 失焦及背景不透明遮罩，API 33 以上停用 Recents 快照；裝置驗收待做 |
 | 手機通知 | FCM 依賴隨官方 plugin 引入，但未設 Firebase 專案，未啟用 Android 登記或發送；關閉自動初始化與分析收集 |
 
 Android 不能使用 APNs 金鑰，現有伺服器推播契約也是 APNs 專用。若要 Android 同時支援三類手機通知，需另接 FCM 的平台識別、Token 驗證、身分綁定、發送及撤銷；不能只把 native supported 改為 true，也不能把 FCM Token 送到 APNs。第一版可先驗收 App 內通知，但不得宣傳尚未完成的背景推播。
 
-## 建置環境與目前限制
+<!-- page -->
 
-盤點時這台 Mac 尚無 Android Studio、JDK、Android SDK 或 API 36 工具。已在 Safari 開啟官方 Android Studio Rabbit 2 2026.2.2 的 SDK 協議頁，等待持有人確認接受後才能下載及安裝。Android 工程已生成，不等於已能編譯。正式文件交付時若有後續變更，另附更新紀錄。
+## Android 建置環境與驗證
+
+持有人已明確同意 Android SDK 協議及安裝。官方 Android Studio Rabbit 2 已完成初次設定並顯示歡迎畫面；SDK Platform 36、Build Tools 36.0.0、Platform Tools 及 Emulator 37.2.13 已安裝；AGP 另按需安裝 Build Tools 35.0.0。尚未建立虛擬手機或下載系統映像。
+
+Android Studio 內附 JBR 25，這個 Gradle 8.14.3 工程另外使用已驗證的 Temurin Java 21；daemon criteria 已鎖定 Java 21，未改系統全域 Java 設定。
+
+Debug APK 與 unsigned Release AAB 已編譯成功，修正後增量編譯再次通過。APK 開發簽章與 16 KB ZIP 對齊通過；AAB ZIP 完整、沒有發行簽章，六個 64 位元原生函式庫的 ELF 載入段均符合 16 KB 對齊。這些是產物檢查，不是 16 KB 裝置、功能或 Play 審核驗收。
+
+| 檢查 | 結果與界線 |
+| --- | --- |
+| 工具盤點 | Android Studio、SDK 36、Build Tools 及 JDK 21；0 個缺少的工具前提 |
+| Gradle | assembleDebug 與 bundleRelease 成功，修正後再次通過 |
+| APK | 開發簽章、16 KB ZIP 對齊、App 介面檔案一致性通過；不作商店上傳 |
+| Release AAB | ZIP 完整、未簽章；六個 64 位元原生函式庫 ELF 對齊通過 |
+| 合併設定 | 禁止備份及明文傳輸、FCM 自動初始化關閉、release 非 debuggable |
+| 仍待驗收 | 真機、16 KB 執行環境、背景遮罩、相機、專用帳號與商店審核 |
+
+FileProvider 已縮到 App Pictures 目錄，移除依賴帶入的舊儲存 opt-out，修正 API 24-25 圖示資源。相機快取仍需裝置測試。Android 第三方入口暫停，只有第三方登入的既有會員暫無 Android 原生登入路徑；既有 iOS OAuth 問題仍待修復。發布前須確認功能範圍。
+
+測試 APK 與 unsigned AAB 另存於這台 Mac 的 output/android；不放進程式封包。檔案大小、SHA-256 與重建方式見 docs/ANDROID_BUILD_ACCEPTANCE_2026-11-05.md。APK 只能用於受控測試，不含審查帳密。
 
 新 App 目前須 target API 36；16 KB 相容性也列入產物與裝置檢查，不因使用 Java 或 Capacitor 就自動勾選通過。[Google target API 要求](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en)與 [16 KB 說明](https://developer.android.com/guide/practices/page-sizes)。
 
@@ -104,7 +124,7 @@ Android 不能使用 APNs 金鑰，現有伺服器推播契約也是 APNs 專用
 
 | 項目 | 需要持有人與 Jerry 確認 |
 | --- | --- |
-| 發行帳號 | 是否已有公司組織帳號及擁有人，或既有個人帳號；目前未登入核實 |
+| 發行帳號 | 持有人回覆尚未建立或不確定，並指定交 Jerry 決定擁有人與辦理註冊；未登入或代付費 |
 | 公司驗證 | 如採組織帳號，核對法定名稱、D-U-N-S、網站與可驗證的聯絡資料，不以 Apple 團隊顯示名稱代替驗證 |
 | 註冊與條款 | 如需新帳號，Google Play 有一次性註冊費與協議；尚未代付款或建立帳號 |
 | App 身分 | 最終 package name、免費或付費、發行地區、目標年齡、內容分級與廣告聲明 |
@@ -113,7 +133,7 @@ Android 不能使用 APNs 金鑰，現有伺服器推播契約也是 APNs 專用
 | 圖像 | 512 × 512 商店圖示、1024 × 500 feature graphic，至少兩張真實 Android 截圖及需要的裝置類別素材 |
 | 審查前測試 | 先 internal testing；若適用新個人帳號規則，至少 12 位測試者持續加入 14 天，再申請 production access |
 
-帳號類型尚未確認，須以實際 Play Console 的驗證與測試要求為準。詳見 [個人帳號測試規則](https://support.google.com/googleplay/android-developer/answer/14151465?hl=en)、[開發者帳號資料](https://support.google.com/googleplay/android-developer/answer/13628312?hl=en)及 [商店素材要求](https://support.google.com/googleplay/android-developer/answer/9866151?hl=en)。
+帳號類型尚未確認，須以實際 Play Console 的驗證與測試要求為準。公司帳號的資料清單及交接步驟另見 docs/GOOGLE_PLAY_ACCOUNT_SETUP_2026-11-05.md。詳見 [個人帳號測試規則](https://support.google.com/googleplay/android-developer/answer/14151465?hl=en)、[開發者帳號資料](https://support.google.com/googleplay/android-developer/answer/13628312?hl=en)及 [商店素材要求](https://support.google.com/googleplay/android-developer/answer/9866151?hl=en)。
 
 ## Data safety 核對草案
 
@@ -153,10 +173,11 @@ git switch codex/jerry-native-play-20261105
 | docs/NATIVE_UI_AND_PUSH_IMPLEMENTATION_2026-11-05.md | 推播架構、API、worker、測試及限制 |
 | docs/PUSH_PRIVACY_RECONCILIATION_2026-11-05.md | 資料流、政策修訂與保留核對 |
 | docs/app-store/GOOGLE_PLAY_PREPARATION.zh-Hant.json | Android 商店資料草案與未驗收旗標 |
+| docs/ANDROID_BUILD_ACCEPTANCE_2026-11-05.md | 工具鏈、產物指紋、已通過檢查與裝置待辦 |
 | npm run android:sync | 建置既有 App 介面並同步 Android；不簽章或上傳 |
 | npm run google-play:check | 唯讀盤點；--strict 未完成時應回非零 |
 | node --import tsx scripts/mobile-push-worker.mjs --plan | 零 DB、零私鑰讀取、零發送的工作需求預覽 |
 
-請用 package-lock.json 鎖定依賴，先安裝與產生 Prisma client；有 JDK 21 與已接受授權的 SDK 36 後再進 android 執行 ./gradlew assembleDebug。Release AAB、upload key、Google Play 上傳及任何正式 migration 需要另行安排，不能只改 ready 旗標。
+請用 package-lock.json 鎖定依賴，先安裝與產生 Prisma client。使用 JDK 21 與 SDK 36，進 android 執行 ./gradlew assembleDebug；本機 sdk.dir 與 Java 路徑設定均不進 Git。發行簽章、upload key、Google Play 上傳及任何正式 migration 需另行安排，不能只改 ready 旗標。
 
 本文件可直接交 Jerry；未替使用者發訊息或寄信。機密資料由持有人與 Jerry 透過核定管道另行交接。建議先由 Jerry 確認帳號、簽章、後端執行位置及留存四項，這邊可持續處理工程、測試與素材。

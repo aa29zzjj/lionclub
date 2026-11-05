@@ -76,8 +76,8 @@ if (pathJava && !(process.platform === "darwin" && pathJava === "/usr/bin/java")
 const java = javaCandidates.find(executable);
 const javaVersion = java ? command(java, ["-version"]) : { ok: false, text: "No JDK found; the macOS /usr/bin/java launcher alone is not a JDK." };
 const major = Number(javaVersion.text.match(/version\s+"?(\d+)/)?.[1] || 0);
-record("jdk-21-capacitor-8", javaVersion.ok && major >= 21, javaVersion.ok ? `${java}; ${javaVersion.text.split("\n")[0]}` : javaVersion.text);
-record("jdk-compatibility", null, "This Capacitor 8 Android host compiles Java 21 source. Use a compatible JDK 21+ such as the official Android Studio bundled JBR; verify the generated Gradle/AGP combination.");
+record("jdk-21-capacitor-8", javaVersion.ok && major === 21, javaVersion.ok ? `${java}; ${javaVersion.text.split("\n")[0]}` : javaVersion.text);
+record("jdk-compatibility", null, "This host pins its Gradle daemon to Java 21. A newer Android Studio bundled JBR may run the IDE but must not be assumed compatible with Gradle 8.14.3; use the installed JDK 21 for builds.");
 
 const sdkCandidates = [...new Set([process.env.ANDROID_HOME, process.env.ANDROID_SDK_ROOT, process.platform === "darwin" && join(homedir(), "Library/Android/sdk"), process.platform === "linux" && join(homedir(), "Android/Sdk")].filter(Boolean))];
 const sdk = sdkCandidates.find(existsSync);
