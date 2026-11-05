@@ -4,6 +4,8 @@ import { requireMobileMember } from "@/lib/mobile-request-auth";
 import { getBlockedMemberIds } from "@/lib/member-block";
 import { hasAdminRoleForOrganization } from "@/lib/current-member";
 import { isPersonalEventHidden, visibleEventsWhere } from "@/lib/event-visibility";
+import { enqueueMobilePush } from "@/lib/mobile-push";
+import { resolveMobilePushSettings } from "@/lib/mobile-push-runtime";
 
 export async function GET(req: NextRequest) {
   const auth = await requireMobileMember(req);
@@ -87,6 +89,7 @@ export async function POST(req: NextRequest) {
   const { eventId, recipientType, message } = parsed.data;
 
   const database = auth.prisma;
+  const pushSettings = await resolveMobilePushSettings();
   try { return await database.$transaction(async prisma => {
   // Identity, permission, block/recipient checks and message creation must share
   // the deletion transaction boundary; a deleted sender cannot write PII back.
@@ -161,6 +164,7 @@ export async function POST(req: NextRequest) {
       recipients: { create: memberIds.map((recipientId) => ({ recipientId })) },
     },
   });
+  await enqueueMobilePush(prisma, { kind: "activity", sourceId: notification.id, actorId: me.id, recipientMemberIds: memberIds }, pushSettings);
 
   return NextResponse.json({ ok: true, notificationId: notification.id, recipientCount: memberIds.length });
   }, { isolationLevel: "Serializable" }); }

@@ -129,8 +129,8 @@ export default function HomeScreen({
             <dd>{formatJoinDate(member.joinYear, member.joinMonth) ?? "—"}</dd>
           </div>
         </dl>
-        <button type="button" className="member-card-qr-button" onClick={() => setShowQr(true)}>
-          <p className="member-card-qr-text">掃描條碼供活動報到、資源媒合驗證身分</p>
+        <button type="button" className="member-card-qr-button" onClick={() => setShowQr(true)} aria-label="顯示加好友 QR Code">
+          <p className="member-card-qr-text">出示 QR Code，讓獅友掃描加好友</p>
           <span className="member-card-qr-icon">
             <QrIcon className="icon-20" />
           </span>
@@ -138,7 +138,7 @@ export default function HomeScreen({
       </div>
 
       {showQr ? (
-        <div className="qr-overlay" role="dialog" aria-label="我的會員證 QR Code">
+        <div className="qr-overlay" role="dialog" aria-label="我的加好友 QR Code">
           <div className="qr-panel">
             <QRCodeSVG value={createFriendQrPayload(member.id)} size={220} bgColor="#ffffff" fgColor="#0a0d18" />
             <p className="member-meta" style={{ marginTop: "1rem" }}>

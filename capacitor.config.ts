@@ -4,6 +4,8 @@ const config: CapacitorConfig = {
   appId: 'com.lionclubsmembership.app',
   appName: 'LionClubs',
   webDir: 'mobile-app/dist',
+  // Bridge calls include authentication and APNs registration values.
+  loggingBehavior: 'none',
   // Matches --lion-page in mobile-app/src/styles.css. Without this the native
   // WKWebView's own inset/overscroll backing stays white, which shows as a
   // white strip behind the status bar (contentInset: 'automatic' reserves

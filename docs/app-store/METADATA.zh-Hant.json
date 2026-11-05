@@ -2,9 +2,41 @@
   "schemaVersion": 1,
   "status": "blocked",
   "ready": false,
-  "reviewedOn": "2026-10-27",
-  "blockingReasons": [],
+  "reviewedOn": "2026-11-05",
+  "readinessScope": "next-native-ui-and-push-candidate-not-the-published-1.0-baseline",
+  "blockingReasons": [
+    "NEXT_NATIVE_DEVICE_AND_PUSH_ACCEPTANCE_PENDING",
+    "OAUTH_HANDOFF_SINGLE_USE_AND_PKCE_PENDING",
+    "BACKGROUND_PRIVACY_ACCEPTANCE_PENDING",
+    "NEXT_NATIVE_UI_ACCESSIBILITY_ACCEPTANCE_PENDING",
+    "PUSH_PRIVACY_RECONCILIATION_PENDING",
+    "NEXT_RELEASE_ARCHIVE_AND_SUBMISSION_PENDING"
+  ],
   "locale": "zh-Hant",
+  "publishedBaseline": {
+    "version": "1.0",
+    "buildNumberReported": "4",
+    "buildNumberEvidence": "owner handoff and checked-in iOS project, not public App Store lookup",
+    "publicListingVerified": true,
+    "publicLookupCountry": "tw",
+    "publicReleaseDateTaiwan": "2026-11-03",
+    "publicReleaseDateUtc": "2026-11-03T01:25:46Z",
+    "appStoreUrl": "https://apps.apple.com/tw/app/lionclubs/id6826321953",
+    "publicLookupUrl": "https://itunes.apple.com/lookup?id=6826321953&country=tw",
+    "publicAgeRating": "4+",
+    "publicPrice": 0,
+    "publicCurrency": "TWD",
+    "publicCategory": "Social Networking",
+    "publicIphoneScreenshotCount": 3,
+    "publicIpadScreenshotCount": 1,
+    "appStoreConnectStatusReported": "Ready for Distribution",
+    "appStoreConnectStatusReverified": false,
+    "territoryCountReported": 38,
+    "exactTerritoriesReverified": false,
+    "releaseMethodReported": "manual",
+    "sourceMainCommit": "844e82defbe459700a29dcb56adc1e7238907de8",
+    "nextCandidateUploaded": false
+  },
   "app": {
     "name": "LionClubs",
     "nameConfirmed": true,
@@ -18,9 +50,9 @@
   "contacts": {
     "supportEmail": "jerry@prepmateai.com",
     "privacyEmail": "jerry@prepmateai.com",
-    "reviewContactName": "Jerry Huang",
-    "reviewContactEmail": "jerry@prepmateai.com",
-    "reviewContactPhone": "+886963821809"
+    "reviewContactName": null,
+    "reviewContactEmail": null,
+    "reviewContactPhone": null
   },
   "urls": {
     "website": "https://lionclubsmembership.com/",
@@ -37,18 +69,23 @@
     "googlePlayShortDescription": "管理會員檔案與服務資歷、掃描獅友 QR Code、參與分會活動。",
     "category": "SOCIAL_NETWORKING",
     "categoryConfirmed": true,
-    "ageRating": "12+",
-    "territories": ["全球（App Store／Google Play 所有可上架地區，不限台灣）"],
+    "ageRating": null,
+    "ageRatingScope": "next candidate questionnaire pending; published App Store baseline is 4+",
+    "territories": [],
+    "territoriesReportedCount": 38,
+    "territoriesStatus": "owner reports Taiwan, Asia-Pacific and US; exact App Store Connect list not reverified",
     "price": "免費 (Free)"
   },
   "release": {
     "version": "1.0",
-    "buildNumber": "1",
+    "buildNumber": "4",
+    "buildNumberScope": "checked-in published baseline; next candidate build number not assigned",
+    "nextBuildNumber": null,
     "nativeArchitecture": "Capacitor 8 + React/TypeScript 原生殼，接專用 bearer-token 行動 API（/api/mobile/*），非 Web 的 HttpOnly Session；Token 存放於 iOS Keychain（@aparajita/capacitor-secure-storage）。",
     "appleAccountReportedAvailable": true,
     "appleDeveloperEnrollmentReportedActive": true,
     "appleDeveloperEnrollmentConfirmed": false,
-    "appStoreConnectAppCreated": false,
+    "appStoreConnectAppCreated": true,
     "googlePlayAccountCreated": false,
     "googlePlayAccountType": "organization",
     "nativeProjectCreated": true,
@@ -60,8 +97,8 @@
     "submissionReady": false
   },
   "deploymentDependencies": {
-    "status": "pending_operator_handoff",
-    "decisionRevision": "2026-10-17-login-handoff",
+    "status": "published-baseline-verified-next-candidate-not-deployed",
+    "decisionRevision": "2026-11-05-native-baseline-reconciliation",
     "productionAwsMigrationDeploymentOwner": "使用者接手，與 Jerry 確認正式執行分工",
     "nativeEngineeringAndStoreOwner": "Hao",
     "haoRunsProductionMigration": false,
@@ -69,24 +106,37 @@
     "matchingProductionApiDeploymentVerified": false,
     "nativeLiveApiAcceptanceComplete": false,
     "order": [
-      "Jerry 核對目標環境、備份與 migration，先完成同版資料庫更新",
-      "部署相容的同版 API，驗證登入、Session、QR、權限與退役刪帳 API 固定 410",
-      "原生客戶端接同版 API 完成實機端到端驗收",
-      "簽章、商店資料與政策驗收通過後才提交審查"
+      "保留已發佈 mobile-app／root ios／Bearer 基線，明確界定下一版候選",
+      "核定推播的精確部署目標與認證；若需新 migration，先核對目標、備份與影響",
+      "同版 mobile API 與原生候選完成實機、推播、權限及安全回歸",
+      "更新隱私／商店資料，驗收通過後才建置、上傳及提交下一版"
     ],
-    "notes": "2026-10-17 使用者要求協助登入 AWS IAM 後由本人接手，取代舊不移交登入安排。代理本輪僅完成 Console 登入，未改 IAM/RDS/Amplify/安全群組、未跑正式 migration 或套名冊，Access Key 未設定至 CLI。Jerry 接私人核定 JSON 後仍需正式 ID 映射、reparent、舊官方活動 host 及角色驗收。正式 AWS 執行分工由使用者與 Jerry 確認，不能將登入當作代理已取得執行授權。DB-first、同版 API、原生真機與政策驗收順序不變。尚無原生工程、完整工具鏈或可發布產物，未提交商店。"
+    "notes": "2026-11-05 已核實公開 App Store 1.0 與 GitHub main 844e82d；五個 mobile API 以 invalid bearer 回401，僅證明路由存在及拒絕未授權，非完整功能E2E。/api/mobile/config 是舊候選契約，不是本版阻擋。本輪 UI／推播實作未因此取得 push main、正式 migration、雲端新費用、建憑證或提交商店授權；EC2 維持跳過，不啟用。"
   },
   "review": {
     "demoAccountConfigured": false,
     "credentialsDelivery": "App Store Connect App Review Information；不要將正式審查帳密寫入此 JSON",
     "sampleQrPath": null,
-    "notes": "尚未提交審查。需建立可直接登入的獨立合成審查帳號與第二名合成會員 QR Code，不能使用正式會員個資或公開舊 demo／短密碼帳號。原生包須接已完成同版 migration 與部署驗收的 API；一般會員及幹部權限需清楚說明。",
+    "publishedReviewAccountReportedConfigured": true,
+    "notes": "已發佈1.0；持有人交接回報 Build4 與審查登入已完成。此 review 區塊的驗收旗標指下一版候選，尚未重新核對正式帳號、真機、推播或商店聲明。審查帳密與私人聯絡資料由持有人直接在 App Store Connect 保管，不放 repo／聊天／本文件。不能把公開 API 的401當作授權功能E2E，亦不能沿用另一個原生架構的舊測試。",
     "privacyLabelsReviewed": false,
     "dataSafetyReviewed": false,
     "accountDeletionImplemented": true,
     "accountDeletionStatus": "restored_2026-10-27",
-    "accountDeletionNotes": "2026-10-22 曾依使用者要求移除，2026-10-27 已還原自助刪帳流程（本人登入＋密碼或第三方重新驗證確認）。尚待實機與正式環境重新驗收，不代表已完成上架驗收。",
+    "nativeAccountDeletionFlow": "direct-official-website-button",
+    "accountDeletionNotes": "目前已發佈原生架構以可點擊按鈕開啟官方 /account/delete，由網站本人登入及重新驗證；不混用舊 Cookie 候選的 App 內流程。下一版仍需確認連結、登入、重新驗證與刪除結果，破壞性測試只用核定的可拋棄帳號。",
     "ugcModerationImplemented": false
+  },
+  "operationalDecisions": {
+    "nextCandidatePushScope": ["activity", "friend_invitation", "experience_review", "membership_review"],
+    "nextCandidatePushScopeConfirmedOn": "2026-11-05",
+    "membershipRejectionPushSupported": false,
+    "membershipRejectionPushNote": "Existing rejection removes User/Member; do not enqueue an unreadable receipt or claim every rejection can be pushed.",
+    "applicationLogRetentionDecision": "deferred_to_jerry_no_change",
+    "applicationLogRetentionDecisionOn": "2026-10-27",
+    "applicationLogRetentionReverifiedOn20261105": false,
+    "storageEnforcementVerified": false,
+    "note": "User explicitly deferred retention changes to Jerry; no authorization to set 90 days or delete existing logs. No new paid cloud resources or EC2 deployment authorized by this baseline document."
   },
   "assets": {
     "appIcon1024": "ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png",

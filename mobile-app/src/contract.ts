@@ -2,6 +2,9 @@ import { CapacitorHttp } from "@capacitor/core";
 import { SecureStorage } from "@aparajita/capacitor-secure-storage";
 import { Browser } from "@capacitor/browser";
 import { App, type URLOpenListenerEvent } from "@capacitor/app";
+import type { PushConfig, PushDeviceInput } from "./push-controller";
+import { readNotificationsResponse } from "./notification-contract";
+import { createMobileSessionCoordinator } from "./mobile-session";
 
 export type OAuthProvider = "google" | "apple";
 const OAUTH_REDIRECT_URI = "com.lionclubsmembership.app://oauth-callback";
@@ -62,6 +65,8 @@ export type NotificationsResponse = {
   inbox: NotificationItem[]; unreadCount: number; friendInvitations: FriendInvitation[]; pendingFriendCount: number;
   notifications: SentNotification[];
 };
+export type PushReceipt = { id: string; kind: "experience_review" | "membership_review"; title: string; body: string; createdAt: string; readAt: string | null };
+export type PushReceiptsResponse = { enabled: boolean; receipts: PushReceipt[]; unreadCount: number };
 
 export type EventPublishingOption = { scope: string; hostOrganizationId: string; hostOrganizationName: string };
 export type EventsFullResponse = { allowedScopes: string[]; officialHosts: EventPublishingOption[]; tagsAvailable: boolean; events: EventCard[] };
@@ -107,9 +112,6 @@ export class ApiError extends Error {
   }
 }
 
-const ACCESS_TOKEN_KEY = "lionclubs.mobile.accessToken";
-const REFRESH_TOKEN_KEY = "lionclubs.mobile.refreshToken";
-
 /**
  * Keychain-backed (iOS) / Keystore-backed (Android) secure storage, per
  * NATIVE_SPIKE_ACCEPTANCE_2026-10-17.md (A06, 冷啟動持久化). Writes are
@@ -117,15 +119,14 @@ const REFRESH_TOKEN_KEY = "lionclubs.mobile.refreshToken";
  * (the previous @capacitor/preferences approach), which could lose a write
  * made just before the process is terminated.
  */
-async function getToken(key: string) {
-  return await SecureStorage.getItem(key);
-}
-async function setToken(key: string, value: string) {
-  await SecureStorage.setItem(key, value);
-}
-async function clearTokens() {
-  await Promise.all([SecureStorage.removeItem(ACCESS_TOKEN_KEY), SecureStorage.removeItem(REFRESH_TOKEN_KEY)]);
-}
+// One coordinator across ALL createApiClient instances. Background push config,
+// token rotation and ordinary requests share the same generation and serialized
+// Keychain operations; disposing a React controller alone cannot fence storage.
+const mobileSession = createMobileSessionCoordinator({
+  getItem: key => SecureStorage.getItem(key),
+  async setItem(key, value) { await SecureStorage.setItem(key, value); },
+  async removeItem(key) { await SecureStorage.removeItem(key); },
+}, () => new ApiError("UNAUTHENTICATED", "登入狀態已更新，請重新確認本人帳號"));
 
 /**
  * Uploads straight to the presigned S3 URL with plain `fetch`, not
@@ -160,15 +161,21 @@ export function createApiClient(baseUrl: string) {
   }
 
   async function login(email: string, password: string): Promise<void> {
+    const epoch = mobileSession.beginChange();
+    await mobileSession.clear(epoch); mobileSession.assertCurrent(epoch);
     const response = await request("/api/mobile/auth/login", { method: "POST", body: { email, password } });
+    mobileSession.assertCurrent(epoch);
     if (response.status === 401) throw new ApiError("INVALID_CREDENTIALS", response.data?.error ?? "帳號或密碼錯誤", 401);
     if (response.status === 429) throw new ApiError("RATE_LIMITED", response.data?.error ?? "嘗試次數過多，請稍後再試", 429);
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `登入失敗（HTTP ${response.status}）`, response.status);
-    await Promise.all([setToken(ACCESS_TOKEN_KEY, response.data.accessToken), setToken(REFRESH_TOKEN_KEY, response.data.refreshToken)]);
+    await mobileSession.writePair(epoch, response.data); mobileSession.assertCurrent(epoch);
   }
 
   async function loginWithProvider(provider: OAuthProvider): Promise<void> {
+    const epoch = mobileSession.beginChange();
+    await mobileSession.clear(epoch); mobileSession.assertCurrent(epoch);
     const start = await request(`/api/mobile/auth/oauth/${provider}/start`, { method: "POST", body: { redirectUri: OAUTH_REDIRECT_URI } });
+    mobileSession.assertCurrent(epoch);
     if (start.status !== 200 || !start.data?.bootstrapUrl) {
       throw new ApiError("UNKNOWN", start.data?.error ?? `無法開始 ${provider} 登入`, start.status);
     }
@@ -180,7 +187,9 @@ export function createApiClient(baseUrl: string) {
         settled = true;
         urlListener.then((handle) => handle.remove());
         finishedListener.then((handle) => handle.remove());
-        void Browser.close().catch(() => {});
+        // A superseded login may clean up its own listeners but must not close
+        // a newer account's browser sheet.
+        if (mobileSession.isCurrent(epoch)) void Browser.close().catch(() => {});
         resolve(value);
       };
       const urlListener = App.addListener("appUrlOpen", (event: URLOpenListenerEvent) => {
@@ -192,37 +201,53 @@ export function createApiClient(baseUrl: string) {
       const finishedListener = Browser.addListener("browserFinished", () => finish({ error: "OAUTH_CANCELLED" }));
       void Browser.open({ url: start.data.bootstrapUrl, presentationStyle: "popover" });
     });
+    mobileSession.assertCurrent(epoch);
 
     if (!result.code) throw new ApiError(result.error === "OAUTH_CANCELLED" ? "UNAUTHENTICATED" : "UNKNOWN", result.error ?? `${provider} 登入未完成`);
 
     const exchange = await request("/api/mobile/auth/oauth/exchange", { method: "POST", body: { code: result.code } });
+    mobileSession.assertCurrent(epoch);
     if (exchange.status !== 200) throw new ApiError("UNAUTHENTICATED", exchange.data?.error ?? "登入連結已過期，請重新開始", exchange.status);
-    await Promise.all([setToken(ACCESS_TOKEN_KEY, exchange.data.accessToken), setToken(REFRESH_TOKEN_KEY, exchange.data.refreshToken)]);
+    await mobileSession.writePair(epoch, exchange.data); mobileSession.assertCurrent(epoch);
   }
 
-  async function refresh(): Promise<boolean> {
-    const refreshToken = await getToken(REFRESH_TOKEN_KEY);
-    if (!refreshToken) return false;
-    const response = await request("/api/mobile/auth/refresh", { method: "POST", body: { refreshToken } });
-    if (response.status !== 200) {
-      await clearTokens();
-      return false;
-    }
-    await Promise.all([setToken(ACCESS_TOKEN_KEY, response.data.accessToken), setToken(REFRESH_TOKEN_KEY, response.data.refreshToken)]);
-    return true;
+  async function refresh(epoch: number): Promise<boolean> {
+    return mobileSession.refreshOnce(epoch, async () => {
+      const { refreshToken } = await mobileSession.snapshot(epoch); mobileSession.assertCurrent(epoch);
+      if (!refreshToken) return false;
+      const response = await request("/api/mobile/auth/refresh", { method: "POST", body: { refreshToken } });
+      mobileSession.assertCurrent(epoch);
+      if (response.status === 401) {
+        // Only explicit current-session rejection invalidates the pair. A late
+        // 401 for A cannot clear B, and unknown network/5xx must not clear A.
+        const rejectedEpoch = mobileSession.beginChange(epoch);
+        await mobileSession.clear(rejectedEpoch); return false;
+      }
+      if (response.status !== 200) throw new ApiError("UNKNOWN", "登入更新暫時無法確認，請稍後重試", response.status);
+      await mobileSession.writePair(epoch, response.data); mobileSession.assertCurrent(epoch);
+      return true;
+    });
   }
 
   /** Authenticated call with one automatic retry after a refresh, for any /api/mobile/* route. */
   async function authedRequest(path: string, init: { method: string; body?: unknown }) {
-    const accessToken = await getToken(ACCESS_TOKEN_KEY);
+    const epoch = mobileSession.capture();
+    const { accessToken } = await mobileSession.snapshot(epoch); mobileSession.assertCurrent(epoch);
     if (!accessToken) throw new ApiError("UNAUTHENTICATED", "尚未登入");
 
     let response = await request(path, { ...init, accessToken });
+    mobileSession.assertCurrent(epoch);
     if (response.status === 401) {
-      const refreshed = await refresh();
+      // Another request may already have refreshed this SAME session while our
+      // old-token response was in flight. Never refresh or retry as a new epoch.
+      const latest = await mobileSession.snapshot(epoch); mobileSession.assertCurrent(epoch);
+      const refreshed = latest.accessToken && latest.accessToken !== accessToken ? true : await refresh(epoch);
+      mobileSession.assertCurrent(epoch);
       if (!refreshed) throw new ApiError("UNAUTHENTICATED", "登入已過期，請重新登入");
-      const refreshedAccessToken = await getToken(ACCESS_TOKEN_KEY);
+      const { accessToken: refreshedAccessToken } = await mobileSession.snapshot(epoch); mobileSession.assertCurrent(epoch);
+      if (!refreshedAccessToken) throw new ApiError("UNAUTHENTICATED", "尚未登入");
       response = await request(path, { ...init, accessToken: refreshedAccessToken });
+      mobileSession.assertCurrent(epoch);
     }
     return response;
   }
@@ -247,8 +272,8 @@ export function createApiClient(baseUrl: string) {
   }
 
   async function logout(): Promise<void> {
-    const accessToken = await getToken(ACCESS_TOKEN_KEY);
-    await clearTokens();
+    const epoch = mobileSession.beginChange();
+    const accessToken = await mobileSession.clear(epoch); mobileSession.assertCurrent(epoch);
     if (accessToken) {
       // Best-effort only: stateless JWTs can't be revoked server-side per device.
       // Local tokens are already cleared above regardless of this call's outcome.
@@ -258,10 +283,43 @@ export function createApiClient(baseUrl: string) {
         /* ignore */
       }
     }
+    mobileSession.assertCurrent(epoch);
+  }
+
+  async function getPushConfig(): Promise<PushConfig> {
+    const response = await authedRequest("/api/mobile/push/config", { method: "GET" });
+    if ([404, 503].includes(response.status)) return { enabled: false, privacyMode: "generic" };
+    if (response.status !== 200 || typeof response.data?.enabled !== "boolean" || response.data?.privacyMode !== "generic") throw new ApiError("UNKNOWN", "無法確認手機通知設定");
+    return response.data as PushConfig;
+  }
+  async function registerPushDevice(input: PushDeviceInput): Promise<void> {
+    const response = await authedRequest("/api/mobile/push/devices", { method: "POST", body: input });
+    if (response.status !== 200 || response.data?.ok !== true) throw new ApiError("UNKNOWN", "手機通知登記尚未確認", response.status);
+  }
+  async function disablePushDevice(input: { installationId: string; revision: number }): Promise<void> {
+    const response = await authedRequest("/api/mobile/push/devices", { method: "DELETE", body: input });
+    if (response.status !== 200 || response.data?.ok !== true) throw new ApiError("UNKNOWN", "伺服器停用通知尚未確認", response.status);
+  }
+  async function getPushReceipts(): Promise<PushReceiptsResponse> {
+    const response = await authedRequest("/api/mobile/push/receipts", { method: "GET" });
+    if ([404, 503].includes(response.status)) return { enabled: false, receipts: [], unreadCount: 0 };
+    const data = response.data;
+    if (response.status !== 200 || typeof data?.enabled !== "boolean" || !Array.isArray(data?.receipts)
+      || !Number.isSafeInteger(data.unreadCount) || data.unreadCount < 0) throw new ApiError("UNKNOWN", "審核通知讀取尚未完成");
+    for (const row of data.receipts) if (!row || !["experience_review", "membership_review"].includes(row.kind)
+      || ![row.id, row.title, row.body, row.createdAt].every(value => typeof value === "string")
+      || row.readAt !== null && typeof row.readAt !== "string") throw new ApiError("UNKNOWN", "審核通知格式尚未確認");
+    return data as PushReceiptsResponse;
+  }
+  async function markPushReceiptsRead(ids: string[]): Promise<void> {
+    const response = await authedRequest("/api/mobile/push/receipts", { method: "PATCH", body: { ids } });
+    if (response.status !== 200 || response.data?.ok !== true) throw new ApiError("UNKNOWN", "通知已讀狀態尚未確認", response.status);
   }
 
   async function hasStoredSession(): Promise<boolean> {
-    return (await getToken(REFRESH_TOKEN_KEY)) !== null;
+    const epoch = mobileSession.capture();
+    const pair = await mobileSession.snapshot(epoch); mobileSession.assertCurrent(epoch);
+    return pair.accessToken !== null && pair.refreshToken !== null;
   }
 
   async function getFriends(): Promise<FriendsResponse> {
@@ -370,7 +428,8 @@ export function createApiClient(baseUrl: string) {
   async function getNotifications(): Promise<NotificationsResponse> {
     const response = await authedRequest("/api/mobile/notifications", { method: "GET" });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `讀取通知失敗（HTTP ${response.status}）`, response.status);
-    return response.data;
+    try { return readNotificationsResponse(response.data); }
+    catch { throw new ApiError("UNKNOWN", "通知資料格式尚未確認，請重新讀取；不代表沒有通知"); }
   }
 
   async function markNotificationsRead(ids: string[]): Promise<void> {
@@ -391,13 +450,15 @@ export function createApiClient(baseUrl: string) {
   }
 
   async function revokeOtherSessions(password: string): Promise<{ currentSessionRetained: boolean; message: string }> {
+    const epoch = mobileSession.capture();
     const response = await authedRequest("/api/mobile/me/sessions/revoke", { method: "POST", body: { password } });
+    mobileSession.assertCurrent(epoch);
     if (response.status !== 200) {
       if (response.data?.code === "REAUTH_REQUIRED") throw new ApiError("UNAUTHENTICATED", response.data.error, response.status);
       throw new ApiError("UNKNOWN", response.data?.error ?? `操作失敗（HTTP ${response.status}）`, response.status);
     }
     if (response.data.accessToken && response.data.refreshToken) {
-      await Promise.all([setToken(ACCESS_TOKEN_KEY, response.data.accessToken), setToken(REFRESH_TOKEN_KEY, response.data.refreshToken)]);
+      await mobileSession.writePair(epoch, response.data); mobileSession.assertCurrent(epoch);
     }
     return response.data;
   }
@@ -493,6 +554,7 @@ export function createApiClient(baseUrl: string) {
   }
 
   return {
+    getPushConfig, registerPushDevice, disablePushDevice, getPushReceipts, markPushReceiptsRead,
     login, loginWithProvider, me, updateProfile, resendVerificationEmail, logout, hasStoredSession,
     getFriends, searchMembers, addFriendByQr, requestFriend, respondFriend,
     getMember, blockMember, unblockMember, reportMember,

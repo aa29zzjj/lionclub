@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createApiClient, ApiError, type NotificationItem, type FriendInvitation, type SentNotification, type EventCard, type FriendCard } from "./contract";
+import ReviewNotifications from "./ReviewNotifications";
 
 declare const API_BASE_URL: string;
 const api = createApiClient(API_BASE_URL);
@@ -129,7 +130,7 @@ export default function NotificationsScreen() {
       setInvitations(data.friendInvitations ?? []);
       setSent(data.notifications ?? []);
       const unread = (data.inbox ?? []).filter((n) => !n.readAt).map((n) => n.notificationId);
-      if (unread.length > 0) void api.markNotificationsRead(unread);
+      if (unread.length > 0) void api.markNotificationsRead(unread).catch(() => setToast("已讀狀態尚未確認，請稍後重試"));
     } catch (failure) {
       setError(failure instanceof ApiError ? failure.message : "讀取通知失敗");
     } finally {
@@ -137,7 +138,11 @@ export default function NotificationsScreen() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load(); const refresh = () => void load();
+    window.addEventListener("lion-notifications-refresh", refresh);
+    return () => window.removeEventListener("lion-notifications-refresh", refresh);
+  }, [load]);
 
   async function handleRespond(friendshipId: string, action: "accept" | "decline") {
     setBusyId(friendshipId);
@@ -179,6 +184,7 @@ export default function NotificationsScreen() {
 
       {tab === "received" ? (
         <>
+          <ReviewNotifications />
           <section>
             <h2 className="section-title">好友邀請（{invitations.length} 待回覆）</h2>
             {invitations.length === 0 ? <p className="member-meta">目前沒有待回覆的好友邀請。</p> : null}

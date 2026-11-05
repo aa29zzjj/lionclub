@@ -6,6 +6,8 @@ import { sendSesEmail } from "@/lib/aws-http";
 import { APPROVER_ROLES, getAdministeredOrganizationIds } from "@/lib/admin-scope";
 import { activeAdminRoleWhere } from "@/lib/active-admin-role";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
+import { enqueueMobilePush } from "@/lib/mobile-push";
+import { resolveMobilePushSettings } from "@/lib/mobile-push-runtime";
 
 const bodySchema = z.object({ action: z.enum(["approve", "reject"]), joinYear: z.number().int().min(1900).max(2100).optional(), joinMonth: z.number().int().min(1).max(12).optional() });
 class ReviewError extends Error { constructor(public status: number, message: string) { super(message); } }
@@ -19,6 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ mem
   const { memberId } = await params;
   const prisma = await getPrisma();
   let target;
+  const pushSettings = await resolveMobilePushSettings();
   try {
     target = await prisma.$transaction(async tx => {
       if (!await tx.member.findFirst({ where: { id: me.id, status: "ACTIVE", deletedAt: null } })) throw new ReviewError(403, "帳號已失效");
@@ -32,6 +35,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ mem
         const now = new Date();
         const changed = await tx.member.updateMany({ where: { id: memberId, status: "PENDING" }, data: { status: "ACTIVE", joinYear: parsed.data.joinYear ?? now.getFullYear(), joinMonth: parsed.data.joinMonth ?? now.getMonth() + 1 } });
         if (changed.count !== 1) throw new ReviewError(409, "此申請已由其他管理者處理");
+        const approved = await tx.member.findUniqueOrThrow({ where: { id: memberId }, select: { updatedAt: true } });
+        await enqueueMobilePush(tx, { kind: "membership_review", sourceId: memberId, sourceRevision: approved.updatedAt.toISOString(), actorId: me.id, recipientMemberIds: [memberId] }, pushSettings);
       } else {
         // Legacy pending accounts may own shared history. Never cascade that away,
         // or send a rejection email before the database transaction commits.
@@ -43,6 +48,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ mem
         if (history.some(Boolean)) throw new ReviewError(409, "這筆申請已有活動、報到或權限歷史，不可連帶刪除；請先處理帳號交接。");
         await tx.user.deleteMany({ where: { memberId } });
         await tx.member.delete({ where: { id: memberId } });
+        // This legacy rejection deletes the login identity. Do not create a
+        // receipt for a recipient who can no longer authenticate to read it.
       }
       return pending;
     }, { isolationLevel: "Serializable" });

@@ -1,6 +1,8 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { EXPERIENCE_REVIEW_ROLES } from "./admin-scope";
 import { activeAdminRoleWhere, isActiveAdminRole } from "./active-admin-role";
+import { enqueueMobilePush } from "./mobile-push";
+import { resolveMobilePushSettings } from "./mobile-push-runtime";
 
 type Database = PrismaClient | Prisma.TransactionClient;
 type Level = "club" | "zone" | "region" | "district" | "md" | "international" | "foundation";
@@ -113,6 +115,7 @@ export function experienceReviewCandidateWhere(context: ExperienceReviewContext)
 }
 
 export async function reviewExperience(prisma: PrismaClient, input: { actorId: string; experienceId: string; action: "verify" | "reject"; expectedUpdatedAt: string; reason?: string }) {
+  const pushSettings = await resolveMobilePushSettings();
   try {
     return await prisma.$transaction(async tx => {
       const context = await loadExperienceReviewContext(tx, input.actorId);
@@ -130,8 +133,11 @@ export async function reviewExperience(prisma: PrismaClient, input: { actorId: s
         ...(input.action === "verify" && decision.organizationId ? { organizationId: decision.organizationId } : {}),
       } });
       if (changed.count !== 1) throw new ExperienceReviewError(409, "資歷或會員狀態已更新，請重新載入");
-      await tx.experienceReviewAudit.create({ data: { experienceId: target.id, actorId: input.actorId, action: input.action, reviewRole: decision.role, scopeId: decision.scopeId,
+      const audit = await tx.experienceReviewAudit.create({ data: { experienceId: target.id, actorId: input.actorId, action: input.action, reviewRole: decision.role, scopeId: decision.scopeId,
         reason, experienceUpdatedAt: target.updatedAt } });
+      // A receipt identifies this committed audit, never its private reason.
+      // Both web/mobile review routes share this original transaction.
+      await enqueueMobilePush(tx, { kind: "experience_review", sourceId: audit.id, actorId: input.actorId, recipientMemberIds: [target.memberId] }, pushSettings);
       return { ok: true, status: input.action === "verify" ? "verified" : "rejected" };
     }, { isolationLevel: "Serializable" });
   } catch (error) {

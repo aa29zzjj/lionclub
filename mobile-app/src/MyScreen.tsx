@@ -6,6 +6,7 @@ import SecurityScreen from "./SecurityScreen";
 import AdminScreen from "./AdminScreen";
 import ExperienceScreen from "./ExperienceScreen";
 import Avatar from "./Avatar";
+import NotificationSettings, { type MobilePushUi } from "./NotificationSettings";
 import { colorFromId } from "../../src/lib/avatar-color";
 
 declare const API_BASE_URL: string;
@@ -21,11 +22,15 @@ export default function MyScreen({
   onUpdated,
   onLogout,
   busy,
+  push,
+  accountMessage,
 }: {
   member: Member;
   onUpdated: (member: Member) => void;
   onLogout: () => void;
   busy: boolean;
+  push: MobilePushUi;
+  accountMessage?: string | null;
 }) {
   const [view, setView] = useState<View>("overview");
   const isAdmin = Array.isArray(member.adminRoles) && member.adminRoles.length > 0;
@@ -116,6 +121,8 @@ export default function MyScreen({
         </button>
       </section>
 
+      <NotificationSettings push={push} />
+
       <section className="my-screen-section">
         <h2 className="section-title">帳號登入方式</h2>
         <p className="member-meta">綁定 Google／Apple 帳號請至網站操作，需要重新驗證身分。</p>
@@ -153,6 +160,7 @@ export default function MyScreen({
         <SecurityScreen />
       </section>
 
+      {accountMessage && <p role="alert" className="error">{accountMessage}</p>}
       <button type="button" className="secondary logout-button" onClick={onLogout} disabled={busy}>
         {busy ? "登出中…" : "登出"}
       </button>

@@ -1,0 +1,8 @@
+.preview-frame { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.preview-frame > .shell { flex: 1; min-height: 0; height: auto; }
+.preview-banner { flex-shrink: 0; background: #202a42; border-bottom: 1px solid #c8a951; padding: 0.5rem 0.75rem; color: #f3f1ea; }
+.preview-banner p { font-size: 14px; margin: 0.15rem 0 0; line-height: 1.4; }
+.preview-banner strong { font-size: 15px; }
+.preview-banner-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.preview-banner button { font-size: 14px; padding-inline: 0.6rem; min-height: 48px; }
+html[data-preview-large-text="true"] { font-size: 170%; }

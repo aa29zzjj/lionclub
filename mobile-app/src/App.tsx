@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { App as NativeApp } from "@capacitor/app";
 import { createApiClient, ApiError, type Member, type OAuthProvider } from "./contract";
 import Shell from "./Shell";
 import HomeScreen from "./HomeScreen";
@@ -6,6 +7,7 @@ import FriendsScreen from "./FriendsScreen";
 import EventsScreen from "./EventsScreen";
 import NotificationsScreen from "./NotificationsScreen";
 import MyScreen from "./MyScreen";
+import { useMobilePush } from "./NotificationSettings";
 import logoAsset from "./lions-logo.png";
 // Next.js's repo-wide "*.png" ambient type says StaticImageData, but esbuild's
 // dataurl loader actually emits a plain string at runtime.
@@ -14,7 +16,7 @@ const logo = logoAsset as unknown as string;
 declare const API_BASE_URL: string;
 const api = createApiClient(API_BASE_URL);
 
-type Phase = "checking" | "signed-out" | "signed-in";
+type Phase = "checking" | "signed-out" | "signed-in" | "offline";
 
 export default function App() {
   const [phase, setPhase] = useState<Phase>("checking");
@@ -24,28 +26,49 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [oauthBusy, setOauthBusy] = useState<OAuthProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [accountMessage, setAccountMessage] = useState<string | null>(null);
+  const [signedOutNotice, setSignedOutNotice] = useState<string | null>(null);
+  const [notificationNavigationRevision, setNotificationNavigationRevision] = useState(0);
+  const loadGeneration = useRef(0);
+  const openPushNotifications = useCallback(() => setNotificationNavigationRevision(value => value + 1), []);
+  const push = useMobilePush(phase === "signed-in" ? member?.id ?? null : null, api, openPushNotifications);
 
   const loadMe = useCallback(async () => {
+    const attempt = ++loadGeneration.current;
     try {
       const result = await api.me();
+      if (loadGeneration.current !== attempt) return;
       setMember(result);
       setPhase("signed-in");
-    } catch {
+    } catch (failure) {
+      if (loadGeneration.current !== attempt) return;
       setMember(null);
-      setPhase("signed-out");
+      setPhase(failure instanceof ApiError && failure.code === "UNAUTHENTICATED" ? "signed-out" : "offline");
     }
   }, []);
 
   useEffect(() => {
     (async () => {
-      if (await api.hasStoredSession()) await loadMe();
-      else setPhase("signed-out");
+      try {
+        if (await api.hasStoredSession()) await loadMe();
+        else setPhase("signed-out");
+      } catch { setPhase("offline"); }
     })();
   }, [loadMe]);
+
+  useEffect(() => {
+    if (phase !== "signed-in") return;
+    let active = true;
+    const listener = NativeApp.addListener("appStateChange", event => {
+      if (event.isActive && active) { setPhase("checking"); void loadMe(); }
+    });
+    return () => { active = false; void listener.then(handle => handle.remove()).catch(() => {}); };
+  }, [phase, loadMe]);
 
   async function handleLogin(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
+    loadGeneration.current++;
     setBusy(true);
     setError(null);
     try {
@@ -61,6 +84,7 @@ export default function App() {
 
   async function handleOAuthLogin(provider: OAuthProvider) {
     if (busy || oauthBusy) return;
+    loadGeneration.current++;
     setOauthBusy(provider);
     setError(null);
     try {
@@ -77,12 +101,20 @@ export default function App() {
 
   async function handleLogout() {
     if (busy) return;
+    loadGeneration.current++;
     setBusy(true);
+    setAccountMessage(null);
     try {
+      // Revoke this installation while its old account's bearer is still usable.
+      const stopped = await push.disable();
       await api.logout();
-    } finally {
       setMember(null);
       setPhase("signed-out");
+      setSignedOutNotice(!stopped.serverConfirmed || !stopped.nativeConfirmed
+        ? "已清除本機登入，但通知停用尚未全部確認。恢復連線後請重新確認；這不代表其他裝置或所有伺服器登入已撤銷。" : null);
+    } catch {
+      setAccountMessage("本機登入清除尚未確認，請稍後重試；不會假稱已登出。");
+    } finally {
       setBusy(false);
     }
   }
@@ -106,10 +138,19 @@ export default function App() {
     );
   }
 
+  if (phase === "offline") return <main className="screen">
+    {brand}<h1>目前無法確認登入狀態</h1>
+    <p role="status">會員資料已隱藏。連線或儲存未確認不代表已登出，不會自動重送任何操作。</p>
+    {accountMessage && <p role="alert" className="error">{accountMessage}</p>}
+    <button type="button" className="primary" disabled={busy} onClick={() => { setPhase("checking"); void loadMe(); }}>重新連線確認</button>
+    <button type="button" className="secondary" disabled={busy} onClick={() => void handleLogout()}>登出此 App</button>
+  </main>;
+
   if (phase === "signed-in" && member) {
     return (
       <Shell
         member={member}
+        notificationNavigationRevision={notificationNavigationRevision}
         renderTab={(tab, m, setTab) => {
           if (tab === "home") return (
             <HomeScreen
@@ -123,7 +164,7 @@ export default function App() {
           if (tab === "friends") return <FriendsScreen member={m} />;
           if (tab === "events") return <EventsScreen member={m} />;
           if (tab === "notifications") return <NotificationsScreen />;
-          if (tab === "security") return <MyScreen member={m} onUpdated={setMember} onLogout={handleLogout} busy={busy} />;
+          if (tab === "security") return <MyScreen member={m} onUpdated={setMember} onLogout={handleLogout} busy={busy} push={push} accountMessage={accountMessage} />;
           return null;
         }}
       />
@@ -133,6 +174,7 @@ export default function App() {
   return (
     <main className="screen">
       {brand}
+      {signedOutNotice && <p role="status" className="member-meta">{signedOutNotice}</p>}
       <form onSubmit={handleLogin}>
         <div>
           <label htmlFor="login-email">會員信箱</label>
