@@ -1,6 +1,8 @@
-# LionClubs 原生 App 與 Google Play 交接文件
+# LionClubs 今日完整交接文件
 
-收件人 Jerry　更新版 v2　2026 年 11 月 5 日　台灣時間
+收件人 Jerry　今日合併定稿　2026 年 11 月 5 日　台灣時間
+
+本文件整合今天的初版與更新版交接，涵蓋 iOS、原生 UI、手機推播及 Google Play 準備。重複項目已合併，完成與待辦均以本文件的最新狀態為準；可直接以這一份交接。
 
 Jerry，iOS 1.0 已於 11 月 3 日在台灣 App Store 公開。本次交接涵蓋下一版原生 UI、三類手機通知及 Android 新工程；下一版尚未部署或提交商店。請先確認發行簽章、後端執行位置與資料保留安排，再進入專用帳號及真機驗收。Android 已開始準備，不能將 iOS 上架或模擬器結果當作 Google Play 已通過。
 
@@ -93,6 +95,8 @@ Apple 開啟推播能力時提示，相關舊 provisioning profiles 需要為後
 
 Android 不能使用 APNs 金鑰，現有伺服器推播契約也是 APNs 專用。若要 Android 同時支援三類手機通知，需另接 FCM 的平台識別、Token 驗證、身分綁定、發送及撤銷；不能只把 native supported 改為 true，也不能把 FCM Token 送到 APNs。第一版可先驗收 App 內通知，但不得宣傳尚未完成的背景推播。
 
+工程仍保留 com.lionclubsmembership.app 自訂 scheme 與 oauth-callback host，但 Android 第三方登入入口已停用；這項設定不代表登入回流已驗收。
+
 <!-- page -->
 
 ## Android 建置環境與驗證
@@ -153,7 +157,7 @@ FileProvider 已縮到 App Pictures 目錄，移除依賴帶入的舊儲存 opt-
 
 本輪原生候選先前位於 codex/native-ui-push-20261105；Android 準備延續為 codex/android-play-prep-20261105。交付時兩者尚未 push GitHub，main 未變更。附件程式封包提供以 844e82d 為基線的 Git bundle，讓你不必存取這台 Mac 即可檢視本輪提交；私鑰、帳密、node_modules、SDK 與建置輸出均不包含。
 
-三筆已完成的原生提交為 e32d4a9、70b5ae8、c3b8a51。Android 提交以封包附帶 manifest 的完整 SHA 為準。請先取回 GitHub main，再把 bundle 匯入新的 review branch，核對差異及相容性；不要整批併入 10 月的舊 mobile/cookie 候選。
+三筆已完成的原生提交為 e32d4a9、70b5ae8、c3b8a51。Android 及本輪修正的程式候選為 2e7ef3a1fd03821484f04c983c6e4282c26294e5，與先前交付的 v2 程式封包 manifest 一致；本次僅整合交接文件。請先取回 GitHub main，再把 bundle 匯入新的 review branch，核對差異及相容性；不要整批併入 10 月的舊 mobile/cookie 候選。
 
 ```text
 git fetch origin main
