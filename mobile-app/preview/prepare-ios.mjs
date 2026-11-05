@@ -18,6 +18,9 @@ const project = resolve(host, "ios/App/App.xcodeproj/project.pbxproj");
 let source = readFileSync(project, "utf8");
 if (!source.includes("PRODUCT_BUNDLE_IDENTIFIER = com.lionclubsmembership.app;")) throw Error("UNEXPECTED_IOS_PROJECT");
 source = source.replaceAll("PRODUCT_BUNDLE_IDENTIFIER = com.lionclubsmembership.app;", "PRODUCT_BUNDLE_IDENTIFIER = com.lionclubsmembership.uipreview;");
+// A production push entitlement must never leak into the synthetic host.
+// The preview has no Apple App ID or provisioning profile and cannot register APNs.
+source = source.replace(/^\s*CODE_SIGN_ENTITLEMENTS\s*=\s*[^;]+;\s*$/gm, "");
 writeFileSync(project, source);
 const infoPath = resolve(host, "ios/App/App/Info.plist");
 const info = JSON.parse(execFileSync("/usr/bin/plutil", ["-convert", "json", "-o", "-", infoPath], { encoding: "utf8" }));

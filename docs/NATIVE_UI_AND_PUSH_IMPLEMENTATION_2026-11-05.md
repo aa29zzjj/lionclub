@@ -1,6 +1,6 @@
 # 原生介面與手機推播：2026-11-05 候選版
 
-基於 GitHub main **844e82d**，新分支 `codex/native-ui-push-20261105`。本文件描述下一版候選，不是已上架 Build 4 的功能聲明。現有 App、正式 DB、Apple／AWS 設定與 main 均未因本輪工作而變更。
+基於 GitHub main **844e82d**，新分支 `codex/native-ui-push-20261105`。本文件描述下一版候選，不是已上架 Build 4 的功能聲明。現有 App binary、正式 DB、AWS 與 main 未變更；Apple 的 LionClubs Push Notifications 已在使用者於操作時明確確認後儲存，詳見 APNs 設定紀錄。
 
 ## 這輪完成的程式
 
@@ -92,7 +92,7 @@ node --import tsx scripts/mobile-push-worker.mjs --plan
 
 ## 真正啟用前仍需完成
 
-1. 發行團隊確認 APNs capability、簽章 profile、APNs 專用 key 的用途及安全託管。新增 key／權限在真正操作時確認，不貼到聊天或 repo。
+1. App ID 推播能力已核對及經確認開啟；APNs 專用 key、有效發行簽章及更新後 profile 仍待完成。新增 key／權限在真正操作時確認，不貼到聊天或 repo。
 2. 指定部署、migration 目標與備份；配置 API secret reference、可信 worker／排程與物理清理，先用專用裝置／帳號驗收，不向正式會員廣播測試。
 3. 補齊新版 OAuth handoff 的一次性／PKCE；背景隱私及前景核對已有本輪候選實作，仍須真機驗收，不繼承另一個舊工程的測試結果。
 4. 真機驗證前景、背景、關閉 App、拒絕／重新啟用、Token 更新、登出／換帳號／刪帳、點擊及各角色收件規則。確認 24 小時租約、拒絕會員及來源更新後抑制通知的產品取捨。

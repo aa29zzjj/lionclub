@@ -1,6 +1,10 @@
 # LionClubs APNs 設定與啟用順序
 
-2026-11-05。使用者已確認尚無 APNs 金鑰，請協助設定。目前 Safari 停在 Apple Developer 登入頁；尚未建立金鑰、修改 App ID、授權新存取或向任何裝置發送。
+2026-11-05。使用者已完成 Safari 登入。已核對 Prepmate AI inc.／Team **2TWCSJNDWG** 與 **com.lionclubsmembership.app**，並在使用者於操作時明確確認後，儲存 Push Notifications；重進 App ID 頁確認為開啟，Broadcast Capability 仍關閉。Apple 提醒相關 provisioning profiles 已失效、需為後續建置更新。
+
+APNs 專用 key 的 Production／Topic Specific／單一 LionClubs topic 表單已準備並停在最終 Register。建立與下載的操作時確認仍待回覆；尚未產生金鑰、下載私鑰、發送通知或變更 AWS。
+
+本機工程已加入 `App.entitlements` 與 Push capability，unsigned iPhone SDK Release 重新編譯通過；模擬預覽宿主明確移除 signing entitlement。這不是已完成 distribution 簽章：目前這台 Mac 仍為 **0 個有效 code-signing identity**，沒有建立或撤銷憑證／profile。
 
 ## 1. 登入並核對團隊
 
@@ -12,7 +16,7 @@
 
 查看既有 App ID 的 Push Notifications。若尚未啟用，先展示精確 Team／Bundle 與擬開啟的能力，取得操作時確認再儲存。只做一般可見通知，不順帶開啟 Critical Alerts、VoIP、遠端控制或背景靜默通知。
 
-Xcode 工程的推播 entitlement、對應簽章與 provisioning 也必須一致；目前只有 plugin 及 AppDelegate callback，不能把編譯成功當成已具有效的推播 profile。[Apple 能力設定](https://developer.apple.com/help/account/identifiers/enable-app-capabilities/)
+Xcode 工程的推播 entitlement、對應簽章與 provisioning 也必須一致。候選 `App.entitlements` 使用標準 development 值，實際簽章／匯出環境由 provisioning 決定；正式發佈前要核對匯出 binary 是 production，不能把 unsigned 編譯成功當成有效推播 profile。[Apple 能力設定](https://developer.apple.com/help/account/identifiers/enable-app-capabilities/)、[Apple aps-environment](https://developer.apple.com/documentation/bundleresources/entitlements/aps-environment)
 
 ## 3. 準備 APNs 專用金鑰
 
