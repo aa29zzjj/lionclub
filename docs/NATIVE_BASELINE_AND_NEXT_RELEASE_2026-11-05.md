@@ -63,7 +63,7 @@
 - 最新 [EC2 workflow](https://github.com/aa29zzjj/lionclub/actions/runs/41863460420) 的 gate 成功，真正的 Deploy job 為 **skipped**，不是長期 Queued，也不是 EC2 已部署。它仍是明確 opt-in 的舊替代路徑，**不可因本次工作啟用**。
 - [頭像清理](https://github.com/aa29zzjj/lionclub/actions/runs/41937559016)與 [rate-limit 清理](https://github.com/aa29zzjj/lionclub/actions/runs/41935971097)有成功紀錄；這不等於 S3 歷史版本、CDN、備份、名冊及所有留存承諾都已驗收。
 - **2026-10-27 使用者已決定「日誌留存暫不變更，交 Jerry 確認」。本次沒有把它解讀成允許設為 90 天或刪除舊日誌。** 未重新查 AWS 留存設定，不聲稱現在已是 90 天。政策承諾與實際設定仍須核對後再關閉待辦。
-- 本輪沒有因交接 SOP 自動 push main、跑正式 migration、修改 AWS／IAM／備份、建立 APNs key、變更商店聲明或上傳新 build。正式部署會影響網站與現有 App，需以精確候選、環境和操作範圍安排驗收，不能用 mock 測試取代。
+- 基線盤點沒有因交接 SOP 自動 push main、跑正式 migration、修改 AWS／IAM／備份、變更商店聲明或上傳新 build。後續使用者於操作時明確確認後，已開啟 LionClubs App ID 的推播能力，並建立／下載僅限該 App 的 Production APNs key；私鑰僅存本機私有位置，詳見 [APNs 設定紀錄](APNS_SETUP_2026-11-05.md)。沒有向 APNs 發送測試或啟用正式推播。正式部署仍需以精確候選、環境和操作範圍安排驗收，不能用 mock 測試取代。
 
 ## 六、推播與下一次發佈需要的外部輸入
 

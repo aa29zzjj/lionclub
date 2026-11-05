@@ -2,7 +2,19 @@
 
 2026-11-05。使用者已完成 Safari 登入。已核對 Prepmate AI inc.／Team **2TWCSJNDWG** 與 **com.lionclubsmembership.app**，並在使用者於操作時明確確認後，儲存 Push Notifications；重進 App ID 頁確認為開啟，Broadcast Capability 仍關閉。Apple 提醒相關 provisioning profiles 已失效、需為後續建置更新。
 
-APNs 專用 key 的 Production／Topic Specific／單一 LionClubs topic 表單已準備並停在最終 Register。建立與下載的操作時確認仍待回覆；尚未產生金鑰、下載私鑰、發送通知或變更 AWS。
+使用者已在操作時明確允許建立並下載到本機私有資料夾。APNs 專用 key 已建立、下載並核對：
+
+| 項目 | 實際結果 |
+| --- | --- |
+| 名稱／Key ID | LionClubs APNs Production／**789Y26C8HL** |
+| Team | **2TWCSJNDWG**／Prepmate AI inc. |
+| 服務／環境／限制 | 僅 APNs／Production／Topic Specific，1 個 topic：**com.lionclubsmembership.app** |
+| Apple 端驗證 | 金鑰清單顯示 APNs、1 Topic、Production；詳情顯示 Topic specific [Production]，Download 已停用；重進設定唯讀核對 topic 確為 com.lionclubsmembership.app |
+| 本機保管 | `~/Library/Application Support/LionClubs/APNs/production/AuthKey_789Y26C8HL.p8`，目錄 0700、檔案 0600，Downloads 的暫存副本已移除 |
+| 本機格式核對 | P-256 私鑰及本機簽章／驗章通過，沒有向 APNs 送出測試請求 |
+| 未執行事項 | 未上傳私鑰、未修改 AWS／IAM／DB、未建立或撤銷簽章憑證、未發送推播 |
+
+首次 Register 遇到 Apple session expired；返回帳號後先核對清單沒有新 APNs key，再以相同的已核准範圍恢復表單，沒有重複建立。私鑰未出現在聊天、工具輸出或 repo；文件只記非秘密識別資訊。本機目前是保管位置，尚未建置第二份受控備份或伺服器秘密託管。
 
 本機工程已加入 `App.entitlements` 與 Push capability，unsigned iPhone SDK Release 重新編譯通過；模擬預覽宿主明確移除 signing entitlement。這不是已完成 distribution 簽章：目前這台 Mac 仍為 **0 個有效 code-signing identity**，沒有建立或撤銷憑證／profile。
 
@@ -30,7 +42,7 @@ Apple 目前提供 Team Scoped／Topic Specific 與環境設定；依實際摘�
 
 ## 4. 下載與保管
 
-Apple 的 `.p8` 僅能下載一次。下載後由持有人放入已核定的受控秘密儲存位置；不寄聊天、不上傳 GitHub、不放網站公開目錄或前端環境變數。可以記錄非秘密的 Key ID、Team ID、topic、環境及保管責任人，文件不記私鑰內容。[Apple 下載提醒](https://developer.apple.com/help/account/keys/create-a-private-key/)
+Apple 的 `.p8` 僅能下載一次，本次下載與本機私有保管已完成。後續伺服器秘密託管或受控備份仍需核定位置；不寄聊天、不上傳 GitHub、不放網站公開目錄或前端環境變數。可以記錄非秘密的 Key ID、Team ID、topic、環境及保管責任人，文件不記私鑰內容。[Apple 下載提醒](https://developer.apple.com/help/account/keys/create-a-private-key/)
 
 APNs 私鑰與裝置 Token 的 AES-GCM 加密金鑰是不同用途，不能共用。worker 私鑰檔需要只有擁有人能讀取的權限。本輪尚未選定秘密託管或更改 IAM，也沒有新增付費雲端資源。
 
