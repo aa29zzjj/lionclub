@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "reviewedOn": "2026-11-05",
+  "status": "local-preparation-not-submission-ready",
+  "ready": false,
+  "applicationIdCandidate": "com.lionclubsmembership.app",
+  "applicationIdConfirmedInPlayConsole": false,
+  "versionNameCandidate": "1.0",
+  "versionCodeCandidate": 1,
+  "defaultLanguageCandidate": "zh-TW",
+  "accountTypeRecommendation": "organization",
+  "actualAccountType": null,
+  "accountExistenceVerified": false,
+  "developerVerificationComplete": false,
+  "playConsoleAppCreated": false,
+  "listing": {
+    "name": "LionClubs",
+    "shortDescription": "管理會員檔案與服務資歷、掃描獅友 QR Code、參與分會活動。",
+    "fullDescription": "LionClubs 提供會員交流與服務活動工具，集中管理日常會籍資料。\n\n會員檔案\n管理個人介紹與聯絡資料，查看會員資訊。\n\n服務資歷\n記錄所屬分會與任職經歷，依授權流程核對會籍及資歷。\n\n獅友交流\n搜尋會員、掃描會員 QR Code 建立好友關係，查看獅友檔案。\n\n活動與通知\n查看活動與報名資訊，在 App 內接收活動公告、好友邀請及可讀取的審核結果。\n\n幹部工具\n授權幹部可依有效權限管理活動名單、審核及會籍相關工作。功能依組織範圍與授權顯示。\n\n本服務需要會員帳號與網路連線，註冊依平台邀請與會籍核對流程辦理。Android 手機背景推播尚未啟用。",
+    "categoryCandidate": "SOCIAL",
+    "freeCandidate": true,
+    "containsAdsCandidate": false,
+    "targetAudienceConfirmed": false,
+    "contentRatingCompleted": false,
+    "countriesConfirmed": false,
+    "listingApprovedForPublication": false
+  },
+  "urls": {
+    "support": "https://lionclubsmembership.com/support",
+    "privacyPolicy": "https://lionclubsmembership.com/privacy",
+    "accountDeletion": "https://lionclubsmembership.com/account/delete"
+  },
+  "technical": {
+    "capacitorAndroid": "8.5.3",
+    "minSdk": 24,
+    "compileSdk": 36,
+    "targetSdk": 36,
+    "javaSourceLevel": 21,
+    "androidHostGenerated": true,
+    "debugBuildVerified": false,
+    "releaseBundleVerified": false,
+    "signingConfigured": false,
+    "physicalDeviceVerified": false,
+    "pageSize16KbVerified": false,
+    "oauthSingleUsePkceVerified": false,
+    "backgroundPrivacyVerified": false,
+    "fcmConfigured": false,
+    "pushDeliveryEnabled": false
+  },
+  "assets": {
+    "playIcon512": null,
+    "featureGraphic1024x500": null,
+    "androidScreenshots": []
+  },
+  "review": {
+    "dedicatedAccountVerified": false,
+    "credentialsLocation": "Google Play Console App access only; no passwords in this file",
+    "dataSafetyReviewed": false,
+    "privacyPolicyReconciled": false,
+    "deletionFlowVerified": false,
+    "ugcReportAndBlockVerified": false,
+    "internalTestingComplete": false,
+    "closedTestingRequirementDetermined": false
+  }
+}

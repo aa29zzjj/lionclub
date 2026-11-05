@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LionClubs</string>
+    <string name="title_activity_main">LionClubs</string>
+    <string name="package_name">com.lionclubsmembership.app</string>
+    <string name="custom_url_scheme">com.lionclubsmembership.app</string>
+</resources>

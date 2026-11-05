@@ -66,7 +66,7 @@ record("android-studio-2025.2.1", Boolean(studioVersion) && atLeast(studioVersio
 
 let javaHome = process.env.JAVA_HOME;
 if (!javaHome && process.platform === "darwin") {
-  const home = command("/usr/libexec/java_home", ["-v", "17+"]);
+  const home = command("/usr/libexec/java_home", ["-v", "21+"]);
   if (home.ok) javaHome = home.text;
 }
 const javaCandidates = [javaHome && join(javaHome, "bin/java"), ...studios.map(path => join(path, "Contents/jbr/Contents/Home/bin/java"))].filter(Boolean);
@@ -76,8 +76,8 @@ if (pathJava && !(process.platform === "darwin" && pathJava === "/usr/bin/java")
 const java = javaCandidates.find(executable);
 const javaVersion = java ? command(java, ["-version"]) : { ok: false, text: "No JDK found; the macOS /usr/bin/java launcher alone is not a JDK." };
 const major = Number(javaVersion.text.match(/version\s+"?(\d+)/)?.[1] || 0);
-record("jdk-17-minimum", javaVersion.ok && major >= 17, javaVersion.ok ? `${java}; ${javaVersion.text.split("\n")[0]}` : javaVersion.text);
-record("jdk-compatibility", null, "JDK 17 is the Android Gradle Plugin 8.x minimum, not a promise that every newer JDK works. Use the generated wrapper/AGP and Android Studio bundled JBR compatibility matrix.");
+record("jdk-21-capacitor-8", javaVersion.ok && major >= 21, javaVersion.ok ? `${java}; ${javaVersion.text.split("\n")[0]}` : javaVersion.text);
+record("jdk-compatibility", null, "This Capacitor 8 Android host compiles Java 21 source. Use a compatible JDK 21+ such as the official Android Studio bundled JBR; verify the generated Gradle/AGP combination.");
 
 const sdkCandidates = [...new Set([process.env.ANDROID_HOME, process.env.ANDROID_SDK_ROOT, process.platform === "darwin" && join(homedir(), "Library/Android/sdk"), process.platform === "linux" && join(homedir(), "Android/Sdk")].filter(Boolean))];
 const sdk = sdkCandidates.find(existsSync);
