@@ -1,0 +1,40 @@
+{
+  "status": "draft-unapproved-unpublished",
+  "purpose": "Google Play app icon candidate; unchanged circular brand mark on a full white square",
+  "width": 512,
+  "height": 512,
+  "color": "32-bit RGBA PNG, sRGB, alpha uniformly 255 (fully opaque)",
+  "sourceIcon": {
+    "path": "mobile-app/src/lions-logo.png",
+    "width": 256,
+    "height": 256,
+    "sha256": "eef9b548c0a28f1d840256bea647a6ce32d0b146e83817ee1ba7ab4c1ce9364b",
+    "bytesUnchanged": true
+  },
+  "sourceArtworkUnmodified": true,
+  "placement": {
+    "x": 64,
+    "y": 64,
+    "width": 384,
+    "height": 384
+  },
+  "fullSquareBackground": "#ffffff",
+  "allAlphaValues255": true,
+  "below1MiB": true,
+  "newRoundingShadowCropOrBadgeAdded": false,
+  "files": {
+    "LionClubs_app_icon_draft_512x512.svg": {
+      "sha256": "25e2591c628ad061f108920633069146c70b94a383d61c4fcae5793362d6988c",
+      "bytes": 127128
+    },
+    "LionClubs_app_icon_draft_512x512.png": {
+      "sha256": "fedae5783f8fd67c09ab646d4f448342a73d5b6a8abcac58b8a040ec02331fbe",
+      "bytes": 200511
+    }
+  },
+  "approvalRequired": [
+    "brand and artwork usage rights",
+    "source artwork suitability and visual review before upload"
+  ],
+  "uploaded": false
+}

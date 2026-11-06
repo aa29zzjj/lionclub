@@ -22,6 +22,10 @@ add("listing-lengths",meta.listing.name.length<=30&&meta.listing.shortDescriptio
 for(const field of ["applicationIdConfirmedInPlayConsole","accountExistenceVerified","developerVerificationComplete","playConsoleAppCreated"]) add(field,meta[field]===true,"Requires actual account verification");
 for(const field of ["debugBuildVerified","releaseBundleVerified","signingConfigured","physicalDeviceVerified","pageSize16KbVerified","oauthSingleUsePkceVerified","backgroundPrivacyVerified"]) add(field,meta.technical[field]===true,"Evidence must be recorded before setting true");
 for(const field of ["dedicatedAccountVerified","dataSafetyReviewed","privacyPolicyReconciled","deletionFlowVerified","ugcReportAndBlockVerified","internalTestingComplete","closedTestingRequirementDetermined"]) add(field,meta.review[field]===true,"Cannot inherit iOS acceptance");
+if (["SOCIAL", "DATING"].includes(String(meta.listing.categoryCandidate).toUpperCase())) {
+  for(const field of ["publishedStandardsVerified","inAppReportingVerifiedOnAndroid","moderationAndCsamProcessConfirmed","legalReportingProcessConfirmed","designatedContactVerified","consoleDeclarationCompleted"]) add(`childSafety.${field}`,meta.childSafety?.[field]===true,"Social/Dating child safety declaration needs actual public policy and operational evidence; a draft alone does not pass");
+  add("childSafety.public-standards-url", /^https:\/\//.test(meta.childSafety?.publicStandardsUrl || ""), "Public HTML policy must be verified accessible; no draft or PDF URL");
+}
 for(const field of ["targetAudienceConfirmed","contentRatingCompleted","countriesConfirmed","listingApprovedForPublication"]) add(field,meta.listing[field]===true,"Needs final Play Console review");
 add("play-assets",Boolean(meta.assets.playIcon512&&meta.assets.featureGraphic1024x500&&meta.assets.androidScreenshots.length>=2),"Need final Android assets and accurate screenshots");
 const report={checkedOn:meta.reviewedOn,readOnly:true,checks,missing:checks.filter(c=>!c.ok).length,submissionReady:meta.ready===true&&checks.every(c=>c.ok)};
