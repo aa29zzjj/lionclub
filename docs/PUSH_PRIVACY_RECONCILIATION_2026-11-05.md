@@ -46,6 +46,7 @@ Apple 的資料類型、功能用途、身分連結及追蹤定義見 [App Priva
 
 - 台灣時間 20:31（UTC 12:31:52），`DescribeLogGroups` 成功返回精確群組 `/aws/amplify/d3e0lg3sq8xr96`、區域 `us-east-2`。`retentionInDays` 欄位不存在，群組層級沒有設定 90 天；`inheritedProperties` 為空。
 - 台灣時間 20:32（UTC 12:32:55），僅查留存類型的 `DescribeAccountPolicies` 收到 `AccessDeniedException`，隨即停止。未擴充 IAM、調整認證權限或修改任何留存設定。
+- 台灣時間 20:38（UTC 12:38:10），限定查詢同一 Amplify App 的 `lionclubsmembership.com` 網域關聯，回應 200、狀態 `AVAILABLE`；`www` 對應 `main` 且已驗證。另一筆未提供 prefix 的對應亦為 `main`，但 verified 為 false，因此不宣稱所有 DNS 項目皆已驗證。此步補足本次日誌目標與現有 App 網域的關聯證據，未讀取 App 或分支的環境變數。[AWS 指定網域查詢](https://docs.aws.amazon.com/amplify/latest/APIReference/API_GetDomainAssociation.html)
 
 因此可確認群組層級沒有設定保留天數；帳號層級的實際有效規則尚未核實，不能把結果直接寫成永久保留，也不能宣稱公開政策中的 90 天自動清理已落實。[AWS 留存規則說明](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html#SettingLogRetention)
 
