@@ -25,7 +25,9 @@ APK 開發簽章驗證與 16 KB ZIP 對齊通過；AAB ZIP 完整、沒有簽章
 
 部分 RELRO header 包含填補空間，結尾大於其所屬 LOAD；單純要求兩者結尾相等會誤報。依 [AOSP Android 16 linker](https://android.googlesource.com/platform/bionic/+/android16-release/linker/linker_phdr.cpp#1326) 與 [LLVM lld](https://github.com/llvm/llvm-project/blob/release/14.x/lld/ELF/Writer.cpp#L2640) 重新檢視後，紀錄為「載入對齊與 RELRO 可寫資料交疊靜態檢查通過」。這不是官方工具完整認證，也不等於裝置執行驗收。
 
-使用者已於今天明確同意 `android-sdk-arm-dbt-license`，官方 API 36 ARM64 16 KB 系統映像正在下載。完成安裝後，仍須建立獨立測試 AVD、確認系統實際 PAGE_SIZE 為 16384，再測 App 啟動、重啟與功能；目前不將 `pageSize16KbVerified` 或 `physicalDeviceVerified` 改為 true。[Google 16 KB 測試指引](https://developer.android.com/guide/practices/page-sizes)
+使用者已於今天明確同意 `android-sdk-arm-dbt-license`；官方 API 36 ARM64 16 KB 系統映像 revision 7 安裝完成，並建立 Pixel 9 測試 AVD `LionClubs_Play_API36_16KB_20261106`。採獨立使用者資料與冷啟動，停用主機音訊輸入，後相機為虛擬影像；沒有連接使用者的真實手機或匯入會員資料。
+
+接著須啟動 AVD、確認系統實際 PAGE_SIZE 為 16384，再測 App 啟動、重啟與功能；目前不將 `pageSize16KbVerified` 或 `physicalDeviceVerified` 改為 true。[Google 16 KB 測試指引](https://developer.android.com/guide/practices/page-sizes)
 
 ## 接續範圍
 

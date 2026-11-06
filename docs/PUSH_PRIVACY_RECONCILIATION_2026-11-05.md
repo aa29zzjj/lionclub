@@ -39,3 +39,14 @@ Apple 的資料類型、功能用途、身分連結及追蹤定義見 [App Priva
 - 登出／停用會以遞增 revision 保留必要 tombstone；刪帳透過 User 關聯刪除裝置及推播資料，仍須核對備份與日誌的獨立安排。
 - 既有公開政策寫「操作日誌保留 90 天」，但使用者於 10 月 27 日明確選擇暫不變更、交 Jerry 確認。本輪沒有更改或刪除日誌；政策數字與實際 enforcement 的差異仍是正式啟用前待辦，不可以推播的 TTL 取代核實。
 - 上線前需核定 Token／tombstone／receipt／delivery 的清理、失敗監控、備份週期及責任人，完成有界清理的驗證，再填入可兌現的期限。
+
+## 2026-11-06 日誌留存現況續查
+
+沿用先前已授權的 LionClubs 專用 AWS 認證，在記憶體中先核對正確帳號，再僅查指定資源；未抄錄認證或讀取日誌內容。
+
+- 台灣時間 20:31（UTC 12:31:52），`DescribeLogGroups` 成功返回精確群組 `/aws/amplify/d3e0lg3sq8xr96`、區域 `us-east-2`。`retentionInDays` 欄位不存在，群組層級沒有設定 90 天；`inheritedProperties` 為空。
+- 台灣時間 20:32（UTC 12:32:55），僅查留存類型的 `DescribeAccountPolicies` 收到 `AccessDeniedException`，隨即停止。未擴充 IAM、調整認證權限或修改任何留存設定。
+
+因此可確認群組層級沒有設定保留天數；帳號層級的實際有效規則尚未核實，不能把結果直接寫成永久保留，也不能宣稱公開政策中的 90 天自動清理已落實。[AWS 留存規則說明](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html#SettingLogRetention)
+
+10/27 的暫不變更決定仍保留；本次 Google Play 分工更新沒有執行日誌刪除。送審前須由具既有管理權限的人核對有效規則及必要保留目的，再確認政策與實際處理一致。任何會令既有日誌永久到期刪除的變更，均須針對精確資源另行確認。
