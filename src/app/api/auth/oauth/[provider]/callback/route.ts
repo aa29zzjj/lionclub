@@ -5,6 +5,7 @@ import { acceptOAuthCallback } from "@/lib/federated-auth-service";
 import { FederatedAuthError, isAuthProvider, providerConfig } from "@/lib/federated-auth";
 import { configuredOAuthOrigin, resolveOAuthRuntimeSettings } from "@/lib/federated-auth-runtime";
 import { OAUTH_BROWSER_COOKIE, oauthErrorCode, oauthNoStore, readOAuthCookie } from "@/lib/federated-auth-http";
+import { cancelNativeOAuthCallback, NativeOAuthClaimFailure, NATIVE_OAUTH_REDIRECT_URI } from "@/lib/mobile-oauth";
 async function callback(request: NextRequest, provider: string, body: URLSearchParams) {
   let origin: string | null = null;
   try {
@@ -27,6 +28,23 @@ async function callback(request: NextRequest, provider: string, body: URLSearchP
     const next = new URL(completePath, origin); next.searchParams.set("state", body.get("state")!);
     return NextResponse.redirect(next, { status: 303, headers: oauthNoStore });
   } catch (error) {
+    if (error instanceof NativeOAuthClaimFailure) {
+      const next = new URL(NATIVE_OAUTH_REDIRECT_URI);
+      next.searchParams.set("state", error.nativeState); next.searchParams.set("protocolVersion", "2"); next.searchParams.set("error", oauthErrorCode(error));
+      return NextResponse.redirect(next, { status: 303, headers: oauthNoStore });
+    }
+    // A provider cancellation belongs to the app only after checking its own
+    // browser-bound transaction. Web callbacks retain their existing behavior.
+    if (body.getAll("state").length === 1) {
+      try {
+        const state = await cancelNativeOAuthCallback(await getPrisma(), provider, body.get("state") || "", await readOAuthCookie(OAUTH_BROWSER_COOKIE) || "");
+        if (state) {
+          const next = new URL(NATIVE_OAUTH_REDIRECT_URI);
+          next.searchParams.set("state", state); next.searchParams.set("protocolVersion", "2"); next.searchParams.set("error", oauthErrorCode(error));
+          return NextResponse.redirect(next, { status: 303, headers: oauthNoStore });
+        }
+      } catch { /* fail closed to the existing generic web error */ }
+    }
     if (!origin) return new NextResponse(null, { status: 503, headers: oauthNoStore });
     const next = new URL("/login", origin); next.searchParams.set("oauth_error", oauthErrorCode(error));
     return NextResponse.redirect(next, { status: 303, headers: oauthNoStore });

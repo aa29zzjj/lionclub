@@ -1,13 +1,14 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { SecureStorage } from "@aparajita/capacitor-secure-storage";
 import { Browser } from "@capacitor/browser";
-import { App, type URLOpenListenerEvent } from "@capacitor/app";
+import { App } from "@capacitor/app";
 import type { PushConfig, PushDeviceInput } from "./push-controller";
 import { readNotificationsResponse } from "./notification-contract";
 import { createMobileSessionCoordinator } from "./mobile-session";
+import { NATIVE_OAUTH_REDIRECT_URI, NATIVE_OAUTH_PROTOCOL_VERSION, createNativeOAuthAttempt, nativeOAuthErrorMessage, readNativeOAuthBootstrap, waitForNativeOAuth } from "./native-oauth";
+import { bytesToBase64, createImageUploadGrants } from "./native-upload";
 
 export type OAuthProvider = "google" | "apple";
-const OAUTH_REDIRECT_URI = "com.lionclubsmembership.app://oauth-callback";
 // Android is a new release candidate: do not expose the existing custom-scheme
 // flow until app-bound PKCE/single-use exchange acceptance is complete. This
 // gate does not change or claim acceptance of the existing iOS flow.
@@ -131,18 +132,33 @@ const mobileSession = createMobileSessionCoordinator({
   async setItem(key, value) { await SecureStorage.setItem(key, value); },
   async removeItem(key) { await SecureStorage.removeItem(key); },
 }, () => new ApiError("UNAUTHENTICATED", "登入狀態已更新，請重新確認本人帳號"));
+const imageUploadGrants = createImageUploadGrants();
 
-/**
- * Uploads straight to the presigned S3 URL with plain `fetch`, not
- * CapacitorHttp — this request goes directly to S3, not through
- * createApiClient's origin-prefixed JSON wrapper, and needs a raw binary
- * body (CapacitorHttp's `data` field is JSON-oriented). The WebView's own
- * fetch behaves like a browser's here, so it works the same as the
- * website's identical upload step.
- */
+/** Native binary PUT, limited to one exact URL granted by an authenticated
+ * presign call. No global fetch patch or wider CSP connection policy. */
 export async function uploadToPresignedUrl(url: string, contentType: string, blob: Blob): Promise<void> {
-  const response = await fetch(url, { method: "PUT", headers: { "Content-Type": contentType }, body: blob });
-  if (!response.ok) throw new ApiError("UNKNOWN", "封面照片上傳失敗，請稍後再試");
+  // Installed Android file transport writes no bytes on API 24–25. Keep all
+  // Android versions closed until a trustworthy native decoder path is added.
+  if (Capacitor.getPlatform() !== "ios") throw new ApiError("UNKNOWN", "此裝置的圖片上傳尚未開放，請至網站操作。");
+  const epoch = mobileSession.capture();
+  try {
+    imageUploadGrants.consume(url, contentType, blob.size, epoch);
+    if (blob.type && blob.type !== contentType) throw Error("Image type mismatch");
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    if (bytes.byteLength !== blob.size) throw Error("Image size mismatch");
+    mobileSession.assertCurrent(epoch);
+    const response = await CapacitorHttp.request({
+      url, method: "PUT", headers: { "Content-Type": contentType }, data: bytesToBase64(bytes), dataType: "file",
+      disableRedirects: true, shouldEncodeUrlParams: false, responseType: "text", connectTimeout: 15_000, readTimeout: 60_000,
+    });
+    mobileSession.assertCurrent(epoch);
+    if (response.status < 200 || response.status >= 300 || typeof response.url !== "string") throw Error("Upload not confirmed");
+    const actual = new URL(response.url), issued = new URL(url);
+    if (actual.origin !== issued.origin || actual.pathname !== issued.pathname) throw Error("Upload target changed");
+  } catch {
+    // Native errors can contain the signed URL. Never log or expose them.
+    throw new ApiError("UNKNOWN", "圖片上傳未完成，請重新選擇圖片後再試。");
+  }
 }
 
 export function createApiClient(baseUrl: string) {
@@ -181,38 +197,38 @@ export function createApiClient(baseUrl: string) {
     if (!nativeOAuthAvailable()) throw new ApiError("PROVIDER_DISABLED", "第三方登入尚未開放，請使用會員信箱與密碼登入。", 503);
     const epoch = mobileSession.beginChange();
     await mobileSession.clear(epoch); mobileSession.assertCurrent(epoch);
-    const start = await request(`/api/mobile/auth/oauth/${provider}/start`, { method: "POST", body: { redirectUri: OAUTH_REDIRECT_URI } });
+    let attempt: Awaited<ReturnType<typeof createNativeOAuthAttempt>>;
+    try { attempt = await createNativeOAuthAttempt(); }
+    catch { throw new ApiError("UNKNOWN", "目前無法安全開始登入，請稍後重試。"); }
     mobileSession.assertCurrent(epoch);
-    if (start.status !== 200 || !start.data?.bootstrapUrl) {
+    const start = await request(`/api/mobile/auth/oauth/${provider}/start`, { method: "POST", body: {
+      protocolVersion: NATIVE_OAUTH_PROTOCOL_VERSION, redirectUri: NATIVE_OAUTH_REDIRECT_URI,
+      state: attempt.state, codeChallenge: attempt.codeChallenge, codeChallengeMethod: "S256",
+    } });
+    mobileSession.assertCurrent(epoch);
+    if (start.status !== 200) {
       throw new ApiError("UNKNOWN", start.data?.error ?? `無法開始 ${provider} 登入`, start.status);
     }
+    const bootstrapUrl = readNativeOAuthBootstrap(start.data, baseUrl, attempt.state);
+    if (!bootstrapUrl) throw new ApiError("UNKNOWN", "第三方登入服務尚未完成更新，請先使用會員信箱與密碼登入。", 503);
 
-    const result = await new Promise<{ code?: string; error?: string }>((resolve) => {
-      let settled = false;
-      const finish = (value: { code?: string; error?: string }) => {
-        if (settled) return;
-        settled = true;
-        urlListener.then((handle) => handle.remove());
-        finishedListener.then((handle) => handle.remove());
-        // A superseded login may clean up its own listeners but must not close
-        // a newer account's browser sheet.
-        if (mobileSession.isCurrent(epoch)) void Browser.close().catch(() => {});
-        resolve(value);
-      };
-      const urlListener = App.addListener("appUrlOpen", (event: URLOpenListenerEvent) => {
-        if (!event.url.startsWith(OAUTH_REDIRECT_URI)) return;
-        const params = new URL(event.url).searchParams;
-        finish({ code: params.get("code") ?? undefined, error: params.get("error") ?? undefined });
-      });
-      // User dismissed the browser sheet without finishing (e.g. tapped "Cancel").
-      const finishedListener = Browser.addListener("browserFinished", () => finish({ error: "OAUTH_CANCELLED" }));
-      void Browser.open({ url: start.data.bootstrapUrl, presentationStyle: "popover" });
+    const result = await waitForNativeOAuth({
+      state: attempt.state,
+      listenForUrl: callback => App.addListener("appUrlOpen", event => callback(event.url)),
+      listenForClose: callback => Browser.addListener("browserFinished", callback),
+      openBrowser: () => Browser.open({ url: bootstrapUrl, presentationStyle: "popover" }),
+      closeBrowser: () => Browser.close(),
+      // An old attempt must never close a newer account's browser sheet.
+      isCurrent: () => mobileSession.isCurrent(epoch),
     });
     mobileSession.assertCurrent(epoch);
 
-    if (!result.code) throw new ApiError(result.error === "OAUTH_CANCELLED" ? "UNAUTHENTICATED" : "UNKNOWN", result.error ?? `${provider} 登入未完成`);
+    if (!result.code) throw new ApiError(result.error === "OAUTH_CANCELLED" ? "UNAUTHENTICATED" : "UNKNOWN", nativeOAuthErrorMessage(result.error));
 
-    const exchange = await request("/api/mobile/auth/oauth/exchange", { method: "POST", body: { code: result.code } });
+    const exchange = await request("/api/mobile/auth/oauth/exchange", { method: "POST", body: {
+      protocolVersion: NATIVE_OAUTH_PROTOCOL_VERSION, code: result.code, codeVerifier: attempt.codeVerifier,
+      state: attempt.state, redirectUri: NATIVE_OAUTH_REDIRECT_URI,
+    } });
     mobileSession.assertCurrent(epoch);
     if (exchange.status !== 200) throw new ApiError("UNAUTHENTICATED", exchange.data?.error ?? "登入連結已過期，請重新開始", exchange.status);
     await mobileSession.writePair(epoch, exchange.data); mobileSession.assertCurrent(epoch);
@@ -266,11 +282,21 @@ export function createApiClient(baseUrl: string) {
   }
 
   async function updateProfile(patch: Partial<{
-    name: string; nickname: string; title: string; email: string; phone: string; bio: string; tags: string[]; birthday: string;
+    name: string; nickname: string; title: string; email: string; phone: string; bio: string; tags: string[]; birthday: string; photoUrl: string;
   }>): Promise<Member> {
     const response = await authedRequest("/api/mobile/me", { method: "PATCH", body: patch });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `更新失敗（HTTP ${response.status}）`, response.status);
     return response.data as Member;
+  }
+
+  async function createAvatarUpload(contentType: string, size: number): Promise<{ uploadUrl: string; photoUrl: string; expiresIn?: number }> {
+    const response = await authedRequest("/api/mobile/me/avatar-upload", { method: "POST", body: { contentType, size } });
+    if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `準備大頭貼上傳失敗（HTTP ${response.status}）`, response.status);
+    try {
+      if (typeof response.data?.uploadUrl !== "string" || typeof response.data?.photoUrl !== "string") throw Error("Invalid upload response");
+      imageUploadGrants.register(response.data.uploadUrl, contentType, size, mobileSession.capture(), "avatars", response.data.expiresIn);
+    } catch { throw new ApiError("UNKNOWN", "無法準備圖片上傳，請重新選擇圖片。"); }
+    return response.data;
   }
 
   async function resendVerificationEmail(): Promise<void> {
@@ -401,6 +427,10 @@ export function createApiClient(baseUrl: string) {
   async function createEventCoverUpload(contentType: string, size: number): Promise<{ uploadUrl: string; coverPhotoUrl: string }> {
     const response = await authedRequest("/api/mobile/events/cover-upload", { method: "POST", body: { contentType, size } });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `準備封面照片上傳失敗（HTTP ${response.status}）`, response.status);
+    try {
+      if (typeof response.data?.uploadUrl !== "string" || typeof response.data?.coverPhotoUrl !== "string") throw Error("Invalid upload response");
+      imageUploadGrants.register(response.data.uploadUrl, contentType, size, mobileSession.capture(), "events", response.data.expiresIn);
+    } catch { throw new ApiError("UNKNOWN", "無法準備圖片上傳，請重新選擇圖片。"); }
     return response.data;
   }
 
@@ -442,6 +472,10 @@ export function createApiClient(baseUrl: string) {
   async function markNotificationsRead(ids: string[]): Promise<void> {
     const response = await authedRequest("/api/mobile/notifications", { method: "PATCH", body: { ids } });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `標記已讀失敗（HTTP ${response.status}）`, response.status);
+    if (response.data?.ok !== true || !Number.isSafeInteger(response.data.updatedCount)
+      || response.data.updatedCount < 0 || response.data.updatedCount > new Set(ids).size) {
+      throw new ApiError("UNKNOWN", "通知已讀狀態尚未確認，請重新讀取後再試。");
+    }
   }
 
   async function sendNotification(input: { eventId: string; recipientType: "selected" | "organization"; memberIds?: string[]; message?: string }): Promise<{ recipientCount: number }> {
@@ -562,7 +596,7 @@ export function createApiClient(baseUrl: string) {
 
   return {
     getPushConfig, registerPushDevice, disablePushDevice, getPushReceipts, markPushReceiptsRead,
-    login, loginWithProvider, me, updateProfile, resendVerificationEmail, logout, hasStoredSession,
+    login, loginWithProvider, me, updateProfile, createAvatarUpload, resendVerificationEmail, logout, hasStoredSession,
     getFriends, searchMembers, addFriendByQr, requestFriend, respondFriend,
     getMember, blockMember, unblockMember, reportMember,
     getEvents, getEventsFull, createEvent, createEventCoverUpload, getEvent, toggleEventRegistration, checkInToEvent,

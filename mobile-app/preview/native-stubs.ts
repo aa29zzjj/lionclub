@@ -10,3 +10,10 @@ export const Camera = {
     throw new Error("PREVIEW_CAMERA_DISABLED");
   },
 };
+// Real App's signed-out screen imports the lifecycle API. Never bridge to the
+// simulator/device or retain listeners; a stopped preview has no native state.
+export const App = {
+  async addListener(_event: string, _listener: (...args: never[]) => unknown) {
+    return { async remove() {} };
+  },
+};

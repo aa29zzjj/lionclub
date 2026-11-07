@@ -1,33 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { NextRequest } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { getAppSecrets } from "@/lib/secrets";
-import { readOAuthHandoffCode, signMobileAccessToken, signMobileRefreshToken, MOBILE_ACCESS_TOKEN_DURATION_SECONDS } from "@/lib/mobile-auth";
-import type { SessionUser } from "@/lib/auth-session";
+import { getClientIp, consumeRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { hashOAuthSecret } from "@/lib/federated-auth";
+import { nativeOAuthExchangeSchema, readNativeOAuthBody, requireNativeOAuthV2, nativeOAuthJson, nativeOAuthFailure, exchangeNativeOAuthHandoff } from "@/lib/mobile-oauth";
 
-const schema = z.object({ code: z.string().min(1).max(4096) });
-
-/** Exchanges the one-time OAuth handoff code (from the custom-scheme redirect) for the same
- * mobile access/refresh token pair POST /api/mobile/auth/login issues. */
-export async function POST(req: NextRequest) {
-  const parsed = schema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "缺少 code" }, { status: 400 });
-
-  const prisma = await getPrisma();
-  const { AUTH_SECRET } = await getAppSecrets();
-  const key = new TextEncoder().encode(AUTH_SECRET);
-
-  const session = await readOAuthHandoffCode(parsed.data.code, {
-    key,
-    findUser: (id) =>
-      prisma.user.findUnique({
-        where: { id },
-        select: { id: true, memberId: true, email: true, sessionVersion: true, member: { select: { memberNo: true } } },
-      }) as unknown as Promise<SessionUser | null>,
-    production: process.env.NODE_ENV === "production",
-  });
-  if (!session) return NextResponse.json({ error: "登入連結已過期或已使用，請重新開始" }, { status: 401 });
-
-  const [accessToken, refreshToken] = await Promise.all([signMobileAccessToken(session, key), signMobileRefreshToken(session, key)]);
-  return NextResponse.json({ accessToken, refreshToken, expiresIn: MOBILE_ACCESS_TOKEN_DURATION_SECONDS, memberId: session.memberId });
+export async function POST(request: NextRequest) {
+  try {
+    requireNativeOAuthV2();
+    const parsed = nativeOAuthExchangeSchema.safeParse(await readNativeOAuthBody(request));
+    if (!parsed.success) return nativeOAuthJson({ error: "登入驗證參數不正確，請重新開始。", code: "OAUTH_PROTOCOL_REQUIRED" }, 400);
+    const prisma = await getPrisma();
+    for (const [key, limit] of [[`native-oauth-exchange:ip:${getClientIp(request)}`, 600], [`native-oauth-exchange:code:${hashOAuthSecret(parsed.data.code)}`, 20]] as const) {
+      const rate = await consumeRateLimit(prisma, key, limit);
+      if (rate.limited) { const response = rateLimitResponse(rate); response.headers.set("Referrer-Policy", "no-referrer"); return response; }
+    }
+    const { AUTH_SECRET } = await getAppSecrets();
+    return nativeOAuthJson(await exchangeNativeOAuthHandoff(prisma, parsed.data, new TextEncoder().encode(AUTH_SECRET)));
+  } catch (error) { return nativeOAuthFailure(error); }
 }

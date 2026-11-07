@@ -122,6 +122,7 @@ function resolveRoute(path) {
   const pathname = new URL(path, ORIGIN).pathname.replace(/^\/api\//, "");
   if (existsSync(join(ROOT, "src/app/api", pathname, "route.ts"))) return { file: pathname, params: {} };
   const candidates = [
+    [/^mobile\/auth\/oauth\/([^/]+)\/start$/, m => ({ file: "mobile/auth/oauth/[provider]/start", params: { provider: m[1] } })],
     [/^auth\/oauth\/([^/]+)\/(start|callback)$/, m => ({ file: `auth/oauth/[provider]/${m[2]}`, params: { provider: m[1] } })],
     [/^events\/([^/]+)\/(check-in|register|registrations|report)$/, m => ({ file: `events/[id]/${m[2]}`, params: { id: m[1] } })],
     [/^events\/([^/]+)$/, m => ({ file: "events/[id]", params: { id: m[1] } })],

@@ -1,4 +1,7 @@
 import type { NotificationsResponse } from "./contract";
+export type NotificationEventOption = { id: string; title: string };
+export type NotificationFriendOption = { id: string; name: string; nickname?: string; chapter: string };
+export const NOTIFICATION_MESSAGE_LIMIT = 1000;
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const text = (value: unknown): value is string => typeof value === "string";
 const nullableText = (value: unknown) => value === null || text(value);
@@ -38,4 +41,37 @@ export function readNotificationsResponse(value: unknown): NotificationsResponse
   return { inbox, friendInvitations: invitations, notifications,
     unreadCount: count(value.unreadCount, inbox.filter(row => record(row) && row.readAt === null).length),
     pendingFriendCount: count(value.pendingFriendCount, invitations.length) } as NotificationsResponse;
+}
+
+/** Project only fields the composer renders. A partial/wrong API response must
+ * become a recoverable read error, not an undefined.map React root crash. */
+export function readNotificationComposeData(events: unknown, friendsResponse: unknown): {
+  events: NotificationEventOption[]; friends: NotificationFriendOption[];
+} {
+  if (!Array.isArray(events) || !record(friendsResponse) || !Array.isArray(friendsResponse.friends)) throw invalid();
+  return {
+    events: events.map(row => {
+      if (!record(row) || !text(row.id) || !row.id || !text(row.title)) throw invalid();
+      return { id: row.id, title: row.title };
+    }),
+    friends: friendsResponse.friends.map(row => {
+      if (!record(row) || !text(row.id) || !row.id || !text(row.name)
+        || row.nickname != null && !text(row.nickname) || row.chapter != null && !text(row.chapter)) throw invalid();
+      return { id: row.id, name: row.name, nickname: row.nickname ?? undefined, chapter: row.chapter ?? "" };
+    }),
+  };
+}
+
+export function canSendNotification(input: {
+  ready: boolean; busy: boolean; eventId: string; recipientType: "selected" | "organization";
+  selected: readonly string[]; message: string;
+}): boolean {
+  return input.ready && !input.busy && Boolean(input.eventId)
+    && input.message.length <= NOTIFICATION_MESSAGE_LIMIT
+    && (input.recipientType === "organization" || input.selected.length > 0 && input.selected.length <= 1000);
+}
+
+export function notificationSendCount(value: unknown): number | null {
+  return record(value) && Number.isSafeInteger(value.recipientCount) && (value.recipientCount as number) > 0
+    ? value.recipientCount as number : null;
 }

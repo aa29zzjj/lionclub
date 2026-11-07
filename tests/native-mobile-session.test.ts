@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { runInNewContext } from "node:vm";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
+import { webcrypto } from "node:crypto";
 import { build } from "esbuild";
 import { createMobileSessionCoordinator, MOBILE_ACCESS_TOKEN_KEY as ACCESS, MOBILE_REFRESH_TOKEN_KEY as REFRESH } from "../mobile-app/src/mobile-session";
 
@@ -25,7 +26,7 @@ function deferred<T>() { let resolve!: (value: T) => void; const promise = new P
 async function harness(handler: (options: any) => Promise<any>, platform = "ios") {
   const storage = new Map<string, string>([[ACCESS, "access-A"], [REFRESH, "refresh-A"]]);
   const operations: string[] = [];
-  const context = { module: { exports: {} as any }, exports: {}, require: createRequire(import.meta.url), __nativeTest: { storage, request: handler, platform, operations }, URL, setTimeout, clearTimeout };
+  const context = { module: { exports: {} as any }, exports: {}, require: createRequire(import.meta.url), __nativeTest: { storage, request: handler, platform, operations }, URL, setTimeout, clearTimeout, crypto: webcrypto, TextEncoder };
   runInNewContext(await source(), context);
   const create = context.module.exports.createApiClient as (origin: string) => any;
   return { storage, operations, nativeOAuthAvailable: context.module.exports.nativeOAuthAvailable as () => boolean,
@@ -69,6 +70,18 @@ test("iOS keeps the existing provider-start behavior; the Android gate does not 
   assert.deepEqual(requests, ["https://native.example.invalid/api/mobile/auth/oauth/apple/start"]);
   assert.ok(h.operations.includes("storage:remove"));
   assert.equal(h.operations.includes("browser:open"), false);
+});
+
+test("notification read acknowledgement requires an explicit bounded successful count", async () => {
+  for (const data of [{ ok: true, updatedCount: 0 }, { ok: true, updatedCount: 1 }, { ok: true, updatedCount: 2 }]) {
+    const h = await harness(async () => response(200, data));
+    await h.client.markNotificationsRead(["synthetic-one", "synthetic-two", "synthetic-two"]);
+  }
+  for (const data of [{}, null, { ok: false, updatedCount: 1 }, { ok: true }, { ok: true, updatedCount: "1" },
+    { ok: true, updatedCount: -1 }, { ok: true, updatedCount: 0.5 }, { ok: true, updatedCount: 3 }]) {
+    const h = await harness(async () => response(200, data));
+    await assert.rejects(h.client.markNotificationsRead(["synthetic-one", "synthetic-two", "synthetic-two"]), { message: "通知已讀狀態尚未確認，請重新讀取後再試。" });
+  }
 });
 
 for (const lateStatus of [200, 401]) test(`late account-A refresh ${lateStatus} cannot overwrite or clear account B after logout`, async () => {

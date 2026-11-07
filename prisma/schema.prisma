@@ -239,6 +239,12 @@ model OAuthTransaction {
   reauthUsedAt DateTime?
   reauthAction String? // which sensitive action ("link" | "sessions" | "delete") this proof may authorize; consumeOAuthReauth must match it exactly
   nativeRedirectUri String? // set only for native-app flows; web flows stay null and keep today's cookie-session completion
+  nativeState String? // app-generated state; independent of the provider's state/nonce
+  nativeCodeChallenge String? // app S256 challenge, never its verifier
+  nativeBootstrapUsedAt DateTime?
+  nativeHandoffHash String? @unique // opaque one-use handoff; no user data in its URL
+  nativeHandoffExpiresAt DateTime?
+  nativeHandoffUsedAt DateTime?
   createdAt DateTime @default(now())
 
   @@index([expiresAt])

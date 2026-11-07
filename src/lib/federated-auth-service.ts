@@ -7,9 +7,11 @@ import type { AuthProvider, OAuthPurpose, ProviderConfig } from "./federated-aut
 import type { OAuthRuntimeSettings } from "./runtime-secrets";
 import { OAUTH_DATA_VERSION } from "./federated-auth";
 import { resolveOAuthRuntimeSettings, resolveProviderConfig } from "./federated-auth-runtime";
+import { cancelNativeOAuthClaim, isNativeOAuthBinding, NativeOAuthClaimFailure, NATIVE_OAUTH_REDIRECT_URI, NATIVE_OAUTH_HANDOFF_SECONDS, requireNativeOAuthV2, type NativeOAuthBinding } from "./mobile-oauth";
 
 const invalid = () => new FederatedAuthError(400, "OAUTH_EXPIRED", "驗證已失效或已使用，請重新開始");
-const completedScrub = { subject: null, email: null, providerName: null, refreshTokenCiphertext: null, inviteToken: null, codeVerifier: null, nonce: "", browserHash: "" };
+const completedScrub = { subject: null, email: null, providerName: null, refreshTokenCiphertext: null, inviteToken: null, codeVerifier: null, nonce: "", browserHash: "",
+  nativeState: null, nativeCodeChallenge: null, nativeHandoffHash: null, nativeHandoffExpiresAt: null, nativeHandoffUsedAt: null };
 /** Bounded housekeeping only; expiry is not a promise of physical deletion. */
 export async function cleanupExpiredOAuthTransactions(prisma: PrismaClient, limit = 25, now = new Date(), apply = true) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) throw new Error("INVALID_OAUTH_CLEANUP_LIMIT");
@@ -31,13 +33,17 @@ async function activeUser(prisma: PrismaClient, session: SessionPayload) {
 export type ReauthAction = "link" | "sessions" | "delete";
 export async function beginOAuth(prisma: PrismaClient, provider: AuthProvider, purpose: OAuthPurpose, browserSecret: string,
   session: SessionPayload | null, confirmedExisting = false, now = new Date(), inviteToken?: string, configuration?: ProviderConfig | null,
-  nativeRedirectUri?: string, reauthAction?: ReauthAction) {
+  nativeRedirectUri?: string, reauthAction?: ReauthAction, nativeBinding?: NativeOAuthBinding) {
   const config = configuration === undefined ? await resolveProviderConfig(provider) : configuration;
   if (!config) throw new FederatedAuthError(503, "PROVIDER_DISABLED", "此第三方登入尚未完成設定");
   if (!validOAuthSecret(browserSecret)) throw invalid();
   if (!["login", "link", "reauth"].includes(purpose)) throw invalid();
   // Native completion is only wired up for the login purpose; link/reauth stay web-only for now.
   if (nativeRedirectUri !== undefined && purpose !== "login") throw invalid();
+  if (nativeRedirectUri !== undefined) {
+    requireNativeOAuthV2();
+    if (nativeRedirectUri !== NATIVE_OAUTH_REDIRECT_URI || !validOAuthSecret(nativeBinding?.state) || !validOAuthSecret(nativeBinding?.codeChallenge)) throw invalid();
+  } else if (nativeBinding !== undefined) throw invalid();
   if (purpose !== "reauth" && reauthAction !== undefined) throw invalid();
   await cleanupExpiredOAuthTransactions(prisma);
   if (inviteToken) {
@@ -59,11 +65,12 @@ export async function beginOAuth(prisma: PrismaClient, provider: AuthProvider, p
     }
   }
   const state = randomOAuthSecret(), nonce = randomOAuthSecret(), verifier = randomOAuthSecret();
-  await prisma.oAuthTransaction.create({ data: { provider, purpose, stateHash: hashOAuthSecret(state), browserHash: hashOAuthSecret(browserSecret),
+  const transaction = await prisma.oAuthTransaction.create({ data: { provider, purpose, stateHash: hashOAuthSecret(state), browserHash: hashOAuthSecret(browserSecret),
     nonce, codeVerifier: provider === "google" ? verifier : null, inviteToken: purpose === "login" ? inviteToken : null, userId: purpose === "login" ? null : session!.userId,
     sessionVersion: purpose === "login" ? null : session!.sessionVersion, expiresAt: new Date(now.getTime() + 10 * 60_000),
-    nativeRedirectUri: nativeRedirectUri ?? null, reauthAction: purpose === "reauth" ? reauthAction : null } });
-  return { authorizationUrl: authorizationUrl(config, state, nonce, verifier, purpose) };
+    nativeRedirectUri: nativeRedirectUri ?? null, nativeState: nativeBinding?.state, nativeCodeChallenge: nativeBinding?.codeChallenge,
+    reauthAction: purpose === "reauth" ? reauthAction : null } });
+  return { authorizationUrl: authorizationUrl(config, state, nonce, verifier, purpose), ...(nativeBinding ? { nativeTransactionId: transaction.id } : {}) };
 }
 export async function readOAuthTransaction(prisma: PrismaClient, state: string, browserSecret: string, now = new Date()) {
   if (!validOAuthSecret(state) || !validOAuthSecret(browserSecret)) throw invalid();
@@ -79,10 +86,12 @@ export async function acceptOAuthCallback(prisma: PrismaClient, provider: AuthPr
   const config = dependencies.config === undefined ? await resolveProviderConfig(provider) : dependencies.config;
   if (!config) throw new FederatedAuthError(503, "PROVIDER_DISABLED", "此第三方登入尚未完成設定");
   const row = await readOAuthTransaction(prisma, state, browserSecret);
+  if (row.nativeRedirectUri) { requireNativeOAuthV2(); if (!isNativeOAuthBinding(row) || !row.nativeBootstrapUsedAt) throw invalid(); }
   if (row.provider !== provider || row.claimedAt || !input.code || input.code.length > 4096) throw invalid();
   const claimedAt = new Date(), browserHash = hashOAuthSecret(browserSecret);
   const claimed = await prisma.oAuthTransaction.updateMany({ where: { id: row.id, browserHash, claimedAt: null, completedAt: null, expiresAt: { gt: claimedAt } }, data: { claimedAt } });
   if (claimed.count !== 1) throw invalid();
+  try {
   const verify = dependencies.verify ?? verifyProviderToken;
   let front;
   if (provider === "apple") {
@@ -93,7 +102,7 @@ export async function acceptOAuthCallback(prisma: PrismaClient, provider: AuthPr
   const identity = await verify(tokens.idToken, config, row.nonce);
   if (front && (front.subject !== identity.subject || front.email !== identity.email)) throw invalid();
   if (row.purpose === "reauth") verifyFreshProviderAuthentication(identity.payload, row.createdAt);
-  const ciphertext = provider === "apple" && tokens.refreshToken ? (dependencies.encrypt ?? encryptProviderToken)(tokens.refreshToken) : null;
+  const ciphertext = provider === "apple" && tokens.refreshToken ? (dependencies.encrypt ?? encryptProviderToken)(tokens.refreshToken, config.tokenEncryptionKey ?? "") : null;
   if (provider === "apple" && !ciphertext) throw new FederatedAuthError(503, "APPLE_REVOCATION_UNAVAILABLE", "Apple 未提供可撤銷憑證，暫不建立或連結帳號，請重新開始");
   // Provider I/O may outlive a browser cancellation or expiry. Never restore
   // scrubbed identity data unless this exact claim is still live and owned.
@@ -103,12 +112,23 @@ export async function acceptOAuthCallback(prisma: PrismaClient, provider: AuthPr
       providerName: identity.name || input.appleName?.slice(0, 100), refreshTokenCiphertext: ciphertext, codeVerifier: null } });
   if (verified.count !== 1) throw invalid();
   return { nativeRedirectUri: row.nativeRedirectUri };
+  } catch (error) {
+    if (row.nativeRedirectUri) {
+      const nativeState = await cancelNativeOAuthClaim(prisma, row, claimedAt, browserHash);
+      if (nativeState) throw new NativeOAuthClaimFailure(nativeState, error);
+    }
+    throw error;
+  }
 }
 /** Same-site GET after Apple's form_post restores normal Lax application cookies. */
-export async function finishOAuth(prisma: PrismaClient, state: string, browserSecret: string, session: SessionPayload | null, configuration?: OAuthRuntimeSettings) {
+export async function finishOAuth(prisma: PrismaClient, state: string, browserSecret: string, session: SessionPayload | null, configuration?: OAuthRuntimeSettings, nativeHandoff?: { code: string }) {
   const settings = configuration ?? await resolveOAuthRuntimeSettings();
   return prisma.$transaction(async tx => {
     const row = await readOAuthTransaction(tx as PrismaClient, state, browserSecret);
+    if (row.nativeRedirectUri) {
+      requireNativeOAuthV2();
+      if (!nativeHandoff || !validOAuthSecret(nativeHandoff.code) || !isNativeOAuthBinding(row) || !row.nativeBootstrapUsedAt) throw invalid();
+    } else if (nativeHandoff) throw invalid();
     if (!row.verifiedAt || !row.subject || !row.email) throw invalid();
     if (!isAuthProvider(row.provider) || !providerConfig(row.provider, settings)) throw new FederatedAuthError(503, "PROVIDER_DISABLED", "此第三方登入目前未開放");
     const identity = await tx.federatedIdentity.findUnique({ where: { provider_subject: { provider: row.provider, subject: row.subject } }, include: { user: { include: { member: true } } } });
@@ -143,7 +163,10 @@ export async function finishOAuth(prisma: PrismaClient, state: string, browserSe
       return { kind: "reauthenticated" as const, proof };
     }
     if (row.purpose !== "login") throw invalid();
-    await claimCompleted(tx as PrismaClient, row.id, { userId: user.id, sessionVersion: user.sessionVersion });
+    const issuedAt = new Date();
+    await claimCompleted(tx as PrismaClient, row.id, { userId: user.id, sessionVersion: user.sessionVersion,
+      ...(nativeHandoff ? { nativeState: row.nativeState, nativeCodeChallenge: row.nativeCodeChallenge,
+        nativeHandoffHash: hashOAuthSecret(nativeHandoff.code), nativeHandoffExpiresAt: new Date(Math.min(+row.expiresAt, +issuedAt + NATIVE_OAUTH_HANDOFF_SECONDS * 1000)) } : {}) });
     if (row.refreshTokenCiphertext) await tx.federatedIdentity.update({ where: { id: identity!.id }, data: { refreshTokenCiphertext: row.refreshTokenCiphertext } });
     return { kind: "login" as const, session: { userId: user.id, memberId: user.member.id, email: user.email, sessionVersion: user.sessionVersion } };
   }, { isolationLevel: "Serializable" });
@@ -163,12 +186,13 @@ export async function consumeOAuthReauth(prisma: PrismaClient, session: SessionP
   const claimed = await prisma.oAuthTransaction.updateMany({ where: { id: row.id, reauthUsedAt: null, reauthExpiresAt: { gt: new Date() } }, data: { reauthUsedAt: new Date() } });
   return claimed.count === 1;
 }
-export async function revokeLinkedAppleBeforeDeletion(prisma: PrismaClient, userId: string, revoke = revokeAppleToken) {
+export async function revokeLinkedAppleBeforeDeletion(prisma: PrismaClient, userId: string, revoke = revokeAppleToken,
+  resolveAppleConfig: () => Promise<ProviderConfig | null> = () => resolveProviderConfig("apple")) {
   let identities;
   try { identities = await prisma.federatedIdentity.findMany({ where: { userId }, select: { id: true, provider: true, refreshTokenCiphertext: true, updatedAt: true } }); }
   catch (error) { if (isMissingFederatedTable(error)) return undefined; throw error; }
   for (const identity of identities.filter(item => item.provider === "apple")) {
-    const config = providerConfig("apple");
+    const config = await resolveAppleConfig();
     if (!config || !identity.refreshTokenCiphertext) throw new FederatedAuthError(503, "APPLE_REVOCATION_UNAVAILABLE", "Apple 授權撤銷服務尚未可用，尚未刪除帳號；請稍後再試");
     try { await revoke(identity.refreshTokenCiphertext, config); }
     catch { throw new FederatedAuthError(503, "APPLE_REVOCATION_FAILED", "Apple 授權撤銷暫時失敗，尚未刪除帳號；請重新驗證後再試"); }

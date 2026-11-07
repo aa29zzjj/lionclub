@@ -22,7 +22,7 @@ const result = await build({
     builder.onResolve({ filter: /^\.\/contract$/ }, () => ({ path: mock }));
     builder.onResolve({ filter: /^\.\/native-push$/ }, () => ({ path: push }));
     builder.onResolve({ filter: /^@(?:capacitor|aparajita)\// }, (args) => {
-      if (["@capacitor/browser", "@capacitor/camera"].includes(args.path)) return { path: native };
+      if (["@capacitor/browser", "@capacitor/camera", "@capacitor/app"].includes(args.path)) return { path: native };
       throw Error("REAL_NATIVE_PLUGIN_FORBIDDEN_IN_PREVIEW");
     });
   } }],
@@ -39,6 +39,8 @@ await writeFile(resolve(output, "build-evidence.json"), JSON.stringify({
   mode: "isolated-native-ui-candidate-synthetic-only", output: relative(root, output),
   productionChanged: false, nativePermissions: false, networkAllowed: false,
   keychainAccess: false, credentialsIncluded: false, sources: inputs,
-  mutations: "rejected-or-explicitly-not-persisted", physicalDeviceAcceptance: false,
+  mutations: "all-rejected", realAppSignedOutPreview: true,
+  notificationFixtures: ["normal", "load-error", "malformed", "compose-error", "empty-friends", "render-error"],
+  physicalDeviceAcceptance: false,
 }, null, 2));
 console.log("Built isolated native UI candidate in tmp/native-ui-preview; no real API, plugins, credentials or network access.");

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { createApiClient, ApiError, type MemberExperience, type ExperienceInput } from "./contract";
+import { createApiClient, ApiError, type MemberExperience } from "./contract";
 import { experienceKindOptions, organizationLevelOptions, positionOptions, visibilityLabels, type ExperienceKind, type OrganizationLevel } from "../../src/lib/experience-data";
+import { readExperienceDraft } from "./experience-draft";
 
 declare const API_BASE_URL: string;
 const api = createApiClient(API_BASE_URL);
@@ -21,6 +22,8 @@ function ExperienceForm({
   const [positionCode, setPositionCode] = useState(initial?.positionCode ?? "");
   const [customPositionLabel, setCustomPositionLabel] = useState(kind === "other" ? initial?.positionName ?? "" : "");
   const [organizationName, setOrganizationName] = useState(initial?.organizationName ?? "");
+  const [multipleDistrictCode, setMultipleDistrictCode] = useState(initial?.multipleDistrictCode ?? "");
+  const [districtCode, setDistrictCode] = useState(initial?.districtCode ?? "");
   const [startYear, setStartYear] = useState(String(initial?.startYear ?? new Date().getFullYear()));
   const [startMonth, setStartMonth] = useState(initial?.startMonth ? String(initial.startMonth) : "");
   const [endYear, setEndYear] = useState(initial?.endYear ? String(initial.endYear) : "");
@@ -30,49 +33,30 @@ function ExperienceForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const positionChoices = positionOptions.filter((p) => p.kind === kind);
+  const positionChoices = positionOptions.filter((p) => p.kind === kind && p.level === level);
 
   async function handleSubmit() {
-    if (kind !== "membership" && !organizationName.trim()) {
-      setError("請填寫分會／組織名稱");
-      return;
-    }
-    const year = Number(startYear);
-    if (!Number.isInteger(year) || year < 1917) {
-      setError("請填寫正確的開始年度");
-      return;
-    }
+    if (saving) return;
     setSaving(true);
     setError(null);
     try {
-      const input: ExperienceInput = {
-        kind,
-        level: kind === "membership" ? "club" : level,
-        positionCode: kind === "membership" ? "membership_joined" : kind === "other" ? customPositionLabel.trim() || "other" : positionCode || positionChoices[0]?.code || "other",
-        organizationName: organizationName.trim() || "中央獅子會",
-        organizationIsUnlisted: true,
-        startYear: year,
-        startMonth: kind === "membership" && startMonth ? Number(startMonth) : undefined,
-        endYear: kind !== "membership" && endYear ? Number(endYear) : undefined,
-        datePrecision: "lions-year",
-        isCurrent,
-        visibility,
-        note: note.trim() || undefined,
-      };
+      const input = readExperienceDraft({ kind, level, positionCode, customPositionLabel, organizationName, multipleDistrictCode,
+        districtCode, startYear, startMonth, endYear, isCurrent, visibility, note }, initial);
       if (initial) await api.updateExperience(initial.id, input);
       else await api.createExperience(input);
       onSaved();
       onClose();
     } catch (failure) {
-      setError(failure instanceof ApiError ? failure.message : "儲存失敗，請重試");
+      setError(failure instanceof Error ? failure.message : "儲存失敗，請重試");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="compose-form">
+    <div className="compose-form" aria-busy={saving}>
       {error ? <p className="error" role="alert">{error}</p> : null}
+      <fieldset disabled={saving} className="compose-form" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
 
       <div>
         <label>類型</label>
@@ -90,7 +74,7 @@ function ExperienceForm({
           <label>層級</label>
           <div className="tag-row">
             {organizationLevelOptions.map((o) => (
-              <button key={o.value} type="button" className={level === o.value ? "tag-chip active" : "tag-chip"} onClick={() => setLevel(o.value)}>
+              <button key={o.value} type="button" className={level === o.value ? "tag-chip active" : "tag-chip"} onClick={() => { setLevel(o.value); setPositionCode(""); }}>
                 {o.label}
               </button>
             ))}
@@ -103,6 +87,7 @@ function ExperienceForm({
           <label htmlFor="exp-position">職務／身分</label>
           <select id="exp-position" value={positionCode} onChange={(e) => setPositionCode(e.target.value)}>
             <option value="">請選擇</option>
+            {initial && positionCode === initial.positionCode && !positionChoices.some(p => p.code === positionCode) ? <option value={positionCode}>既有職務：{initial.positionName}</option> : null}
             {positionChoices.map((p) => <option key={p.code} value={p.code}>{p.label}（{organizationLevelOptions.find((l) => l.value === p.level)?.label}）</option>)}
           </select>
         </div>
@@ -111,19 +96,28 @@ function ExperienceForm({
       {kind === "other" ? (
         <div>
           <label htmlFor="exp-custom">請說明身分／職務</label>
-          <input id="exp-custom" value={customPositionLabel} onChange={(e) => setCustomPositionLabel(e.target.value)} placeholder="例如：區服務計畫召集人" />
+          <input id="exp-custom" maxLength={80} value={customPositionLabel} onChange={(e) => setCustomPositionLabel(e.target.value)} placeholder="例如：區服務計畫召集人" />
         </div>
       ) : null}
 
       <div>
         <label htmlFor="exp-org">{kind === "membership" ? "所屬分會" : "分會／組織名稱"}</label>
-        <input id="exp-org" value={organizationName} onChange={(e) => setOrganizationName(e.target.value)} placeholder="例如：中央獅子會" />
+        <input id="exp-org" required maxLength={160} value={organizationName} onChange={(e) => setOrganizationName(e.target.value)} placeholder="請填寫實際分會／組織名稱" />
+        <p className="member-meta">手填或更名的組織需另行核對名錄；不會據此變更正式分會或取得管理權限。</p>
+      </div>
+      <div>
+        <label htmlFor="exp-md">複合區（選填）</label>
+        <input id="exp-md" maxLength={20} value={multipleDistrictCode} onChange={(e) => setMultipleDistrictCode(e.target.value)} placeholder="例如：300A" />
+      </div>
+      <div>
+        <label htmlFor="exp-district">區（選填）</label>
+        <input id="exp-district" maxLength={30} value={districtCode} onChange={(e) => setDistrictCode(e.target.value)} placeholder="例如：300A-1" />
       </div>
 
       <div className="form-actions">
         <div style={{ flex: 1 }}>
           <label htmlFor="exp-year">開始年度</label>
-          <input id="exp-year" type="number" value={startYear} onChange={(e) => setStartYear(e.target.value)} />
+          <input id="exp-year" type="number" min={1917} max={2200} step={1} value={startYear} onChange={(e) => setStartYear(e.target.value)} />
         </div>
         {kind === "membership" ? (
           <div style={{ flex: 1 }}>
@@ -133,7 +127,7 @@ function ExperienceForm({
         ) : (
           <div style={{ flex: 1 }}>
             <label htmlFor="exp-end-year">結束年度（選填）</label>
-            <input id="exp-end-year" type="number" value={endYear} onChange={(e) => setEndYear(e.target.value)} disabled={isCurrent} />
+            <input id="exp-end-year" type="number" min={1917} max={2200} step={1} value={endYear} onChange={(e) => setEndYear(e.target.value)} />
           </div>
         )}
       </div>
@@ -156,8 +150,9 @@ function ExperienceForm({
 
       <div>
         <label htmlFor="exp-note">備註（選填）</label>
-        <textarea id="exp-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+        <textarea id="exp-note" rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
+      </fieldset>
 
       <div className="form-actions">
         <button type="button" className="secondary" onClick={onClose} disabled={saving}>取消</button>
