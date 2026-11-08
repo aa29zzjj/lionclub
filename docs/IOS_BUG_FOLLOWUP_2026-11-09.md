@@ -26,13 +26,15 @@ Web 待審表單本身仍有預設今天的既有行為，本輪沒有重寫該 
 - 所有介面資料均為合成資料，CSP 禁止網路，條款同意、會員審核、發布及帳號寫入均拒絕；沒有對正式會員執行操作。日期／時間欄位以原生控制項操作核對。
 - 模擬前景切換及帳號交錯由純邏輯／真實 client 的注入式測試驗證；不代表相機、APNs、Google／Apple 真實登入、iPad 或真機驗收完成。
 
-## Xcode 已登入，簽章仍需既有建置資源
+## Xcode 與簽章已就緒，待核對發行描述檔
 
-使用者完成登入後，Xcode 已顯示 **Prepmate AI inc.／Admin** 團隊與 Certificates, Identifiers, & Profiles。`Manage Certificates` 顯示三張既有 **Apple Distribution**，狀態都是 **Not in Keychain**；本機簽章檢查仍為 **0 valid identities**。新增憑證選單各項在當時均停用；未推斷停用原因，也未建立、撤銷或替換憑證。
+使用者完成登入後，Xcode 已顯示 **Prepmate AI inc.／Admin** 團隊與 Certificates, Identifiers, & Profiles。最初三張既有 **Apple Distribution** 均為 **Not in Keychain**、本機 **0 valid identities**。接續已依使用者提供的 `.p12` 完成既有憑證及配對私鑰匯入；鑰匙圈「我的憑證」可展開看到配對的 Imported Private Key。
 
-優先從原本成功上架的 Mac 匯出既有簽章（含私鑰的 `.p12`），由持有人在這台 Mac 完成匯入及密碼輸入。單獨登入 Xcode 或下載 `.cer` 不足以證明可簽署。若原建置機不可用，需先釐清帳號權限與團隊憑證限制，再採具體的新憑證方案；不以撤銷現有憑證解決。
+匯入後先出現有配對 identity 但 valid=0，鑰匙圈顯示不受信任。補入 [Apple 官方 WWDR G3 公用中繼憑證](https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer)，保留系統預設信任後，系統已列出 **2 valid identities**，包含 **Apple Distribution: Prepmate AI inc. (2TWCSJNDWG)**。該發行憑證有效至 `2027-10-30T17:46:22Z`。沒有建立、撤銷或替換發行憑證，沒有設定 Always Trust，也未將私鑰或密碼寫入 repo／證據。官方用途說明見 [WWDR intermediate certificates](https://developer.apple.com/help/account/certificates/wwdr-intermediate-certificates/)。
 
-取得有效簽章後，還需確認最高已上傳 Build、設定更高的新版 Build、簽署／驗證 Archive、TestFlight 驗收，再送商店更新。專案目前版本與 Build 未任意調整。
+Xcode 已執行 Download Manual Profiles，但目前下載到的既有描述檔沒有 LionClubs 配對項；仍需核對 Team `2TWCSJNDWG`、明確 Bundle ID `com.lionclubsmembership.app`、production Push 與本次發行憑證相符的 distribution profile。Safari 已開啟 Apple Developer 的 Profiles 清單，網站要求重新登入，目前由使用者完成驗證；尚未建立或變更任何 profile。
+
+接著還需確認最高已上傳 Build、設定更高的新版 Build、簽署／驗證 Archive、TestFlight 驗收，再送商店更新。專案目前版本與 Build 未任意調整。當下簽章快照見 `output/acceptance/native-followup-20261109/SIGNING_STATUS.json`；較早的 `EVIDENCE.json` 保留當時 unsigned 建置的原始紀錄。
 
 ## 仍保留的發行關卡
 
