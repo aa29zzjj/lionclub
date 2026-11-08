@@ -26,15 +26,17 @@ Web 待審表單本身仍有預設今天的既有行為，本輪沒有重寫該 
 - 所有介面資料均為合成資料，CSP 禁止網路，條款同意、會員審核、發布及帳號寫入均拒絕；沒有對正式會員執行操作。日期／時間欄位以原生控制項操作核對。
 - 模擬前景切換及帳號交錯由純邏輯／真實 client 的注入式測試驗證；不代表相機、APNs、Google／Apple 真實登入、iPad 或真機驗收完成。
 
-## Xcode 與簽章已就緒，待核對發行描述檔
+## 簽章與發行描述檔已就緒，正在完成簽署
 
 使用者完成登入後，Xcode 已顯示 **Prepmate AI inc.／Admin** 團隊與 Certificates, Identifiers, & Profiles。最初三張既有 **Apple Distribution** 均為 **Not in Keychain**、本機 **0 valid identities**。接續已依使用者提供的 `.p12` 完成既有憑證及配對私鑰匯入；鑰匙圈「我的憑證」可展開看到配對的 Imported Private Key。
 
 匯入後先出現有配對 identity 但 valid=0，鑰匙圈顯示不受信任。補入 [Apple 官方 WWDR G3 公用中繼憑證](https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer)，保留系統預設信任後，系統已列出 **2 valid identities**，包含 **Apple Distribution: Prepmate AI inc. (2TWCSJNDWG)**。該發行憑證有效至 `2027-10-30T17:46:22Z`。沒有建立、撤銷或替換發行憑證，沒有設定 Always Trust，也未將私鑰或密碼寫入 repo／證據。官方用途說明見 [WWDR intermediate certificates](https://developer.apple.com/help/account/certificates/wwdr-intermediate-certificates/)。
 
-Xcode 已執行 Download Manual Profiles，但目前下載到的既有描述檔沒有 LionClubs 配對項；仍需核對 Team `2TWCSJNDWG`、明確 Bundle ID `com.lionclubsmembership.app`、production Push 與本次發行憑證相符的 distribution profile。Safari 已開啟 Apple Developer 的 Profiles 清單，網站要求重新登入，目前由使用者完成驗證；尚未建立或變更任何 profile。
+Developer 已重新登入。原有 Profiles 清單沒有 LionClubs；使用者於 Generate 前明確核准後，已建立、下載並安裝 **LionClubs App Store 20261109**，UUID `63cc0c31-642b-47fd-8dd4-1fb21a9a90be`。已核對 Team `2TWCSJNDWG`、明確 Bundle ID `com.lionclubsmembership.app`、指定 Distribution 憑證、`aps-environment=production`、`get-task-allow=false`，且無 Ad Hoc 裝置清單或 Enterprise 全裝置授權；描述檔有效至 `2027-10-30T17:46:22Z`。
 
-接著還需確認最高已上傳 Build、設定更高的新版 Build、簽署／驗證 Archive、TestFlight 驗收，再送商店更新。專案目前版本與 Build 未任意調整。當下簽章快照見 `output/acceptance/native-followup-20261109/SIGNING_STATUS.json`；較早的 `EVIDENCE.json` 保留當時 unsigned 建置的原始紀錄。
+App Store Connect 的 TestFlight 上傳清單已唯讀確認最新為 **1.0.1（5）**，上傳完成時間顯示 Nov 5, 2026；清單沒有更高或處理中的建置。這次候選採 **1.0.1（6）**，在獨立本機 iOS 建置副本中只設定 App target 的 Release 簽章／版本；避免把 App 的描述檔套用到共用套件，主工作樹工程未綁死此機的 profile。
+
+簽署已啟動，目前停在 macOS 允許 codesign 使用 Imported Private Key 的驗證，需持有人在本機輸入登入密碼並按「允許」。尚未完成 signed Archive／IPA，也尚未上傳。通過後仍需簽章／權限／資源雜湊驗證、配套後端及 TestFlight 真機驗收，再送商店更新。當下簽章快照見 `output/acceptance/native-followup-20261109/SIGNING_STATUS.json`；較早的 `EVIDENCE.json` 保留當時 unsigned 建置的原始紀錄。
 
 ## 仍保留的發行關卡
 
