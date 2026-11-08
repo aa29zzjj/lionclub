@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { webcrypto } from "node:crypto";
 import { build } from "esbuild";
 import { createMobileSessionCoordinator, MOBILE_ACCESS_TOKEN_KEY as ACCESS, MOBILE_REFRESH_TOKEN_KEY as REFRESH } from "../mobile-app/src/mobile-session";
+import { createSessionEndController } from "../mobile-app/src/session-end-controller";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 let compiled: Promise<string>;
@@ -34,6 +35,106 @@ async function harness(handler: (options: any) => Promise<any>, platform = "ios"
 }
 const pair = (account: string) => ({ accessToken: `access-${account}`, refreshToken: `refresh-${account}` });
 const response = (status: number, data: unknown = {}) => ({ status, data });
+
+function sessionCleanup(client: any, stopPush: () => Promise<{ serverConfirmed: boolean; nativeConfirmed: boolean }>) {
+  const events: string[] = [];
+  const controller = createSessionEndController({
+    stopPush, endSession: () => client.logout(), errorGuard: error => (error as any)?.isCurrentSession,
+    onStart: () => { events.push("private-hidden"); },
+    onComplete: () => { events.push("signed-out"); },
+    onUnconfirmed: () => { events.push("offline-hidden"); },
+    onOwnershipLost: () => { events.push("reload-current-identity"); },
+    onSettled: () => { events.push("settled"); },
+  });
+  let recovery: Promise<void> | undefined;
+  const unsubscribe = client.onSessionInvalidated((guard: () => boolean) => { recovery = controller.request(guard); });
+  return { events, controller, unsubscribe, recovery: () => recovery };
+}
+
+test("global revocation supersedes an in-flight logout even after its account page has gone", async () => {
+  const h = await harness(async () => response(200, { ok: true, currentSessionRetained: false }));
+  const push = deferred<{ serverConfirmed: boolean; nativeConfirmed: boolean }>();
+  const cleanup = sessionCleanup(h.client, () => push.promise);
+  const originalLogout = cleanup.controller.request(h.client.captureSessionGuard());
+  assert.deepEqual(cleanup.events, ["private-hidden"]);
+  await h.anotherClient.revokeOtherSessions("synthetic-password");
+  assert.equal(cleanup.recovery(), originalLogout);
+  push.resolve({ serverConfirmed: false, nativeConfirmed: true });
+  await originalLogout;
+  assert.equal(h.storage.size, 0);
+  assert.deepEqual(cleanup.events, ["private-hidden", "signed-out", "settled"]);
+  cleanup.unsubscribe();
+});
+
+test("queued expired-session cleanup cannot log out a replacement account", async () => {
+  const h = await harness(async options => options.url.endsWith("/auth/login")
+    ? response(200, pair("B")) : response(200, { ok: true, currentSessionRetained: false }));
+  const push = deferred<{ serverConfirmed: boolean; nativeConfirmed: boolean }>();
+  const cleanup = sessionCleanup(h.client, () => push.promise);
+  await h.anotherClient.revokeOtherSessions("synthetic-password");
+  const recovery = cleanup.recovery(); assert.ok(recovery);
+  await h.anotherClient.login("B@example.invalid", "synthetic-password");
+  push.resolve({ serverConfirmed: false, nativeConfirmed: false });
+  await recovery;
+  assert.equal(h.storage.get(ACCESS), "access-B"); assert.equal(h.storage.get(REFRESH), "refresh-B");
+  assert.deepEqual(cleanup.events, ["private-hidden", "reload-current-identity", "settled"]);
+  cleanup.unsubscribe();
+});
+
+test("old cleanup only hides content while a replacement login is still writing its new pair", async () => {
+  const loginStarted = deferred<void>(), loginResponse = deferred<any>();
+  const h = await harness(async options => {
+    assert.ok(options.url.endsWith("/auth/login")); loginStarted.resolve(); return loginResponse.promise;
+  });
+  const push = deferred<{ serverConfirmed: boolean; nativeConfirmed: boolean }>();
+  const cleanup = sessionCleanup(h.client, () => push.promise);
+  const logout = cleanup.controller.request(h.client.captureSessionGuard());
+  const login = h.anotherClient.login("B@example.invalid", "synthetic-password");
+  await loginStarted.promise;
+  push.resolve({ serverConfirmed: false, nativeConfirmed: true }); await logout;
+  assert.deepEqual(cleanup.events, ["private-hidden", "reload-current-identity", "settled"]);
+  loginResponse.resolve(response(200, pair("B"))); await login;
+  assert.equal(h.storage.get(ACCESS), "access-B"); assert.equal(h.storage.get(REFRESH), "refresh-B");
+  cleanup.unsubscribe();
+  const app = readFileSync(new URL("../mobile-app/src/App.tsx", import.meta.url), "utf8");
+  const lost = app.slice(app.indexOf("onOwnershipLost:"), app.indexOf("onSettled:"));
+  assert.doesNotMatch(lost, /loadMe\(|api\.me\(/);
+  assert.match(lost, /setMember\(null\); setPhase\("offline"\)/);
+});
+
+test("confirmed revocation with unavailable keychain hides data once and never loops cleanup", async () => {
+  const h = await harness(async () => response(200, { ok: true, currentSessionRetained: false }));
+  h.storage.delete = () => { throw Error("synthetic keychain unavailable"); };
+  let pushAttempts = 0;
+  const cleanup = sessionCleanup(h.client, async () => { pushAttempts++; return { serverConfirmed: false, nativeConfirmed: true }; });
+  await assert.rejects(h.client.revokeOtherSessions("synthetic-password"));
+  await cleanup.recovery();
+  assert.equal(pushAttempts, 1);
+  assert.deepEqual(cleanup.events, ["private-hidden", "offline-hidden", "settled"]);
+  cleanup.unsubscribe();
+});
+
+test("a protected retry explicitly rejecting the refreshed session notifies global recovery", async () => {
+  let refreshes = 0, invalidations = 0;
+  const h = await harness(async options => {
+    if (options.url.endsWith("/auth/refresh")) { refreshes++; return response(200, pair("renewed")); }
+    return response(401, { error: "未登入或登入已過期" });
+  });
+  const unsubscribe = h.client.onSessionInvalidated(() => { invalidations++; });
+  await assert.rejects(h.client.getBlockedMembers(), { code: "UNAUTHENTICATED", status: 401 });
+  assert.equal(refreshes, 1); assert.equal(invalidations, 1); assert.equal(h.storage.size, 0);
+  unsubscribe();
+});
+
+test("a reauthentication password refusal after refresh never expires the current account", async () => {
+  let invalidations = 0;
+  const h = await harness(async options => options.url.endsWith("/auth/refresh")
+    ? response(200, pair("renewed")) : response(401, { error: "密碼不正確", code: "REAUTH_REQUIRED" }));
+  const unsubscribe = h.client.onSessionInvalidated(() => { invalidations++; });
+  await assert.rejects(h.client.revokeOtherSessions("synthetic-incorrect-password"));
+  assert.equal(invalidations, 0); assert.equal(h.storage.get(ACCESS), "access-renewed");
+  unsubscribe();
+});
 
 test("Android login UI gates both third-party buttons and uses plain unavailable copy", () => {
   const app = readFileSync(new URL("../mobile-app/src/App.tsx", import.meta.url), "utf8");
@@ -82,6 +183,124 @@ test("notification read acknowledgement requires an explicit bounded successful 
     const h = await harness(async () => response(200, data));
     await assert.rejects(h.client.markNotificationsRead(["synthetic-one", "synthetic-two", "synthetic-two"]), { message: "通知已讀狀態尚未確認，請重新讀取後再試。" });
   }
+});
+
+test("screen guards are shared across clients, survive same-account refresh, and expire on replacement login", async () => {
+  const h = await harness(async options => {
+    if (options.url.endsWith("/auth/login")) return response(200, pair("B"));
+    if (options.url.endsWith("/auth/refresh")) return response(200, pair("new"));
+    if (options.headers.Authorization !== "Bearer access-new") return response(401);
+    return response(200, { enabled: false, privacyMode: "generic" });
+  });
+  const current = h.client.captureSessionGuard(); assert.equal(typeof current, "function"); assert.equal(current(), true);
+  await h.client.getPushConfig(); assert.equal(current(), true);
+  await h.anotherClient.login("B@example.invalid", "synthetic"); assert.equal(current(), false);
+  assert.equal(h.client.captureSessionGuard()(), true);
+});
+
+test("malformed block lists become read failures while a genuine empty list remains valid", async () => {
+  for (const blocks of [undefined, null, {}, "wrong", [null], [{ member: null, createdAt: "2026-11-08T00:00:00Z" }],
+    [{ member: { id: "synthetic", name: {} }, createdAt: "2026-11-08T00:00:00Z" }]]) {
+    const h = await harness(async () => response(200, { blocks }));
+    await assert.rejects(h.client.getBlockedMembers(), { message: "封鎖名單格式尚未確認，請重新讀取；不代表沒有封鎖會員。" });
+  }
+  const valid = await harness(async () => response(200, { blocks: [] }));
+  assert.equal(JSON.stringify(await valid.client.getBlockedMembers()), "[]");
+  const compatible = await harness(async () => response(200, { blocks: [{ member: { id: "synthetic", name: "合成會員", ignored: {} }, createdAt: "2026-11-08T00:00:00Z" }] }));
+  assert.deepEqual(JSON.parse(JSON.stringify(await compatible.client.getBlockedMembers())), [{ member: { id: "synthetic", name: "合成會員", nickname: null, photoUrl: null }, createdAt: "2026-11-08T00:00:00Z" }]);
+});
+
+test("HTTP 200 alone cannot claim verification requested, blocking or unblocking success", async () => {
+  for (const data of [{}, null, { ok: false }, { ok: "true" }]) {
+    const h = await harness(async () => response(200, data));
+    for (const method of ["resendVerificationEmail", "blockMember", "unblockMember"]) await assert.rejects(h.client[method]("synthetic-member"));
+  }
+  const h = await harness(async () => response(200, { ok: true }));
+  await h.client.resendVerificationEmail(); await h.client.blockMember("synthetic-member"); await h.client.unblockMember("synthetic-member");
+});
+
+test("retained-session acknowledgement needs a complete pair and never renders an unchecked server message", async () => {
+  const h = await harness(async () => response(200, { ok: true, currentSessionRetained: true, ...pair("renewed"), message: { malformed: true } }));
+  const result = await h.client.revokeOtherSessions("synthetic-password");
+  assert.equal(result.currentSessionRetained, true); assert.equal(result.message, "其他裝置已登出，此裝置繼續使用");
+  assert.equal(h.storage.get(ACCESS), "access-renewed"); assert.equal(h.storage.get(REFRESH), "refresh-renewed"); assert.equal(result.isCurrent(), true);
+  for (const data of [{}, { ok: false, currentSessionRetained: true }, { ok: true, currentSessionRetained: "true" },
+    { ok: true, currentSessionRetained: true }, { ok: true, currentSessionRetained: true, accessToken: "only-one" },
+    { ok: true, currentSessionRetained: false, ...pair("contradictory") }]) {
+    const invalid = await harness(async () => response(200, data));
+    await assert.rejects(invalid.client.revokeOtherSessions("synthetic-password"), { message: "登出結果尚未確認，請重新確認登入狀態；不會自動重送。" });
+    assert.equal(invalid.storage.get(ACCESS), "access-A"); assert.equal(invalid.storage.get(REFRESH), "refresh-A");
+  }
+});
+
+test("confirmed loss of this session clears its credentials and its UI result cannot target a later account", async () => {
+  const h = await harness(async options => options.url.endsWith("/auth/login") ? response(200, pair("B")) : response(200, { ok: true, currentSessionRetained: false }));
+  const result = await h.client.revokeOtherSessions("synthetic-password");
+  assert.equal(result.currentSessionRetained, false); assert.equal(h.storage.size, 0); assert.equal(result.isCurrent(), true);
+  await h.anotherClient.login("B@example.invalid", "synthetic"); assert.equal(result.isCurrent(), false);
+  assert.equal(h.storage.get(ACCESS), "access-B");
+});
+
+for (const method of ["logout", "revokeOtherSessions"] as const) test(`${method} storage-clear failure retains its exact recovery guard without targeting a replacement account`, async () => {
+  const h = await harness(async options => options.url.endsWith("/auth/login") ? response(200, pair("B")) : response(200, { ok: true, currentSessionRetained: false }));
+  const before = h.client.captureSessionGuard(), remove = h.storage.delete.bind(h.storage);
+  h.storage.delete = () => { throw Error("synthetic keychain unavailable"); };
+  let failure: any;
+  try { await h.client[method]("synthetic-password"); } catch (error) { failure = error; }
+  assert.ok(failure); assert.equal(before(), false); assert.equal(failure.isCurrentSession(), true);
+  assert.equal(h.storage.size, 2);
+  h.storage.delete = remove;
+  await h.anotherClient.login("B@example.invalid", "synthetic");
+  assert.equal(failure.isCurrentSession(), false); assert.equal(h.storage.get(ACCESS), "access-B");
+});
+
+test("failed credential rotation after confirmed revocation exposes recovery and never retains a partial token pair", async () => {
+  const h = await harness(async options => options.url.endsWith("/auth/login") ? response(200, pair("B")) : response(200, { ok: true, currentSessionRetained: true, ...pair("renewed") }));
+  const write = h.storage.set.bind(h.storage);
+  h.storage.set = (key, value) => { if (key === REFRESH) throw Error("synthetic refresh write failure"); return write(key, value); };
+  let failure: any;
+  try { await h.client.revokeOtherSessions("synthetic-password"); } catch (error) { failure = error; }
+  assert.match(failure.message, /登入更新尚未保存/); assert.equal(failure.isCurrentSession(), true); assert.equal(h.storage.size, 0);
+  h.storage.set = write;
+  await h.anotherClient.login("B@example.invalid", "synthetic"); assert.equal(failure.isCurrentSession(), false);
+});
+
+test("confirmed refresh rejection notifies the App even when the requesting screen is gone", async () => {
+  const h = await harness(async () => response(401));
+  const invalidated: Array<() => boolean> = [];
+  const unsubscribe = h.anotherClient.onSessionInvalidated((guard: () => boolean) => invalidated.push(guard));
+  await assert.rejects(h.client.getBlockedMembers(), { code: "UNAUTHENTICATED" });
+  assert.equal(h.storage.size, 0); assert.equal(invalidated.length, 1); assert.equal(invalidated[0](), true);
+  unsubscribe();
+});
+
+test("a confirmed revoke or storage failure notifies the global subscriber without a mounted settings page", async () => {
+  for (const failure of [false, true]) {
+    const h = await harness(async () => response(200, { ok: true, currentSessionRetained: false }));
+    const invalidated: Array<() => boolean> = [];
+    h.client.onSessionInvalidated((guard: () => boolean) => invalidated.push(guard));
+    if (failure) h.storage.delete = () => { throw Error("synthetic keychain unavailable"); };
+    if (failure) await assert.rejects(h.client.revokeOtherSessions("synthetic")); else await h.client.revokeOtherSessions("synthetic");
+    assert.equal(invalidated.length, 1); assert.equal(invalidated[0](), true);
+  }
+});
+
+test("unknown refresh failures and stale account-A replies never publish a recovery that targets B", async () => {
+  for (const status of [500, 503]) {
+    const h = await harness(async options => response(options.url.endsWith("/auth/refresh") ? status : 401));
+    let invalidations = 0; h.client.onSessionInvalidated(() => invalidations++);
+    await assert.rejects(h.client.getPushConfig()); assert.equal(invalidations, 0); assert.equal(h.storage.get(ACCESS), "access-A");
+  }
+  const started = deferred<void>(), late = deferred<any>();
+  const h = await harness(async options => {
+    if (options.url.endsWith("/auth/login")) return response(200, pair("B"));
+    if (options.url.endsWith("/auth/refresh")) { started.resolve(); return late.promise; }
+    return response(401);
+  });
+  let invalidations = 0; h.client.onSessionInvalidated(() => invalidations++);
+  const old = h.client.getPushConfig(), rejected = assert.rejects(old);
+  await started.promise; await h.anotherClient.login("B@example.invalid", "synthetic"); late.resolve(response(401)); await rejected;
+  assert.equal(invalidations, 0); assert.equal(h.storage.get(ACCESS), "access-B");
 });
 
 for (const lateStatus of [200, 401]) test(`late account-A refresh ${lateStatus} cannot overwrite or clear account B after logout`, async () => {

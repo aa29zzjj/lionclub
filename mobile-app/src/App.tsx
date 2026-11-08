@@ -8,6 +8,8 @@ import EventsScreen from "./EventsScreen";
 import NotificationsScreen from "./NotificationsScreen";
 import MyScreen from "./MyScreen";
 import { useMobilePush } from "./NotificationSettings";
+import { attachForegroundListener, createForegroundRevalidator } from "./foreground-session";
+import { createSessionEndController } from "./session-end-controller";
 import logoAsset from "./lions-logo.png";
 // Next.js's repo-wide "*.png" ambient type says StaticImageData, but esbuild's
 // dataurl loader actually emits a plain string at runtime.
@@ -24,6 +26,8 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [endingSession, setEndingSession] = useState(false);
+  const [foregroundRevalidating, setForegroundRevalidating] = useState(false);
   const [oauthBusy, setOauthBusy] = useState<OAuthProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
@@ -31,6 +35,8 @@ export default function App() {
   const [notificationNavigationRevision, setNotificationNavigationRevision] = useState(0);
   const oauthAvailable = nativeOAuthAvailable();
   const loadGeneration = useRef(0);
+  const foregroundReady = useRef(false);
+  foregroundReady.current = phase === "signed-in" && !busy && !endingSession;
   const openPushNotifications = useCallback(() => setNotificationNavigationRevision(value => value + 1), []);
   const push = useMobilePush(phase === "signed-in" ? member?.id ?? null : null, api, openPushNotifications);
 
@@ -48,6 +54,48 @@ export default function App() {
     }
   }, []);
 
+  const sessionEnd = useRef<ReturnType<typeof createSessionEndController> | null>(null);
+  if (!sessionEnd.current) sessionEnd.current = createSessionEndController({
+    stopPush: push.disable,
+    endSession: api.logout,
+    errorGuard: failure => failure instanceof ApiError ? failure.isCurrentSession : undefined,
+    onStart: () => {
+      loadGeneration.current++;
+      setBusy(true); setEndingSession(true); setAccountMessage(null);
+    },
+    onComplete: stopped => {
+      loadGeneration.current++;
+      setMember(null); setPhase("signed-out"); setPassword("");
+      setSignedOutNotice(!stopped.serverConfirmed || !stopped.nativeConfirmed
+        ? "已清除本機登入，但通知停用尚未全部確認。恢復連線後請重新確認；這不代表其他裝置或所有伺服器登入已撤銷。" : null);
+    },
+    onUnconfirmed: () => {
+      loadGeneration.current++;
+      setMember(null); setPhase("offline");
+      setAccountMessage("本機登入清除尚未確認，會員資料已隱藏。請重試登出；不會假稱已完成。");
+    },
+    onOwnershipLost: () => {
+      // The replacement may still be writing its credentials. Do not read an
+      // incomplete pair and accidentally treat that new login as expired.
+      loadGeneration.current++;
+      setMember(null); setPhase("offline");
+      setAccountMessage("登入狀態已更新，會員資料暫時隱藏。請完成登入後再按「重新連線確認」。");
+    },
+    onSettled: () => { setEndingSession(false); setBusy(false); },
+  });
+  const endCurrentSession = useCallback((isCurrent: () => boolean) => {
+    return sessionEnd.current!.request(isCurrent).catch(() => {
+      if (!isCurrent()) return;
+      loadGeneration.current++;
+      setMember(null); setPhase("offline"); setEndingSession(false); setBusy(false);
+      setAccountMessage("登入清除尚未確認，會員資料已隱藏。請重新確認登入狀態。");
+    });
+  }, []);
+
+  // Register before the cold-start read. Session loss belongs to the App,
+  // including when the page that initiated the request has been left.
+  useEffect(() => api.onSessionInvalidated(isCurrent => { void endCurrentSession(isCurrent); }), [endCurrentSession]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -58,13 +106,31 @@ export default function App() {
   }, [loadMe]);
 
   useEffect(() => {
-    if (phase !== "signed-in") return;
-    let active = true;
-    const listener = NativeApp.addListener("appStateChange", event => {
-      if (event.isActive && active) { setPhase("checking"); void loadMe(); }
+    if (phase !== "signed-in" || !member || busy || endingSession) {
+      setForegroundRevalidating(false);
+      return;
+    }
+    const foreground = createForegroundRevalidator({
+      memberId: member.id,
+      getMember: () => api.me(),
+      captureSessionGuard: api.captureSessionGuard,
+      getGeneration: () => loadGeneration.current,
+      advanceGeneration: () => ++loadGeneration.current,
+      isReady: () => foregroundReady.current,
+      onPending: setForegroundRevalidating,
+      onVerified: setMember,
+      onUnavailable: failure => {
+        setMember(null);
+        setPhase(failure instanceof ApiError && failure.code === "UNAUTHENTICATED" ? "signed-out" : "offline");
+      },
     });
-    return () => { active = false; void listener.then(handle => handle.remove()).catch(() => {}); };
-  }, [phase, loadMe]);
+    const detach = attachForegroundListener({
+      addListener: listener => NativeApp.addListener("appStateChange", listener),
+      onState: foreground.handleState,
+      onUnavailable: foreground.unavailable,
+    });
+    return () => { foreground.dispose(); detach(); };
+  }, [phase, member?.id, busy, endingSession]);
 
   async function handleLogin(event: FormEvent) {
     event.preventDefault();
@@ -102,23 +168,7 @@ export default function App() {
   }
 
   async function handleLogout() {
-    if (busy) return;
-    loadGeneration.current++;
-    setBusy(true);
-    setAccountMessage(null);
-    try {
-      // Revoke this installation while its old account's bearer is still usable.
-      const stopped = await push.disable();
-      await api.logout();
-      setMember(null);
-      setPhase("signed-out");
-      setSignedOutNotice(!stopped.serverConfirmed || !stopped.nativeConfirmed
-        ? "已清除本機登入，但通知停用尚未全部確認。恢復連線後請重新確認；這不代表其他裝置或所有伺服器登入已撤銷。" : null);
-    } catch {
-      setAccountMessage("本機登入清除尚未確認，請稍後重試；不會假稱已登出。");
-    } finally {
-      setBusy(false);
-    }
+    await endCurrentSession(api.captureSessionGuard());
   }
 
   const brand = (
@@ -130,6 +180,8 @@ export default function App() {
       <p className="subtitle">LIONS CLUB MEMBER PORTAL</p>
     </div>
   );
+
+  if (endingSession) return <main className="screen" aria-busy="true">{brand}<p role="status">正在結束此裝置登入…</p></main>;
 
   if (phase === "checking") {
     return (
@@ -150,6 +202,9 @@ export default function App() {
 
   if (phase === "signed-in" && member) {
     return (
+      <div aria-busy={foregroundRevalidating} style={{ height: "100%", minHeight: 0 }}>
+      <div hidden={foregroundRevalidating} aria-hidden={foregroundRevalidating || undefined}
+        style={{ height: "100%", minHeight: 0, ...(foregroundRevalidating ? { display: "none", pointerEvents: "none" as const } : {}) }}>
       <Shell
         member={member}
         notificationNavigationRevision={notificationNavigationRevision}
@@ -170,6 +225,12 @@ export default function App() {
           return null;
         }}
       />
+      </div>
+      {foregroundRevalidating && <main className="screen" aria-busy="true">
+        {brand}<p role="status">正在重新確認登入狀態…</p>
+        <p className="member-meta">會員畫面暫時隱藏，未送出的草稿仍保留；不會自動重送任何操作。</p>
+      </main>}
+      </div>
     );
   }
 

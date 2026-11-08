@@ -1,6 +1,9 @@
 import type { createApiClient as RealClient } from "../src/contract";
-import { member, friends, incoming, events, experiences } from "./fixtures";
+import { member, friends, incoming, events, experiences, eventPublishingOptions, blockedMembers, pendingMembers } from "./fixtures";
 import { readNotificationsResponse } from "../src/notification-contract";
+import { readBlockedMembersResponse } from "../src/security-contract";
+import { readPendingMembers } from "../src/pending-member-review";
+import { TERMS_VERSION } from "../../src/lib/terms";
 export type * from "../src/contract";
 
 type NativeApi = ReturnType<typeof RealClient>;
@@ -12,6 +15,18 @@ export function setPreviewNotificationFixture(value: PreviewNotificationFixture)
   notificationFixture = value;
 }
 export function getPreviewNotificationFixture() { return notificationFixture; }
+export const PREVIEW_FEATURE_FIXTURES = ["normal", "event-scope", "event-settings-error", "event-options-invalid", "terms-required", "terms-read-error", "security-read-error", "security-malformed", "security-blocked", "browser-error", "pending-members"] as const;
+export type PreviewFeatureFixture = typeof PREVIEW_FEATURE_FIXTURES[number];
+let featureFixture: PreviewFeatureFixture = "normal";
+export function setPreviewFeatureFixture(value: PreviewFeatureFixture) {
+  if (!(PREVIEW_FEATURE_FIXTURES as readonly unknown[]).includes(value)) throw Error("UNKNOWN_PREVIEW_FEATURE_FIXTURE");
+  featureFixture = value;
+}
+export function getPreviewFeatureFixture() { return featureFixture; }
+export function getPreviewMember() {
+  return copy(featureFixture === "pending-members" ? { ...member, title: "分會幹部（合成）", adminRoles: [{ role: "CLUB_PRESIDENT" }] }
+    : featureFixture === "browser-error" ? { ...member, emailVerifiedAt: null } : member);
+}
 // UI visibility fixture only; neither provider can authenticate in this bundle.
 export function nativeOAuthAvailable() { return true; }
 export class ApiError extends Error {
@@ -29,8 +44,10 @@ export async function uploadToPresignedUrl(): Promise<never> { return refused();
 
 export function createApiClient(baseUrl: string): NativeApi {
   if (baseUrl !== "https://native-preview.invalid") throw new Error("PREVIEW_ORIGIN_REQUIRED");
-  const reads: Record<string, (...args: any[]) => Promise<unknown>> = {
-    me: async () => copy(member),
+  const reads: Record<string, (...args: any[]) => unknown> = {
+    captureSessionGuard: () => () => true,
+    onSessionInvalidated: () => () => {},
+    me: async () => getPreviewMember(),
     hasStoredSession: async () => false,
     getFriends: async () => {
       if (notificationFixture === "compose-error") throw new ApiError("NETWORK_ERROR", "合成情境：活動與好友尚未讀取完成，請重新讀取。");
@@ -43,7 +60,28 @@ export function createApiClient(baseUrl: string): NativeApi {
       return copy({ ...selected, nickname: selected.nickname ?? null, bio: "合成會員檔案，非真實人物。", photoUrl: null, memberNo: "PREVIEW", joinYear: 2023, joinMonth: 7, organization: { id: "preview-org", name: selected.chapter, districtCode: null }, tags: [], experiences, blockedByMe: false });
     },
     getEvents: async () => copy(events),
-    getEventsFull: async () => copy({ events, allowedScopes: [], officialHosts: [], tagsAvailable: false }),
+    getEventsFull: async () => {
+      if (featureFixture === "event-settings-error") throw new ApiError("NETWORK_ERROR", "合成情境：活動發布設定尚未讀取完成，請重新讀取；草稿仍保留。");
+      if (featureFixture === "event-options-invalid") return copy({ events, allowedScopes: ["CLUB"], officialHosts: [{ ...eventPublishingOptions[0], scope: "ZONE" }], tagsAvailable: false });
+      return copy({ events, allowedScopes: featureFixture === "event-scope" ? eventPublishingOptions.map(option => option.scope) : [],
+        officialHosts: featureFixture === "event-scope" ? eventPublishingOptions : [], tagsAvailable: false });
+    },
+    getTermsConsent: async () => {
+      if (featureFixture === "terms-read-error") throw new ApiError("NETWORK_ERROR", "合成情境：使用條款狀態尚未讀取完成，並不表示已同意。");
+      return { termsVersion: TERMS_VERSION, accepted: false, termsAcceptedAt: null };
+    },
+    createEvent: async (input: unknown) => {
+      if (["terms-required", "terms-read-error"].includes(featureFixture)) throw new ApiError("TERMS_REQUIRED", "發布內容前，請先閱讀並同意使用條款。", 428);
+      if (featureFixture === "event-scope" && input && typeof input === "object") {
+        const candidate = input as { category?: unknown; scope?: unknown; hostOrganizationId?: unknown };
+        const option = candidate.category === "CLUB_OFFICIAL" ? eventPublishingOptions.find(item => item.scope === candidate.scope && item.hostOrganizationId === candidate.hostOrganizationId) : undefined;
+        if (option) {
+          previewNotice(`介面預覽：已核對合成發布範圍 ${option.scope}／主辦 ${option.hostOrganizationId}；發布未執行，也不會儲存。`);
+          throw new ApiError("UNKNOWN", "介面預覽：操作未執行，也不會儲存。", 409);
+        }
+      }
+      return refused();
+    },
     getEvent: async (id: string) => {
       const selected = events.find((event) => event.id === id);
       if (!selected) throw new ApiError("UNKNOWN", "預覽中沒有這場合成活動", 404);
@@ -67,9 +105,15 @@ export function createApiClient(baseUrl: string): NativeApi {
     getPushReceipts: async () => copy({ enabled: true, receipts: [{ id: "preview-review", kind: "experience_review", title: "會員資料有新的審核結果", body: "這是合成審核通知，請至「我的」查看預覽資料。", createdAt: "2026-11-05T01:30:00.000Z", readAt: null }], unreadCount: 1 }),
     getPushConfig: async () => ({ enabled: false, privacyMode: "generic" }),
     getMyExperiences: async () => copy(experiences),
-    getBlockedMembers: async () => [],
+    getBlockedMembers: async () => {
+      if (featureFixture === "security-read-error") throw new ApiError("NETWORK_ERROR", "合成情境：封鎖名單尚未讀取完成，請重新讀取；不代表沒有封鎖會員。");
+      const raw: unknown = featureFixture === "security-malformed" ? { blocks: [{ member: null, createdAt: "2026-11-07T01:00:00.000Z" }] }
+        : { blocks: featureFixture === "security-blocked" ? blockedMembers : [] };
+      try { return readBlockedMembersResponse(copy(raw)); }
+      catch { throw new ApiError("UNKNOWN", "封鎖名單格式尚未確認，請重新讀取；不代表沒有封鎖會員。"); }
+    },
     getInvites: async () => [],
-    getPendingMembers: async () => [],
+    getPendingMembers: async () => readPendingMembers(copy({ members: featureFixture === "pending-members" ? pendingMembers : [] })),
     getPendingExperiences: async () => [],
     getRoles: async () => ({ organizations: [], organization: { id: "preview-org", name: "合成分會", level: "club", districtCode: null }, members: [], assignableRoles: [] }),
     getReports: async () => ({ reports: [], eventReports: [] }),

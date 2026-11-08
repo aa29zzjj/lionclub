@@ -41,6 +41,8 @@ await writeFile(resolve(output, "build-evidence.json"), JSON.stringify({
   keychainAccess: false, credentialsIncluded: false, sources: inputs,
   mutations: "all-rejected", realAppSignedOutPreview: true,
   notificationFixtures: ["normal", "load-error", "malformed", "compose-error", "empty-friends", "render-error"],
+  featureFixtures: ["normal", "event-scope", "event-settings-error", "event-options-invalid", "terms-required", "terms-read-error", "security-read-error", "security-malformed", "security-blocked", "browser-error", "pending-members"],
+  termsAcceptance: "always-rejected", eventPublication: "always-rejected", moderation: "always-rejected",
   physicalDeviceAcceptance: false,
 }, null, 2));
 console.log("Built isolated native UI candidate in tmp/native-ui-preview; no real API, plugins, credentials or network access.");

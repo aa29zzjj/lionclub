@@ -10,8 +10,7 @@ import App from "../src/App";
 import { createNativeOAuthAttempt } from "../src/native-oauth";
 import PreviewRenderFailure from "./render-failure";
 import type { MobilePushUi } from "../src/NotificationSettings";
-import { member } from "./fixtures";
-import { previewNotice, setPreviewNotificationFixture, type PreviewNotificationFixture } from "./mock-contract";
+import { getPreviewMember, previewNotice, setPreviewFeatureFixture, setPreviewNotificationFixture, type PreviewFeatureFixture, type PreviewNotificationFixture } from "./mock-contract";
 
 const push: MobilePushUi = {
   status: "unavailable",
@@ -28,6 +27,9 @@ function Preview() {
   const [large, setLarge] = useState(false);
   const [mode, setMode] = useState<"member" | "signed-out">("member");
   const [fixture, setFixture] = useState<PreviewNotificationFixture>("normal");
+  const [feature, setFeature] = useState<PreviewFeatureFixture>("normal");
+  const member = getPreviewMember();
+  const featureTab: TabKey = feature.startsWith("event-") || feature.startsWith("terms-") ? "events" : "security";
   useEffect(() => {
     const onNotice = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;
@@ -61,6 +63,7 @@ function Preview() {
         <label htmlFor="preview-notification-fixture">通知情境
           <select id="preview-notification-fixture" value={fixture} onChange={event => {
             const value = event.target.value as PreviewNotificationFixture;
+            setPreviewFeatureFixture("normal"); setFeature("normal");
             setPreviewNotificationFixture(value); setFixture(value); setMode("member");
             setNotice(value === "normal" ? "正常合成資料；所有寫入均拒絕。" : "合成通知情境已切換；可進入發送頁檢查錯誤、重試及按鈕狀態，沒有真實連線。");
           }}>
@@ -70,10 +73,30 @@ function Preview() {
             <option value="render-error">合成畫面錯誤保護</option>
           </select>
         </label>
+        <label htmlFor="preview-feature-fixture" className="preview-feature-control">其他功能情境
+          <select id="preview-feature-fixture" value={feature} onChange={event => {
+            const value = event.target.value as PreviewFeatureFixture;
+            setPreviewNotificationFixture("normal"); setFixture("normal");
+            setPreviewFeatureFixture(value); setFeature(value); setMode("member");
+            setNotice(value === "normal" ? "正常合成資料；所有寫入均拒絕。" : "合成功能情境已切換。請由畫面按鈕進入操作；條款同意、發布、審核及帳號變更均不會執行。");
+          }}>
+            <option value="normal">正常合成資料</option>
+            <option value="event-scope">活動・授權層級與主辦配對</option>
+            <option value="event-settings-error">活動・發布設定讀取失敗</option>
+            <option value="event-options-invalid">活動・授權資料格式錯誤</option>
+            <option value="terms-required">活動・需要同意條款</option>
+            <option value="terms-read-error">活動・條款讀取失敗</option>
+            <option value="security-read-error">帳號安全・封鎖名單讀取失敗</option>
+            <option value="security-malformed">帳號安全・封鎖名單格式錯誤</option>
+            <option value="security-blocked">帳號安全・一位合成封鎖會員</option>
+            <option value="browser-error">帳號管理・網頁開啟失敗</option>
+            <option value="pending-members">幹部管理・歷史入會年月</option>
+          </select>
+        </label>
       </div>
     </aside>
     {mode === "signed-out" ? <div className="preview-app-content"><App key="signed-out-preview" /></div> :
-    <Shell key={`member:${fixture}`} member={member} initialTab={fixture === "normal" ? initialTab() : "notifications"} renderTab={(tab, current, setTab) => {
+    <Shell key={`member:${fixture}:${feature}`} member={member} initialTab={feature !== "normal" ? featureTab : fixture === "normal" ? initialTab() : "notifications"} renderTab={(tab, current, setTab) => {
       if (tab === "home") return <HomeScreen member={current} onOpenProfile={() => setTab("security")} onOpenNotifications={() => setTab("notifications")} onOpenFriends={() => setTab("friends")} onOpenEvents={() => setTab("events")} />;
       if (tab === "friends") return <FriendsScreen member={current} />;
       if (tab === "events") return <EventsScreen member={current} />;

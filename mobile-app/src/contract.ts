@@ -4,11 +4,15 @@ import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
 import type { PushConfig, PushDeviceInput } from "./push-controller";
 import { readNotificationsResponse } from "./notification-contract";
-import { createMobileSessionCoordinator } from "./mobile-session";
+import { createMobileSessionCoordinator, mobileTokenPair } from "./mobile-session";
 import { NATIVE_OAUTH_REDIRECT_URI, NATIVE_OAUTH_PROTOCOL_VERSION, createNativeOAuthAttempt, nativeOAuthErrorMessage, readNativeOAuthBootstrap, waitForNativeOAuth } from "./native-oauth";
 import { bytesToBase64, createImageUploadGrants } from "./native-upload";
+import { mobileActionAcknowledged, readBlockedMembersResponse, readSessionRevocationResponse } from "./security-contract";
+import { TERMS_VERSION } from "../../src/lib/terms";
+import { readPendingMembers, pendingMemberReviewAcknowledged, validPendingMemberReviewInput } from "./pending-member-review";
 
 export type OAuthProvider = "google" | "apple";
+export type TermsConsentStatus = { termsVersion: string; accepted: boolean; termsAcceptedAt: string | null };
 // Android is a new release candidate: do not expose the existing custom-scheme
 // flow until app-bound PKCE/single-use exchange acceptance is complete. This
 // gate does not change or claim acceptance of the existing iOS flow.
@@ -101,7 +105,8 @@ export type ExperienceInput = {
 export type BlockedMember = { member: { id: string; name: string; nickname: string | null; photoUrl: string | null }; createdAt: string };
 
 export type Invite = { id: string; validFrom: string; validUntil: string; usageLimit: number | null; usageCount: number; registerUrl: string };
-export type PendingMember = { id: string; name: string; email: string; phone: string | null; organization: { id: string; name: string }; createdAt: string };
+export type PendingMember = { id: string; name: string; email: string | null; phone: string | null; organization: { id: string; name: string }; createdAt: string; updatedAt: string; joinYear: number | null; joinMonth: number | null };
+export type PendingMemberReviewInput = { expectedUpdatedAt: string; expectedOrganizationId: string; joinYear?: number | null; joinMonth?: number | null };
 export type PendingExperience = { id: string; member: { id: string; name: string }; review: { label: string; requiresReason: boolean }; updatedAt: string; [key: string]: unknown };
 export type AdminOrganization = { id: string; name: string; level: string; districtCode: string | null };
 export type RoleMember = { id: string; name: string; email: string | null; title: string | null; eligibleForGrant: boolean; adminRoles: { id: string; role: string; validFrom: string; validUntil: string | null }[] };
@@ -110,9 +115,9 @@ export type MemberReport = { id: string; reason: string; details: string | null;
 export type EventReport = { id: string; reason: string; details: string | null; reporter: { id: string; name: string }; event: { id: string; title: string } | null };
 export type ReportsResponse = { reports: MemberReport[]; eventReports: EventReport[] };
 
-export type ApiErrorCode = "UNAUTHENTICATED" | "INVALID_CREDENTIALS" | "RATE_LIMITED" | "NETWORK_ERROR" | "PROVIDER_DISABLED" | "UNKNOWN";
+export type ApiErrorCode = "UNAUTHENTICATED" | "INVALID_CREDENTIALS" | "RATE_LIMITED" | "NETWORK_ERROR" | "PROVIDER_DISABLED" | "TERMS_REQUIRED" | "UNKNOWN";
 export class ApiError extends Error {
-  constructor(public readonly code: ApiErrorCode, message: string, public readonly status?: number) {
+  constructor(public readonly code: ApiErrorCode, message: string, public readonly status?: number, public readonly isCurrentSession?: () => boolean) {
     super(message);
   }
 }
@@ -133,6 +138,22 @@ const mobileSession = createMobileSessionCoordinator({
   async removeItem(key) { await SecureStorage.removeItem(key); },
 }, () => new ApiError("UNAUTHENTICATED", "登入狀態已更新，請重新確認本人帳號"));
 const imageUploadGrants = createImageUploadGrants();
+const invalidatedListeners = new Set<(isCurrent: () => boolean) => void>();
+function publishSessionInvalidation(epoch: number) {
+  const isCurrent = () => mobileSession.isCurrent(epoch);
+  if (!isCurrent()) return;
+  for (const listener of [...invalidatedListeners]) {
+    try { listener(isCurrent); } catch { /* UI recovery cannot replace the original result. */ }
+  }
+}
+async function invalidateExpiredSession(epoch: number): Promise<never> {
+  const ended = mobileSession.beginChange(epoch);
+  let cleared = false;
+  try { await mobileSession.clear(ended); mobileSession.assertCurrent(ended); cleared = true; }
+  catch { /* Preserve the exact ended-session guard for UI recovery below. */ }
+  finally { publishSessionInvalidation(ended); }
+  throw new ApiError("UNAUTHENTICATED", cleared ? "登入已過期，請重新登入。" : "登入已失效，本機清除尚未確認，請重試登出。", 401, () => mobileSession.isCurrent(ended));
+}
 
 /** Native binary PUT, limited to one exact URL granted by an authenticated
  * presign call. No global fetch patch or wider CSP connection policy. */
@@ -237,17 +258,23 @@ export function createApiClient(baseUrl: string) {
   async function refresh(epoch: number): Promise<boolean> {
     return mobileSession.refreshOnce(epoch, async () => {
       const { refreshToken } = await mobileSession.snapshot(epoch); mobileSession.assertCurrent(epoch);
-      if (!refreshToken) return false;
+      if (!refreshToken) return invalidateExpiredSession(epoch);
       const response = await request("/api/mobile/auth/refresh", { method: "POST", body: { refreshToken } });
       mobileSession.assertCurrent(epoch);
       if (response.status === 401) {
         // Only explicit current-session rejection invalidates the pair. A late
         // 401 for A cannot clear B, and unknown network/5xx must not clear A.
-        const rejectedEpoch = mobileSession.beginChange(epoch);
-        await mobileSession.clear(rejectedEpoch); return false;
+        return invalidateExpiredSession(epoch);
       }
       if (response.status !== 200) throw new ApiError("UNKNOWN", "登入更新暫時無法確認，請稍後重試", response.status);
-      await mobileSession.writePair(epoch, response.data); mobileSession.assertCurrent(epoch);
+      let pair: ReturnType<typeof mobileTokenPair>;
+      try { pair = mobileTokenPair(response.data); }
+      catch { throw new ApiError("UNKNOWN", "登入更新回覆尚未確認，請稍後重試。", response.status); }
+      try { await mobileSession.writePair(epoch, pair); mobileSession.assertCurrent(epoch); }
+      catch {
+        publishSessionInvalidation(epoch);
+        throw new ApiError("UNKNOWN", "此裝置登入更新尚未保存，請重新登入。", undefined, () => mobileSession.isCurrent(epoch));
+      }
       return true;
     });
   }
@@ -256,7 +283,10 @@ export function createApiClient(baseUrl: string) {
   async function authedRequest(path: string, init: { method: string; body?: unknown }) {
     const epoch = mobileSession.capture();
     const { accessToken } = await mobileSession.snapshot(epoch); mobileSession.assertCurrent(epoch);
-    if (!accessToken) throw new ApiError("UNAUTHENTICATED", "尚未登入");
+    if (!accessToken) {
+      publishSessionInvalidation(epoch);
+      throw new ApiError("UNAUTHENTICATED", "尚未登入", 401, () => mobileSession.isCurrent(epoch));
+    }
 
     let response = await request(path, { ...init, accessToken });
     mobileSession.assertCurrent(epoch);
@@ -271,6 +301,12 @@ export function createApiClient(baseUrl: string) {
       if (!refreshedAccessToken) throw new ApiError("UNAUTHENTICATED", "尚未登入");
       response = await request(path, { ...init, accessToken: refreshedAccessToken });
       mobileSession.assertCurrent(epoch);
+      // A retry may discover a revoked session even after refresh succeeded.
+      // Match the backend's authentication refusal exactly: other 401s (for
+      // example a wrong reauthentication password) do not end this session.
+      if (response.status === 401 && response.data?.error === "未登入或登入已過期") {
+        return invalidateExpiredSession(epoch);
+      }
     }
     return response;
   }
@@ -279,6 +315,31 @@ export function createApiClient(baseUrl: string) {
     const response = await authedRequest("/api/mobile/me", { method: "GET" });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `讀取會員資料失敗（HTTP ${response.status}）`, response.status);
     return response.data as Member;
+  }
+
+  function readTermsConsent(data: unknown): TermsConsentStatus {
+    const row = data as Partial<TermsConsentStatus> | null;
+    if (!row || row.termsVersion !== TERMS_VERSION || typeof row.accepted !== "boolean"
+      || (row.accepted ? typeof row.termsAcceptedAt !== "string" || !Number.isFinite(Date.parse(row.termsAcceptedAt))
+        || new Date(row.termsAcceptedAt).toISOString() !== row.termsAcceptedAt : row.termsAcceptedAt !== null)) {
+      throw new ApiError("UNKNOWN", "使用條款版本或同意狀態尚未確認，請更新 App 或稍後重新讀取。");
+    }
+    return row as TermsConsentStatus;
+  }
+
+  async function getTermsConsent(): Promise<TermsConsentStatus> {
+    const response = await authedRequest("/api/mobile/me/terms-consent", { method: "GET" });
+    if (response.status !== 200) throw new ApiError("UNKNOWN", "使用條款狀態尚未讀取完成，請稍後再試。", response.status);
+    return readTermsConsent(response.data);
+  }
+
+  async function acceptTerms(termsVersion: string): Promise<TermsConsentStatus> {
+    if (termsVersion !== TERMS_VERSION) throw new ApiError("UNKNOWN", "使用條款版本已更新，請重新讀取後再試。");
+    const response = await authedRequest("/api/mobile/me/terms-consent", { method: "POST", body: { accept: true, termsVersion } });
+    if (response.status !== 200 || response.data?.ok !== true) throw new ApiError("UNKNOWN", "同意結果尚未確認，請重新讀取後再試。", response.status);
+    const status = readTermsConsent(response.data);
+    if (!status.accepted) throw new ApiError("UNKNOWN", "同意結果尚未確認，請重新讀取後再試。");
+    return status;
   }
 
   async function updateProfile(patch: Partial<{
@@ -302,11 +363,14 @@ export function createApiClient(baseUrl: string) {
   async function resendVerificationEmail(): Promise<void> {
     const response = await authedRequest("/api/mobile/me/resend-verification", { method: "POST" });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `寄送失敗（HTTP ${response.status}）`, response.status);
+    if (!mobileActionAcknowledged(response.data)) throw new ApiError("UNKNOWN", "寄送請求尚未確認，請稍後重新確認。", response.status);
   }
 
-  async function logout(): Promise<void> {
+  async function logout(): Promise<() => boolean> {
     const epoch = mobileSession.beginChange();
-    const accessToken = await mobileSession.clear(epoch); mobileSession.assertCurrent(epoch);
+    let accessToken: string | null;
+    try { accessToken = await mobileSession.clear(epoch); mobileSession.assertCurrent(epoch); }
+    catch { throw new ApiError("UNKNOWN", "此裝置的本機登入清除尚未確認，請重試登出。", undefined, () => mobileSession.isCurrent(epoch)); }
     if (accessToken) {
       // Best-effort only: stateless JWTs can't be revoked server-side per device.
       // Local tokens are already cleared above regardless of this call's outcome.
@@ -317,6 +381,7 @@ export function createApiClient(baseUrl: string) {
       }
     }
     mobileSession.assertCurrent(epoch);
+    return () => mobileSession.isCurrent(epoch);
   }
 
   async function getPushConfig(): Promise<PushConfig> {
@@ -391,11 +456,13 @@ export function createApiClient(baseUrl: string) {
   async function blockMember(memberId: string): Promise<void> {
     const response = await authedRequest(`/api/mobile/members/${memberId}/block`, { method: "POST" });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `封鎖失敗（HTTP ${response.status}）`, response.status);
+    if (!mobileActionAcknowledged(response.data)) throw new ApiError("UNKNOWN", "封鎖結果尚未確認，請重新讀取會員狀態。", response.status);
   }
 
   async function unblockMember(memberId: string): Promise<void> {
     const response = await authedRequest(`/api/mobile/members/${memberId}/block`, { method: "DELETE" });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `取消封鎖失敗（HTTP ${response.status}）`, response.status);
+    if (!mobileActionAcknowledged(response.data)) throw new ApiError("UNKNOWN", "取消封鎖結果尚未確認，請重新讀取封鎖名單。", response.status);
   }
 
   async function reportMember(memberId: string, reason: string, details?: string): Promise<void> {
@@ -418,7 +485,7 @@ export function createApiClient(baseUrl: string) {
   async function createEvent(input: CreateEventInput): Promise<{ eventId: string }> {
     const response = await authedRequest("/api/mobile/events", { method: "POST", body: input });
     if (response.status !== 200) {
-      if (response.data?.code === "TERMS_REQUIRED") throw new ApiError("UNKNOWN", "發布內容前，請先到網站閱讀並同意使用條款", response.status);
+      if (response.data?.code === "TERMS_REQUIRED") throw new ApiError("TERMS_REQUIRED", "發布內容前，請先閱讀並同意使用條款。", response.status);
       throw new ApiError("UNKNOWN", response.data?.error ?? `發布活動失敗（HTTP ${response.status}）`, response.status);
     }
     return response.data;
@@ -487,10 +554,11 @@ export function createApiClient(baseUrl: string) {
   async function getBlockedMembers(): Promise<BlockedMember[]> {
     const response = await authedRequest("/api/mobile/me/blocks", { method: "GET" });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `讀取封鎖名單失敗（HTTP ${response.status}）`, response.status);
-    return response.data.blocks;
+    try { return readBlockedMembersResponse(response.data); }
+    catch { throw new ApiError("UNKNOWN", "封鎖名單格式尚未確認，請重新讀取；不代表沒有封鎖會員。"); }
   }
 
-  async function revokeOtherSessions(password: string): Promise<{ currentSessionRetained: boolean; message: string }> {
+  async function revokeOtherSessions(password: string): Promise<{ currentSessionRetained: boolean; message: string; isCurrent: () => boolean }> {
     const epoch = mobileSession.capture();
     const response = await authedRequest("/api/mobile/me/sessions/revoke", { method: "POST", body: { password } });
     mobileSession.assertCurrent(epoch);
@@ -498,10 +566,24 @@ export function createApiClient(baseUrl: string) {
       if (response.data?.code === "REAUTH_REQUIRED") throw new ApiError("UNAUTHENTICATED", response.data.error, response.status);
       throw new ApiError("UNKNOWN", response.data?.error ?? `操作失敗（HTTP ${response.status}）`, response.status);
     }
-    if (response.data.accessToken && response.data.refreshToken) {
-      await mobileSession.writePair(epoch, response.data); mobileSession.assertCurrent(epoch);
+    let result: ReturnType<typeof readSessionRevocationResponse>;
+    try { result = readSessionRevocationResponse(response.data); }
+    catch { throw new ApiError("UNKNOWN", "登出結果尚未確認，請重新確認登入狀態；不會自動重送。", response.status); }
+    let isCurrent = () => mobileSession.isCurrent(epoch);
+    if (result.currentSessionRetained) {
+      try { await mobileSession.writePair(epoch, result.pair); mobileSession.assertCurrent(epoch); }
+      catch {
+        publishSessionInvalidation(epoch);
+        throw new ApiError("UNKNOWN", "其他裝置已登出，但此裝置登入更新尚未保存，請重新登入。", undefined, () => mobileSession.isCurrent(epoch));
+      }
+    } else {
+      const ended = mobileSession.beginChange(epoch);
+      try { await mobileSession.clear(ended); mobileSession.assertCurrent(ended); }
+      catch { throw new ApiError("UNKNOWN", "其他裝置已登出，但此裝置本機登入清除尚未確認，請重試登出。", undefined, () => mobileSession.isCurrent(ended)); }
+      finally { publishSessionInvalidation(ended); }
+      isCurrent = () => mobileSession.isCurrent(ended);
     }
-    return response.data;
+    return { currentSessionRetained: result.currentSessionRetained, message: result.message, isCurrent };
   }
 
   async function getInvites(): Promise<Invite[]> {
@@ -519,12 +601,18 @@ export function createApiClient(baseUrl: string) {
   async function getPendingMembers(): Promise<PendingMember[]> {
     const response = await authedRequest("/api/mobile/admin/pending-members", { method: "GET" });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `讀取待審會員失敗（HTTP ${response.status}）`, response.status);
-    return response.data.members;
+    try { return readPendingMembers(response.data); }
+    catch { throw new ApiError("UNKNOWN", "申請的歷史入會年月或版本尚未讀取完成，請重新載入；請勿以今天代替。"); }
   }
 
-  async function reviewPendingMember(memberId: string, action: "approve" | "reject"): Promise<void> {
-    const response = await authedRequest(`/api/mobile/admin/pending-members/${memberId}`, { method: "POST", body: { action } });
+  async function reviewPendingMember(memberId: string, action: "approve" | "reject", input: PendingMemberReviewInput): Promise<void> {
+    if (!validPendingMemberReviewInput(action, input)) throw new ApiError("UNKNOWN", "請先核對完整的入會年月、分會及申請版本。");
+    const response = await authedRequest(`/api/mobile/admin/pending-members/${encodeURIComponent(memberId)}`, { method: "POST", body: { action,
+      expectedUpdatedAt: input.expectedUpdatedAt, expectedOrganizationId: input.expectedOrganizationId,
+      ...(action === "approve" ? { joinYear: input.joinYear, joinMonth: input.joinMonth } : {}),
+    } });
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `審核失敗（HTTP ${response.status}）`, response.status);
+    if (!pendingMemberReviewAcknowledged(response.data, action, input)) throw new ApiError("UNKNOWN", "審核結果尚未確認，請重新載入名單確認後再操作。");
   }
 
   async function getPendingExperiences(): Promise<PendingExperience[]> {
@@ -595,8 +683,10 @@ export function createApiClient(baseUrl: string) {
   }
 
   return {
+    onSessionInvalidated(listener: (isCurrent: () => boolean) => void) { invalidatedListeners.add(listener); return () => { invalidatedListeners.delete(listener); }; },
+    captureSessionGuard() { const epoch = mobileSession.capture(); return () => mobileSession.isCurrent(epoch); },
     getPushConfig, registerPushDevice, disablePushDevice, getPushReceipts, markPushReceiptsRead,
-    login, loginWithProvider, me, updateProfile, createAvatarUpload, resendVerificationEmail, logout, hasStoredSession,
+    login, loginWithProvider, me, getTermsConsent, acceptTerms, updateProfile, createAvatarUpload, resendVerificationEmail, logout, hasStoredSession,
     getFriends, searchMembers, addFriendByQr, requestFriend, respondFriend,
     getMember, blockMember, unblockMember, reportMember,
     getEvents, getEventsFull, createEvent, createEventCoverUpload, getEvent, toggleEventRegistration, checkInToEvent,

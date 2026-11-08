@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Browser } from "@capacitor/browser";
 import { createApiClient, ApiError, type Member } from "./contract";
 import ProfileScreen from "./ProfileScreen";
@@ -35,24 +35,53 @@ export default function MyScreen({
   const [view, setView] = useState<View>("overview");
   const isAdmin = Array.isArray(member.adminRoles) && member.adminRoles.length > 0;
   const [resending, setResending] = useState(false);
-  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [resendMessage, setResendMessage] = useState<{ memberId: string; email: string; text: string } | null>(null);
+  const [openingWebsite, setOpeningWebsite] = useState(false);
+  const [websiteError, setWebsiteError] = useState<string | null>(null);
+  const screenRef = useRef<HTMLDivElement>(null);
+  const mounted = useRef(false);
+  const resendLock = useRef(false);
+  const websiteLock = useRef(false);
+  const identity = useRef({ id: member.id, email: member.email });
+  identity.current = { id: member.id, email: member.email };
+  const resendNotice = resendMessage?.memberId === member.id && resendMessage.email === member.email ? resendMessage.text : null;
+  useEffect(() => { setResendMessage(null); }, [member.id, member.email]);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useLayoutEffect(() => { screenRef.current?.closest(".shell-content")?.scrollTo(0, 0); }, [view]);
 
   async function handleResendVerification() {
+    if (resendLock.current || busy) return;
+    resendLock.current = true;
+    const owner = identity.current, isCurrent = api.captureSessionGuard();
+    const visible = () => mounted.current && isCurrent() && identity.current.id === owner.id && identity.current.email === owner.email;
     setResending(true);
     setResendMessage(null);
     try {
       await api.resendVerificationEmail();
-      setResendMessage("驗證信已寄出，請至信箱收取");
+      if (visible()) setResendMessage({ memberId: owner.id, email: owner.email, text: "寄送請求已確認，請至信箱查看驗證信；實際送達時間仍取決於郵件服務。" });
     } catch (failure) {
-      setResendMessage(failure instanceof ApiError ? failure.message : "寄送失敗，請稍後再試");
+      if (visible()) setResendMessage({ memberId: owner.id, email: owner.email, text: failure instanceof ApiError ? failure.message : "寄送請求尚未確認，請稍後再試。" });
     } finally {
-      setResending(false);
+      resendLock.current = false;
+      if (mounted.current) setResending(false);
     }
+  }
+
+  async function openWebsite(target: "profile" | "delete") {
+    if (websiteLock.current || busy) return;
+    websiteLock.current = true;
+    const isCurrent = api.captureSessionGuard();
+    setOpeningWebsite(true); setWebsiteError(null);
+    try {
+      await Browser.open({ url: target === "profile" ? "https://lionclubsmembership.com/profile" : "https://lionclubsmembership.com/account/delete", presentationStyle: "popover" });
+    } catch {
+      if (mounted.current && isCurrent()) setWebsiteError("無法開啟帳號管理網頁，請確認連線後重試。App 內的設定尚未變更。");
+    } finally { websiteLock.current = false; if (mounted.current) setOpeningWebsite(false); }
   }
 
   if (view === "profile") {
     return (
-      <div>
+      <div ref={screenRef}>
         <button type="button" className="profile-back" onClick={() => setView("overview")}>
           ‹ 返回
         </button>
@@ -63,7 +92,7 @@ export default function MyScreen({
 
   if (view === "admin") {
     return (
-      <div>
+      <div ref={screenRef}>
         <button type="button" className="profile-back" onClick={() => setView("overview")}>
           ‹ 返回
         </button>
@@ -74,7 +103,7 @@ export default function MyScreen({
 
   if (view === "experience") {
     return (
-      <div>
+      <div ref={screenRef}>
         <button type="button" className="profile-back" onClick={() => setView("overview")}>
           ‹ 返回
         </button>
@@ -84,7 +113,7 @@ export default function MyScreen({
   }
 
   return (
-    <div className="my-screen">
+    <div className="my-screen" ref={screenRef}>
       <div className="my-screen-header">
         <h1 className="my-screen-title">我的檔案</h1>
         <button type="button" className="my-screen-edit-button" onClick={() => setView("profile")}>
@@ -96,8 +125,8 @@ export default function MyScreen({
         <div className="my-screen-section" style={{ borderTop: "none", borderRadius: "1rem", border: "2px solid rgb(253 162 155 / 0.5)", padding: "1rem" }}>
           <h2 className="section-title" style={{ color: "rgb(var(--lion-danger))" }}>Email 尚未驗證</h2>
           <p className="member-meta">請至 {member.email} 收取驗證信並完成驗證，以確保帳號安全。</p>
-          {resendMessage ? <p className="member-meta" role="status" style={{ marginTop: "0.4rem" }}>{resendMessage}</p> : null}
-          <button type="button" className="secondary" disabled={resending} onClick={handleResendVerification} style={{ marginTop: "0.5rem" }}>
+          {resendNotice ? <p className="member-meta" role="status" style={{ marginTop: "0.4rem" }}>{resendNotice}</p> : null}
+          <button type="button" className="secondary" disabled={resending || busy} onClick={() => void handleResendVerification()} style={{ marginTop: "0.5rem" }}>
             {resending ? "寄送中…" : "重新寄送驗證信"}
           </button>
         </div>
@@ -125,11 +154,13 @@ export default function MyScreen({
 
       <section className="my-screen-section">
         <h2 className="section-title">帳號登入方式</h2>
+        {websiteError ? <p className="error" role="alert">{websiteError}</p> : null}
         <p className="member-meta">綁定 Google／Apple 帳號請至網站操作，需要重新驗證身分。</p>
         <button
           type="button"
           className="secondary"
-          onClick={() => void Browser.open({ url: "https://lionclubsmembership.com/profile", presentationStyle: "popover" })}
+          disabled={openingWebsite || busy}
+          onClick={() => void openWebsite("profile")}
         >
           前往網站管理登入方式
         </button>
@@ -141,7 +172,8 @@ export default function MyScreen({
         <button
           type="button"
           className="secondary"
-          onClick={() => void Browser.open({ url: "https://lionclubsmembership.com/account/delete", presentationStyle: "popover" })}
+          disabled={openingWebsite || busy}
+          onClick={() => void openWebsite("delete")}
         >
           前往網站刪除帳號
         </button>

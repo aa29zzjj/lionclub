@@ -1,8 +1,11 @@
-import { previewNotice } from "./mock-contract";
+import { getPreviewFeatureFixture, previewNotice } from "./mock-contract";
 
 // These replace native imports only inside the isolated preview bundle.
 export const Browser = {
-  async open() { previewNotice("介面預覽：外部網頁未開啟，不會連線或登入正式服務。"); },
+  async open() {
+    if (getPreviewFeatureFixture() === "browser-error") throw new Error("SYNTHETIC_PREVIEW_BROWSER_UNAVAILABLE");
+    previewNotice("介面預覽：外部網頁未開啟，不會連線或登入正式服務。");
+  },
 };
 export const Camera = {
   async takePhoto(): Promise<never> {

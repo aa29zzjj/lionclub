@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
   const members = await prisma.member.findMany({
     where: {
       status: "PENDING",
+      deletedAt: null,
       ...(orgIds ? { organizationId: { in: orgIds } } : {}),
     },
     orderBy: { createdAt: "asc" },
@@ -35,6 +36,9 @@ export async function GET(req: NextRequest) {
       phone: m.phone,
       organization: m.organization,
       createdAt: m.createdAt,
+      joinYear: m.joinYear,
+      joinMonth: m.joinMonth,
+      updatedAt: m.updatedAt,
     })),
   });
 }

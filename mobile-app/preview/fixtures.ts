@@ -1,4 +1,4 @@
-import type { EventCard, FriendCard, Member, MemberExperience } from "../src/contract";
+import type { BlockedMember, EventCard, EventPublishingOption, FriendCard, Member, MemberExperience, PendingMember } from "../src/contract";
 
 // Deliberately fictitious: no account can authenticate with these data.
 export const member: Member = {
@@ -27,3 +27,23 @@ export const experiences: MemberExperience[] = [{
   positionName: "分會會員（合成資歷）", organizationName: "共好示範獅子會（合成）", organizationIsUnlisted: true,
   startYear: 2022, startMonth: 7, datePrecision: "month", isCurrent: true, verificationStatus: "verified", visibility: "members",
 }];
+
+// Fixed allowlist for exercising API-authorized scope+host pairs. These are
+// never inferred from a member title, home chapter or any user-entered text.
+export const eventPublishingOptions: EventPublishingOption[] = [
+  { scope: "CLUB", hostOrganizationId: "preview-synthetic-org-club", hostOrganizationName: "共好示範獅子會（合成）" },
+  { scope: "ZONE", hostOrganizationId: "preview-synthetic-org-zone", hostOrganizationName: "示範分區（合成）" },
+  { scope: "DISTRICT", hostOrganizationId: "preview-synthetic-org-district", hostOrganizationName: "示範區（合成）" },
+];
+export const blockedMembers: BlockedMember[] = [{
+  member: { id: "preview-synthetic-blocked-member", name: "合成封鎖會員", nickname: null, photoUrl: null },
+  createdAt: "2026-11-07T01:00:00.000Z",
+}];
+export const pendingMembers: PendingMember[] = [
+  { id: "preview-synthetic-pending-known", name: "合成申請人・已知歷史年月", email: "pending-known@example.invalid", phone: null,
+    organization: { id: "preview-synthetic-org-club", name: "共好示範獅子會（合成）" }, createdAt: "2026-11-01T01:00:00.000Z", updatedAt: "2026-11-07T01:00:00.000Z", joinYear: 2014, joinMonth: 7 },
+  { id: "preview-synthetic-pending-unknown", name: "合成申請人・年月未知", email: null, phone: null,
+    organization: { id: "preview-synthetic-org-other", name: "晨光示範獅子會（合成）" }, createdAt: "2026-11-02T01:00:00.000Z", updatedAt: "2026-11-07T02:00:00.000Z", joinYear: null, joinMonth: null },
+  { id: "preview-synthetic-pending-partial", name: "合成申請人・僅知年份", email: "pending-partial@example.invalid", phone: null,
+    organization: { id: "preview-synthetic-org-club", name: "共好示範獅子會（合成）" }, createdAt: "2026-11-03T01:00:00.000Z", updatedAt: "2026-11-07T03:00:00.000Z", joinYear: 1999, joinMonth: null },
+];

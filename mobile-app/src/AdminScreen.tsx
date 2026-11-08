@@ -8,6 +8,8 @@ import {
   ADMIN_ROLE_LABELS, createAdminRequestGuard, existingRoleGrants, grantableMembers,
   grantableRoles, validateExperienceReview, validateRoleGrant, validateRoleRevoke, type RoleGrantDraft,
 } from "./admin-actions";
+import { assertPendingMemberReviewCurrent, pendingMemberJoinDraft, pendingMemberJoinLabel, preparePendingMemberReview,
+  type PendingMemberJoinDraft, type PendingMemberReview } from "./pending-member-review";
 
 declare const API_BASE_URL: string;
 const api = createApiClient(API_BASE_URL);
@@ -80,44 +82,102 @@ function InvitesPanel() {
 
 function PendingMembersPanel() {
   const [members, setMembers] = useState<PendingMember[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, PendingMemberJoinDraft>>({});
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [requiresReload, setRequiresReload] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<{ id: string; action: "approve" | "reject" } | null>(null);
+  const [confirming, setConfirming] = useState<{ review: PendingMemberReview; message: string } | null>(null);
+  const busy = useRef(false);
+  const requests = useRef(createAdminRequestGuard());
+  const mounted = useRef(false);
 
   const load = useCallback(async () => {
-    try { setMembers(await api.getPendingMembers()); }
-    catch (failure) { setError(failure instanceof ApiError ? failure.message : "讀取失敗"); }
+    if (busy.current || !mounted.current) return;
+    const request = requests.current.begin();
+    setLoading(true); setError(null); setConfirming(null);
+    try {
+      const result = await api.getPendingMembers();
+      if (!mounted.current || !requests.current.isCurrent(request)) return;
+      setMembers(result); setDrafts(Object.fromEntries(result.map(member => [member.id, pendingMemberJoinDraft(member)])));
+      setRequiresReload(false);
+    } catch (failure) {
+      if (mounted.current && requests.current.isCurrent(request)) {
+        setError(failure instanceof ApiError ? failure.message : "讀取失敗，請重新載入名單。"); setRequiresReload(true);
+      }
+    } finally { if (mounted.current && requests.current.isCurrent(request)) setLoading(false); }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    mounted.current = true; void load();
+    return () => { mounted.current = false; requests.current.invalidate(); };
+  }, [load]);
 
-  async function act(id: string, action: "approve" | "reject") {
-    setConfirming(null);
-    setBusyId(id);
-    try { await api.reviewPendingMember(id, action); await load(); }
-    catch (failure) { setError(failure instanceof ApiError ? failure.message : "審核失敗"); }
-    finally { setBusyId(null); }
+  function prepare(member: PendingMember, action: "approve" | "reject") {
+    if (busy.current || loading || requiresReload) return;
+    try {
+      const review = preparePendingMemberReview(member, action, drafts[member.id] ?? pendingMemberJoinDraft(member));
+      const message = action === "approve"
+        ? `確定核准 ${member.name} 加入「${member.organization.name}」？原資料：${pendingMemberJoinLabel(member)}。核准後：${pendingMemberJoinLabel({ joinYear: review.joinYear!, joinMonth: review.joinMonth! })}。未知值會保留為未知，不會改成今天。`
+        : `確定拒絕 ${member.name} 加入「${member.organization.name}」的申請嗎？沒有歷史紀錄的待審帳號及申請將被永久刪除，無法復原；已有活動、報到或權限歷史者會由系統阻止刪除。`;
+      setError(null); setConfirming({ review, message });
+    } catch (failure) { setError(failure instanceof Error ? failure.message : "請確認入會年月。"); }
   }
+
+  async function act() {
+    if (busy.current || loading || requiresReload || !confirming) return;
+    const review = confirming.review;
+    const member = members.find(item => item.id === review.memberId);
+    try { assertPendingMemberReviewCurrent(member, review); }
+    catch (failure) { setConfirming(null); setRequiresReload(true); setError(failure instanceof Error ? failure.message : "請重新載入名單。"); return; }
+    busy.current = true; requests.current.invalidate(); setBusyId(review.memberId); setConfirming(null); setError(null); setNotice(null);
+    try {
+      await api.reviewPendingMember(review.memberId, review.action, review);
+      if (!mounted.current) return;
+      setMembers(current => current.filter(item => item.id !== review.memberId));
+      setDrafts(current => { const next = { ...current }; delete next[review.memberId]; return next; });
+      setNotice(review.action === "approve" ? `已核准 ${member!.name}，${pendingMemberJoinLabel({ joinYear: review.joinYear!, joinMonth: review.joinMonth! })}。` : `已拒絕並移除 ${member!.name} 的待審申請。`);
+    } catch (failure) {
+      if (mounted.current) {
+        setRequiresReload(true);
+        setError(failure instanceof ApiError ? failure.message : "審核結果尚未確認，請重新載入確認後再操作。");
+      }
+    } finally { busy.current = false; if (mounted.current) setBusyId(null); }
+  }
+
+  const disabled = loading || Boolean(busyId) || requiresReload;
 
   return (
     <div className="list-stack">
+      {notice ? <p role="status">{notice}</p> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}
-      {members.length === 0 ? <p className="member-meta">目前沒有待審會員。</p> : null}
-      {members.map((m) => (
+      <button type="button" className="secondary" disabled={loading || Boolean(busyId)} onClick={() => void load()}>重新載入名單</button>
+      <p className="member-meta">請依原始資料核對入會年月。留空表示未知；入會月份須有已知年份。</p>
+      {loading ? <p className="member-meta" role="status">讀取申請及歷史入會年月中…</p> : null}
+      {!loading && !error && members.length === 0 ? <p className="member-meta">目前沒有待審會員。</p> : null}
+      {!loading && members.map((m) => (
         <div key={m.id} className="list-card">
           <div className="list-card-main">
             <p className="list-card-title">{m.name}</p>
-            <p className="list-card-meta">{m.email} · {m.organization.name}</p>
+            <p className="list-card-meta">{m.email || "未提供電子郵件"} · {m.organization.name}</p>
+            <p className="list-card-meta">原資料：{pendingMemberJoinLabel(m)}</p>
+            <label htmlFor={`pending-year-${m.id}`}>核准的入會年份（未知留空）</label>
+            <input id={`pending-year-${m.id}`} type="number" inputMode="numeric" min={1900} max={2100} step={1} disabled={disabled}
+              value={drafts[m.id]?.year ?? ""} onChange={event => setDrafts(current => ({ ...current, [m.id]: { ...(current[m.id] ?? pendingMemberJoinDraft(m)), year: event.target.value } }))} />
+            <label htmlFor={`pending-month-${m.id}`}>核准的入會月份（未知留空）</label>
+            <input id={`pending-month-${m.id}`} type="number" inputMode="numeric" min={1} max={12} step={1} disabled={disabled}
+              value={drafts[m.id]?.month ?? ""} onChange={event => setDrafts(current => ({ ...current, [m.id]: { ...(current[m.id] ?? pendingMemberJoinDraft(m)), month: event.target.value } }))} />
           </div>
           <div className="list-card-actions">
-            <button type="button" className="secondary" disabled={busyId === m.id} onClick={() => act(m.id, "approve")}>核准</button>
-            <button type="button" className="secondary" disabled={busyId === m.id} onClick={() => setConfirming({ id: m.id, action: "reject" })}>拒絕</button>
+            <button type="button" className="secondary" disabled={disabled} onClick={() => prepare(m, "approve")}>核准</button>
+            <button type="button" className="secondary" disabled={disabled} onClick={() => prepare(m, "reject")}>拒絕</button>
           </div>
         </div>
       ))}
       {confirming ? (
         <Confirm
-          message="拒絕後,若此申請沒有任何歷史紀錄,帳號將直接刪除,確定要拒絕嗎？"
-          onConfirm={() => act(confirming.id, confirming.action)}
+          message={confirming.message}
+          onConfirm={() => void act()}
           onCancel={() => setConfirming(null)}
         />
       ) : null}
