@@ -2,20 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
 import { getPrisma } from "@/lib/prisma";
-import { getCurrentMember, hasAdminRoleForOrganization } from "@/lib/current-member";
-import { OnboardingError } from "@/lib/central-onboarding";
+import { getCurrentMember } from "@/lib/current-member";
 import { onboardingErrorResponse } from "@/lib/onboarding-response";
-
-const ALLOWED_ISSUER_ROLES = [
-  "CLUB_OFFICER",
-  "CLUB_VICE_PRESIDENT",
-  "CLUB_PRESIDENT",
-  "CLUB_FINANCE",
-  "ZONE_ADMIN",
-  "DISTRICT_ADMIN",
-  "MULTIDISTRICT_ADMIN",
-  "SUPER_ADMIN",
-];
+import { resolveInviteOrganization } from "@/lib/invite-organization";
+import { isTrustedBrowserMutation } from "@/lib/browser-origin";
+import { registrationTargetsInvitedClub } from "@/lib/club-registration-policy";
 
 function generatePin() {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -30,32 +21,34 @@ function qrInvite<T extends { pin: string }>(invite: T): Omit<T, "pin"> {
 export async function GET(req: NextRequest) {
   const member = await getCurrentMember();
   if (!member) return NextResponse.json({ error: "未登入" }, { status: 401 });
-  if (!(await hasAdminRoleForOrganization(member.id, member.organizationId, ALLOWED_ISSUER_ROLES))) {
-    return NextResponse.json({ error: "您沒有權限查看本分會邀請" }, { status: 403 });
-  }
-
+  const requested = organizationIdSchema.optional().safeParse(req.nextUrl.searchParams.get("organizationId") ?? undefined);
+  if (!requested.success) return NextResponse.json({ error: "分會設定格式錯誤" }, { status: 400 });
   const prisma = await getPrisma();
-  const invites = await prisma.clubInvite.findMany({
-    where: { organizationId: member.organizationId },
-    orderBy: { createdAt: "desc" },
-    include: { organization: { select: { name: true } } },
-  });
-
-  const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).origin;
-  return NextResponse.json({ invites: invites.map((invite) => {
-    const registerUrl = new URL("/register", origin);
-    registerUrl.searchParams.set("org", invite.organizationId);
-    registerUrl.searchParams.set("token", invite.token);
-    return { ...qrInvite(invite), registerUrl: registerUrl.toString() };
-  }) });
+  try {
+    const { organization, invites } = await prisma.$transaction(async tx => {
+      const organization = await resolveInviteOrganization(tx, member, requested.data);
+      const invites = await tx.clubInvite.findMany({ where: { organizationId: organization.id }, orderBy: { createdAt: "desc" }, include: { organization: { select: { id: true, name: true } } } });
+      return { organization, invites };
+    }, { isolationLevel: "Serializable" });
+    const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).origin;
+    return NextResponse.json({ organization, approvalRequired: false, registrationMode: registrationTargetsInvitedClub(organization.id) ? "direct_club" : "central", invites: invites.map(invite => {
+      const registerUrl = new URL("/register", origin);
+      registerUrl.searchParams.set("org", invite.organizationId);
+      registerUrl.searchParams.set("token", invite.token);
+      return { ...qrInvite(invite), registerUrl: registerUrl.toString() };
+    }) }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) { return inviteErrorResponse(error); }
 }
 
+const organizationIdSchema = z.string().trim().min(1).max(256);
 const bodySchema = z.object({
+  organizationId: organizationIdSchema.optional(),
   validDays: z.number().int().min(1).max(365).optional(),
   usageLimit: z.number().int().min(1).optional(),
 });
 
 export async function POST(req: NextRequest) {
+  if (!isTrustedBrowserMutation(req)) return NextResponse.json({ error: "請從網站操作邀請" }, { status: 403 });
   const member = await getCurrentMember();
   if (!member) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
@@ -65,12 +58,12 @@ export async function POST(req: NextRequest) {
   const usageLimit = parsed.data.usageLimit;
   const prisma = await getPrisma();
   try {
-    const invite = await prisma.$transaction(async (tx) => {
-      const actor = await tx.member.findFirst({ where: { id: member.id, status: "ACTIVE", organizationId: member.organizationId }, select: { id: true } });
-      const organization = await tx.organization.findFirst({ where: { id: member.organizationId, isActive: true, level: "club" }, select: { id: true } });
-      if (!actor || !organization || !(await hasAdminRoleForOrganization(member.id, member.organizationId, ALLOWED_ISSUER_ROLES, tx))) throw new OnboardingError(403, "會籍或權限已變更，請重新載入後操作");
-      return tx.clubInvite.create({ data: { organizationId: member.organizationId, pin: generatePin(), token: crypto.randomBytes(24).toString("base64url"), issuedById: member.id,
-        validFrom: new Date(), validUntil: new Date(Date.now() + validDays * 24 * 60 * 60 * 1000), usageLimit } });
+    const { organization, invite } = await prisma.$transaction(async (tx) => {
+      const organization = await resolveInviteOrganization(tx, member, parsed.data.organizationId);
+      const now = new Date();
+      const invite = await tx.clubInvite.create({ data: { organizationId: organization.id, pin: generatePin(), token: crypto.randomBytes(24).toString("base64url"), issuedById: member.id,
+        validFrom: now, validUntil: new Date(now.getTime() + validDays * 24 * 60 * 60 * 1000), usageLimit }, include: { organization: { select: { id: true, name: true } } } });
+      return { organization, invite };
     }, { isolationLevel: "Serializable" });
 
     const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/$/, "");
@@ -78,9 +71,13 @@ export async function POST(req: NextRequest) {
     registerUrl.searchParams.set("org", invite.organizationId);
     registerUrl.searchParams.set("token", invite.token);
 
-    return NextResponse.json({ invite: qrInvite(invite), registerUrl: registerUrl.toString() });
+    return NextResponse.json({ organization, approvalRequired: false, registrationMode: registrationTargetsInvitedClub(organization.id) ? "direct_club" : "central", invite: qrInvite(invite), registerUrl: registerUrl.toString() }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "P2034") return NextResponse.json({ error: "會籍或權限同時更新，請重新載入後操作" }, { status: 409 });
-    return onboardingErrorResponse(error);
+    return inviteErrorResponse(error);
   }
+}
+
+function inviteErrorResponse(error: unknown) {
+  if (error && typeof error === "object" && "code" in error && error.code === "P2034") return NextResponse.json({ error: "會籍或權限同時更新，請重新載入後操作" }, { status: 409 });
+  return onboardingErrorResponse(error);
 }
