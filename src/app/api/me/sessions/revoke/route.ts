@@ -9,6 +9,7 @@ import { revokeOtherSessions, SessionRevocationError } from "@/lib/session-revoc
 import { consumeOAuthReauth } from "@/lib/federated-auth-service";
 import { FederatedAuthError } from "@/lib/federated-auth";
 import { OAUTH_REAUTH_COOKIE, clearOAuthCookie, readOAuthCookie } from "@/lib/federated-auth-http";
+import { EMAIL_ACTION_COOKIE, consumeEmailActionProofInTransaction } from "@/lib/email-action-reauth";
 
 const schema = z.object({ password: z.string().min(1).max(200).optional() });
 
@@ -25,10 +26,23 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.findUnique({ where: { id: session.userId } });
     if (!user) return NextResponse.json({ error: "登入狀態已更新，請重新登入" }, { status: 401 });
     if (!user.passwordHash) {
-      if (!await consumeOAuthReauth(prisma, session, await readOAuthCookie(OAUTH_REAUTH_COOKIE), "sessions")) return NextResponse.json({ error: "請先以已連結的第三方帳號重新驗證", code: "REAUTH_REQUIRED" }, { status: 401 });
-      await clearOAuthCookie(OAUTH_REAUTH_COOKIE);
-      const changed = await prisma.user.updateMany({ where: { id: user.id, memberId: session.memberId, passwordHash: null, sessionVersion: session.sessionVersion }, data: { sessionVersion: { increment: 1 } } });
-      if (changed.count !== 1) throw new SessionRevocationError("SESSION_CONFLICT");
+      const providerProof = await consumeOAuthReauth(prisma, session, await readOAuthCookie(OAUTH_REAUTH_COOKIE), "sessions");
+      if (providerProof) {
+        const changed = await prisma.user.updateMany({ where: { id: user.id, memberId: session.memberId, passwordHash: null, sessionVersion: session.sessionVersion }, data: { sessionVersion: { increment: 1 } } });
+        if (changed.count !== 1) throw new SessionRevocationError("SESSION_CONFLICT");
+      } else {
+        const proof = await readOAuthCookie(EMAIL_ACTION_COOKIE);
+        const authorized = await prisma.$transaction(async tx => {
+          const binding = await consumeEmailActionProofInTransaction(tx, session, proof, "sessions");
+          if (!binding) return false;
+          const changed = await tx.user.updateMany({ where: { id: user.id, memberId: session.memberId, passwordHash: null, sessionVersion: session.sessionVersion,
+            member: { status: "ACTIVE", deletedAt: null } }, data: { sessionVersion: { increment: 1 } } });
+          if (changed.count !== 1) throw new SessionRevocationError("SESSION_CONFLICT");
+          return true;
+        }, { isolationLevel: "Serializable" });
+        if (!authorized) return NextResponse.json({ error: "請先以已連結的本人驗證方式確認身分", code: "REAUTH_REQUIRED" }, { status: 401 });
+      }
+      await clearOAuthCookie(OAUTH_REAUTH_COOKIE); await clearOAuthCookie(EMAIL_ACTION_COOKIE);
       let currentSessionRetained = true;
       try { await createSession({ ...session, email: user.email, sessionVersion: session.sessionVersion + 1 }); }
       catch { await destroySession(); currentSessionRetained = false; }
@@ -38,6 +52,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, ...result, message: result.currentSessionRetained ? "其他裝置已登出，此裝置繼續使用" : "所有裝置已登出，請重新登入" });
   } catch (error) {
     if (error instanceof SessionRevocationError) return NextResponse.json({ error: error.code === "PASSWORD_INVALID" ? "密碼不正確" : "登入狀態已更新，請重新登入" }, { status: error.code === "PASSWORD_INVALID" ? 401 : 409 });
+    if (error && typeof error === "object" && "code" in error && error.code === "P2034") return NextResponse.json({ error: "身分同時更新，請重新驗證後操作" }, { status: 409 });
     if (error instanceof FederatedAuthError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     throw error;
   }

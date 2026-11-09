@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Avatar from "./Avatar";
@@ -9,6 +9,7 @@ import PasswordInput from "./PasswordInput";
 import { colorFromId } from "@/lib/avatar-color";
 import LinkedIdentitySettings from "./LinkedIdentitySettings";
 import FederatedAuthButtons, { useAuthMethods } from "./FederatedAuthButtons";
+import EmailActionReauth from "./EmailActionReauth";
 
 type Block = { member: { id: string; name: string; nickname: string | null; photoUrl: string | null }; createdAt: string };
 
@@ -24,10 +25,13 @@ export default function ProfileSecurityTools() {
   const [oauthBusy, setOauthBusy] = useState(false);
   const [unblock, setUnblock] = useState<Block | null>(null);
   const { methods, error: methodsError, reload: reloadMethods } = useAuthMethods();
+  const reauthReturnHandled = useRef(false);
   const canRevoke = methods?.hasPassword ? Boolean(password) : Boolean(methods?.reauthActions?.includes("sessions"));
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("oauth") === "reauthenticated") setOpen("sessions");
-  }, []);
+    if (reauthReturnHandled.current || !methods || methodsError) return;
+    reauthReturnHandled.current = true;
+    if (new URLSearchParams(window.location.search).get("oauth") === "reauthenticated" && methods.reauthActions.includes("sessions")) setOpen("sessions");
+  }, [methods, methodsError]);
 
   async function loadBlocks() {
     setLoading(true); setError("");
@@ -87,9 +91,10 @@ export default function ProfileSecurityTools() {
         <label htmlFor="revoke-sessions-password" className="block text-sm font-medium">目前密碼</label>
         <PasswordInput id="revoke-sessions-password" autoComplete="current-password" required value={password} disabled={busy} onChange={(event) => setPassword(event.target.value)} className="min-h-12 w-full rounded-xl border border-lion-border bg-lion-page px-3 text-base" />
       </> : methods ? <>
+        {methods.emailActionReauth?.available && methods.emailActionReauth.maskedEmail && methods.memberId && !methods.reauthActions.includes("sessions") ? <EmailActionReauth memberId={methods.memberId} action="sessions" maskedEmail={methods.emailActionReauth.maskedEmail} disabled={busy || oauthBusy} onVerified={reloadMethods} /> : null}
         <FederatedAuthButtons purpose="reauth" reauthAction="sessions" disabled={busy || oauthBusy} onBusyChange={setOauthBusy} allowedProviders={methods.identities.filter((identity) => identity.reauthAvailable !== false).map((identity) => identity.provider)} />
         {methods.identities.filter((identity) => identity.reauthAvailable === false).map((identity) => <p key={identity.provider} className="text-sm text-lion-muted">{identity.reauthReason || "此第三方重新驗證暫不可用。"}</p>)}
-        <p className="text-sm">{canRevoke ? "第三方本人驗證已完成，請再按下方確認。" : "先重新驗證，再回本頁確認撤銷。驗證本身不會執行撤銷。"}</p>
+        <p className="text-sm">{canRevoke ? "本人驗證已完成，請再按下方確認。" : "先重新驗證，再回本頁確認撤銷。驗證本身不會執行撤銷。"}</p>
       </> : <p role="status">確認登入方式中…</p>}
       {methodsError && <><p role="alert" className="text-base text-lion-danger">{methodsError}</p><button type="button" onClick={reloadMethods} className="min-h-12 text-lion-gold underline">重新載入</button></>}
       {error && <p role="alert" className="text-base text-lion-danger">{error}</p>}

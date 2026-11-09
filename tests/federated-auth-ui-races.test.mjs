@@ -25,7 +25,7 @@ function realClient() {
   return module.exports;
 }
 
-function harness(file, { client = {}, props = {}, search = "", fetcher = () => { throw Error("Unexpected fetch"); }, exported = "default" } = {}) {
+function harness(file, { client = {}, props = {}, search = "", fetcher = () => { throw Error("Unexpected fetch"); }, exported = "default", authMethods = () => ({ methods: null, error: "", reload() {} }) } = {}) {
   const hooks = []; const pendingEffects = [];
   let cursor = 0, mounted = true, tree, writesAfterUnmount = 0;
   const navigation = [], redirects = [], busy = [];
@@ -59,6 +59,9 @@ function harness(file, { client = {}, props = {}, search = "", fetcher = () => {
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: Symbol("Fragment") };
       if (name === "next/navigation") return { useRouter: () => router, useSearchParams: () => parameters };
       if (name === "@/lib/federated-auth-client") return dependencies;
+      if (name === "./FederatedAuthButtons") return { __esModule: true, default: placeholder, oauthErrorMessage: dependencies.oauthErrorMessage, useAuthMethods: authMethods };
+      if (["./PasswordInput", "./Avatar", "./AccessibleDialog", "./LinkedIdentitySettings", "./EmailActionReauth"].includes(name)) return { __esModule: true, default: placeholder };
+      if (name === "@/lib/avatar-color") return { colorFromId: () => "#123456" };
       if (name === "@/lib/mock-data") return { memberTitleOptions: [], tagOptions: [] };
       if (name === "next/link" || name === "@/components/PasswordInput" || name === "@/components/FederatedAuthButtons") return { __esModule: true, default: placeholder };
       throw Error(`Unapproved UI test dependency: ${name}`);
@@ -160,4 +163,53 @@ test("successful cancellation returns to login only after confirmation and never
   const { h, posts } = registerHarness(async () => ({ pending: true, provider: "google", email: "synthetic@example.test", hasInvite: true }), () => cancel.promise);
   await h.flush(); h.button("取消驗證／更換帳號").props.onClick(); assert.deepEqual(h.navigation, []);
   cancel.resolve(); await h.flush(); assert.deepEqual(h.navigation, [["replace", "/login"]]); assert.equal(posts.length, 0); h.unmount();
+});
+
+const securityMethods = (reauthActions = []) => ({ hasPassword: false, available: true, reauthenticated: reauthActions.length > 0,
+  reauthActions, identities: [{ provider: "apple", email: "synthetic@example.test", reauthAvailable: false }] });
+
+test("a reauth return URL cannot claim success before the server confirms an unexpired action proof", async () => {
+  let methods = null, error = "";
+  const h = harness("src/components/LinkedIdentitySettings.tsx", { search: "?oauth=reauthenticated", authMethods: () => ({ methods, error, reload() {} }) });
+  await h.flush();
+  assert.ok(text(h.render()).includes("正在確認本人驗證狀態"));
+  assert.ok(!text(h.render()).includes("本人驗證已確認"));
+  methods = securityMethods(); await h.flush();
+  assert.ok(text(h.render()).includes("本人驗證已失效或尚未完成"));
+  assert.ok(!text(h.render()).includes("本人驗證已確認"));
+  assert.ok(!text(h.render()).includes("五分鐘內可確認安全操作"));
+  error = "synthetic server lookup failure"; await h.flush();
+  assert.ok(text(h.render()).includes("目前無法確認本人驗證"));
+  h.unmount();
+});
+
+test("a confirmed deletion proof is described only for deletion and cannot enable identity linking", async () => {
+  const methods = securityMethods(["delete"]);
+  const h = harness("src/components/LinkedIdentitySettings.tsx", { search: "?oauth=reauthenticated", authMethods: () => ({ methods, error: "", reload() {} }) });
+  await h.flush();
+  const confirmation = h.nodes().find(node => node.props?.role === "status" && text(node).includes("本人驗證已確認"));
+  assert.ok(text(confirmation).includes("刪除帳號")); assert.ok(!text(confirmation).includes("連結另一種登入方式"));
+  h.nodes().find(node => node.type === "input" && node.props.type === "checkbox").props.onChange({ target: { checked: true } }); await h.flush();
+  assert.equal(h.nodes().find(node => node.props?.purpose === "link").props.disabled, true);
+  h.unmount();
+});
+
+test("security return opens the sessions panel only after a server-verified sessions proof and never submits it", async () => {
+  const requests = []; let methods = null;
+  const h = harness("src/components/ProfileSecurityTools.tsx", { search: "?oauth=reauthenticated",
+    authMethods: () => ({ methods, error: "", reload() {} }), fetcher: async path => { requests.push(path); throw Error("No mutation may run on return"); } });
+  await h.flush(); assert.ok(!h.nodes().some(node => node.type === "form"));
+  methods = securityMethods(["sessions"]); await h.flush();
+  assert.ok(h.nodes().some(node => node.type === "form")); assert.equal(h.button("確認登出其他裝置").props.disabled, false);
+  assert.deepEqual(requests, []); assert.deepEqual(h.navigation, []);
+  h.unmount();
+});
+
+test("spoofed or unrelated reauth returns cannot open the sessions panel", async () => {
+  for (const [actions, search, error] of [[[], "?oauth=reauthenticated", ""], [["link"], "?oauth=reauthenticated", ""],
+    [["delete"], "?oauth=reauthenticated", ""], [["sessions"], "?oauth=reauthenticated", "synthetic lookup failure"], [["sessions"], "", ""]]) {
+    const h = harness("src/components/ProfileSecurityTools.tsx", { search, authMethods: () => ({ methods: securityMethods(actions), error, reload() {} }) });
+    await h.flush(); assert.ok(!h.nodes().some(node => node.type === "form"), `${actions}: ${search}: ${error}`);
+    h.unmount();
+  }
 });

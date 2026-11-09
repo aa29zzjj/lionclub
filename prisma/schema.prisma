@@ -127,6 +127,7 @@ model Member {
   mobilePushDevices MobilePushDevice[]
   mobilePushReceipts MobilePushReceipt[] @relation("PushReceiptRecipient")
   mobilePushReceiptsAuthored MobilePushReceipt[] @relation("PushReceiptActor")
+  emailActionChallenges EmailActionChallenge[]
 
   issuedInvites ClubInvite[] @relation("InviteIssuedBy")
 
@@ -183,6 +184,7 @@ model User {
   oauthTransactions OAuthTransaction[]
   mobilePushDevices MobilePushDevice[]
   mobilePushReceipts MobilePushReceipt[]
+  emailActionChallenges EmailActionChallenge[]
 }
 
 model MemberDataConsent {
@@ -204,12 +206,44 @@ model FederatedIdentity {
   provider String
   subject String
   email String
+  securityEmailVerifiedAt DateTime? // Set only after a newly verified Apple authorization; legacy rows are not backfilled.
   refreshTokenCiphertext String? // Apple revocation token, AES-256-GCM encrypted
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  emailActionChallenges EmailActionChallenge[]
 
   @@unique([provider, subject])
   @@unique([userId, provider])
+}
+
+// Separate from provider authentication: a code sent to an immutable,
+// provider-attested contact authorizes one explicit sensitive action only.
+model EmailActionChallenge {
+  id String @id @db.Uuid
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  sessionVersion Int
+  identityId String
+  identity FederatedIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  identityUpdatedAt DateTime
+  identityVerifiedAt DateTime
+  email String
+  action String
+  codeHash String? @db.Char(64)
+  deliveryState String @default("PENDING")
+  attempts Int @default(0)
+  expiresAt DateTime
+  verifiedAt DateTime?
+  invalidatedAt DateTime?
+  proofHash String? @unique @db.Char(64)
+  proofExpiresAt DateTime?
+  proofUsedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, action, createdAt])
+  @@index([expiresAt])
 }
 
 // Short-lived, browser-bound, one-use authorization/registration/reauth state.
@@ -238,6 +272,7 @@ model OAuthTransaction {
   reauthExpiresAt DateTime?
   reauthUsedAt DateTime?
   reauthAction String? // which sensitive action ("link" | "sessions" | "delete") this proof may authorize; consumeOAuthReauth must match it exactly
+  emailActionChallengeId String? @db.Uuid // Consumed email step-up for web linking; missing/expired source must fail closed.
   nativeRedirectUri String? // set only for native-app flows; web flows stay null and keep today's cookie-session completion
   nativeState String? // app-generated state; independent of the provider's state/nonce
   nativeCodeChallenge String? // app S256 challenge, never its verifier

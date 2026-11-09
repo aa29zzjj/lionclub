@@ -10,6 +10,7 @@ import { consumeRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { consumeOAuthReauth, revokeLinkedAppleBeforeDeletion } from "@/lib/federated-auth-service";
 import { FederatedAuthError } from "@/lib/federated-auth";
 import { OAUTH_REAUTH_COOKIE, clearOAuthCookie, readOAuthCookie } from "@/lib/federated-auth-http";
+import { EMAIL_ACTION_COOKIE, consumeEmailActionProof, type EmailActionAuthorization } from "@/lib/email-action-reauth";
 
 const bodySchema = z.object({ password: z.string().min(1).max(200).optional() });
 
@@ -34,20 +35,25 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "找不到帳號" }, { status: 404 });
 
   try {
+    let emailAuthorization: EmailActionAuthorization | null = null;
     if (user.passwordHash) {
       if (!parsed.data.password) return NextResponse.json({ error: "請輸入密碼確認" }, { status: 400 });
       if (!await bcrypt.compare(parsed.data.password, user.passwordHash)) return NextResponse.json({ error: "密碼不正確" }, { status: 401 });
     } else {
-      if (!await consumeOAuthReauth(prisma, session, await readOAuthCookie(OAUTH_REAUTH_COOKIE), "delete")) return NextResponse.json({ error: "請先以已連結的第三方帳號重新驗證本人身分", code: "REAUTH_REQUIRED" }, { status: 401 });
+      if (!await consumeOAuthReauth(prisma, session, await readOAuthCookie(OAUTH_REAUTH_COOKIE), "delete")) {
+        emailAuthorization = await consumeEmailActionProof(prisma, session, await readOAuthCookie(EMAIL_ACTION_COOKIE), "delete");
+        if (!emailAuthorization) return NextResponse.json({ error: "請先以已連結的本人驗證方式確認身分", code: "REAUTH_REQUIRED" }, { status: 401 });
+      }
       await clearOAuthCookie(OAUTH_REAUTH_COOKIE);
+      await clearOAuthCookie(EMAIL_ACTION_COOKIE);
     }
     // Avoid revoking Apple while a known handoff blocker already prevents deletion.
     const now = new Date();
     if (await prisma.adminRole.count({ where: { memberId: me.id, OR: [{ validUntil: null }, { validUntil: { gt: now } }] } })) throw new AccountDeletionError(409, "您仍持有有效或預定的幹部權限，請先由其他管理者撤銷後再刪除帳號");
     if (await prisma.event.count({ where: { createdById: me.id, startAt: { gte: now } } })) throw new AccountDeletionError(409, "您有尚未開始的活動，請先安排交接後再刪除帳號");
-    const identities = await revokeLinkedAppleBeforeDeletion(prisma, user.id);
+    const identities = await revokeLinkedAppleBeforeDeletion(prisma, user.id, undefined, undefined, emailAuthorization ?? undefined);
     const result = await anonymizeAccount(prisma, { memberId: me.id, userId: user.id, expectedPasswordHash: user.passwordHash,
-      expectedSessionVersion: session.sessionVersion, expectedFederatedIdentities: identities,
+      expectedSessionVersion: session.sessionVersion, expectedFederatedIdentities: identities, emailActionChallengeId: emailAuthorization?.id,
       bucket: process.env.AVATAR_BUCKET_NAME, region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-northeast-1" });
     await destroySession();
     return NextResponse.json(result);

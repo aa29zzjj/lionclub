@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { assertConsumedEmailAction } from "./email-action-reauth";
 
 export class AccountDeletionError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -14,7 +15,7 @@ export class AccountDeletionError extends Error {
  */
 export async function anonymizeAccount(
   prisma: PrismaClient,
-  input: { memberId: string; userId: string; expectedPasswordHash: string | null; expectedSessionVersion?: number; expectedFederatedIdentities?: { id: string; updatedAt: Date }[]; bucket?: string; region?: string },
+  input: { memberId: string; userId: string; expectedPasswordHash: string | null; expectedSessionVersion?: number; expectedFederatedIdentities?: { id: string; updatedAt: Date }[]; emailActionChallengeId?: string; bucket?: string; region?: string },
 ) {
   if (!/^[A-Za-z0-9_-]{1,200}$/.test(input.memberId)) throw new AccountDeletionError(400, "會員識別格式錯誤");
   try {
@@ -35,6 +36,12 @@ export async function anonymizeAccount(
       if (activeRoles) throw new AccountDeletionError(409, "您仍持有有效或預定的幹部權限，請先由其他管理者撤銷後再刪除帳號");
       const upcomingEvents = await tx.event.count({ where: { createdById: input.memberId, startAt: { gte: now } } });
       if (upcomingEvents) throw new AccountDeletionError(409, "您有尚未開始的活動，請先刪除或請其他幹部接手該活動後再刪除帳號");
+
+      if (input.emailActionChallengeId) {
+        if (input.expectedSessionVersion === undefined || input.expectedPasswordHash !== null) throw new AccountDeletionError(409, "本人驗證與操作不符，尚未刪除帳號。");
+        try { await assertConsumedEmailAction(tx, { userId: input.userId, memberId: input.memberId, sessionVersion: input.expectedSessionVersion, email: "" }, input.emailActionChallengeId, "delete"); }
+        catch { throw new AccountDeletionError(409, "本人驗證已更新或到期，尚未刪除帳號；請重新驗證後確認。"); }
+      }
 
       await tx.memberExperience.deleteMany({ where: { memberId: input.memberId } });
       await tx.friendship.deleteMany({ where: { OR: [{ requesterId: input.memberId }, { addresseeId: input.memberId }] } });

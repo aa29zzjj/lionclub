@@ -6,12 +6,13 @@ import { authorizationUrl, encryptProviderToken, exchangeProviderCode, Federated
 import type { AuthProvider, OAuthPurpose, ProviderConfig } from "./federated-auth";
 import type { OAuthRuntimeSettings } from "./runtime-secrets";
 import { OAUTH_DATA_VERSION } from "./federated-auth";
-import { resolveOAuthRuntimeSettings, resolveProviderConfig } from "./federated-auth-runtime";
+import { resolveAppleRevocationConfig, resolveOAuthRuntimeSettings, resolveProviderConfig } from "./federated-auth-runtime";
+import { assertConsumedEmailAction, emailActionIdentityMatches, type EmailActionAuthorization } from "./email-action-reauth";
 import { cancelNativeOAuthClaim, isNativeOAuthBinding, NativeOAuthClaimFailure, NATIVE_OAUTH_REDIRECT_URI, NATIVE_OAUTH_HANDOFF_SECONDS, requireNativeOAuthV2, type NativeOAuthBinding } from "./mobile-oauth";
 
 const invalid = () => new FederatedAuthError(400, "OAUTH_EXPIRED", "驗證已失效或已使用，請重新開始");
 const completedScrub = { subject: null, email: null, providerName: null, refreshTokenCiphertext: null, inviteToken: null, codeVerifier: null, nonce: "", browserHash: "",
-  nativeState: null, nativeCodeChallenge: null, nativeHandoffHash: null, nativeHandoffExpiresAt: null, nativeHandoffUsedAt: null };
+  nativeState: null, nativeCodeChallenge: null, nativeHandoffHash: null, nativeHandoffExpiresAt: null, nativeHandoffUsedAt: null, emailActionChallengeId: null };
 /** Bounded housekeeping only; expiry is not a promise of physical deletion. */
 export async function cleanupExpiredOAuthTransactions(prisma: PrismaClient, limit = 25, now = new Date(), apply = true) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) throw new Error("INVALID_OAUTH_CLEANUP_LIMIT");
@@ -33,7 +34,7 @@ async function activeUser(prisma: PrismaClient, session: SessionPayload) {
 export type ReauthAction = "link" | "sessions" | "delete";
 export async function beginOAuth(prisma: PrismaClient, provider: AuthProvider, purpose: OAuthPurpose, browserSecret: string,
   session: SessionPayload | null, confirmedExisting = false, now = new Date(), inviteToken?: string, configuration?: ProviderConfig | null,
-  nativeRedirectUri?: string, reauthAction?: ReauthAction, nativeBinding?: NativeOAuthBinding) {
+  nativeRedirectUri?: string, reauthAction?: ReauthAction, nativeBinding?: NativeOAuthBinding, emailActionChallengeId?: string) {
   const config = configuration === undefined ? await resolveProviderConfig(provider) : configuration;
   if (!config) throw new FederatedAuthError(503, "PROVIDER_DISABLED", "此第三方登入尚未完成設定");
   if (!validOAuthSecret(browserSecret)) throw invalid();
@@ -45,6 +46,10 @@ export async function beginOAuth(prisma: PrismaClient, provider: AuthProvider, p
     if (nativeRedirectUri !== NATIVE_OAUTH_REDIRECT_URI || !validOAuthSecret(nativeBinding?.state) || !validOAuthSecret(nativeBinding?.codeChallenge)) throw invalid();
   } else if (nativeBinding !== undefined) throw invalid();
   if (purpose !== "reauth" && reauthAction !== undefined) throw invalid();
+  if (emailActionChallengeId !== undefined) {
+    if (purpose !== "link" || !session || !confirmedExisting || nativeRedirectUri !== undefined) throw invalid();
+    await assertConsumedEmailAction(prisma, session, emailActionChallengeId, "link");
+  }
   await cleanupExpiredOAuthTransactions(prisma);
   if (inviteToken) {
     const invite = await prisma.clubInvite.findFirst({ where: { token: inviteToken, revokedAt: null, validFrom: { lte: now }, validUntil: { gte: now }, organization: { level: "club", isActive: true } } });
@@ -69,7 +74,7 @@ export async function beginOAuth(prisma: PrismaClient, provider: AuthProvider, p
     nonce, codeVerifier: provider === "google" ? verifier : null, inviteToken: purpose === "login" ? inviteToken : null, userId: purpose === "login" ? null : session!.userId,
     sessionVersion: purpose === "login" ? null : session!.sessionVersion, expiresAt: new Date(now.getTime() + 10 * 60_000),
     nativeRedirectUri: nativeRedirectUri ?? null, nativeState: nativeBinding?.state, nativeCodeChallenge: nativeBinding?.codeChallenge,
-    reauthAction: purpose === "reauth" ? reauthAction : null } });
+    reauthAction: purpose === "reauth" ? reauthAction : null, emailActionChallengeId: emailActionChallengeId ?? null } });
   return { authorizationUrl: authorizationUrl(config, state, nonce, verifier, purpose), ...(nativeBinding ? { nativeTransactionId: transaction.id } : {}) };
 }
 export async function readOAuthTransaction(prisma: PrismaClient, state: string, browserSecret: string, now = new Date()) {
@@ -142,11 +147,13 @@ export async function finishOAuth(prisma: PrismaClient, state: string, browserSe
     if (row.purpose === "link") {
       if (!session || row.userId !== session.userId || row.sessionVersion !== session.sessionVersion) throw invalid();
       await activeUser(tx as PrismaClient, session);
+      if (row.emailActionChallengeId) await assertConsumedEmailAction(tx, session, row.emailActionChallengeId, "link");
       if (identity && identity.userId !== session.userId) throw new FederatedAuthError(409, "IDENTITY_ALREADY_LINKED", "此第三方身分已連結其他帳號");
       const other = await tx.federatedIdentity.findUnique({ where: { userId_provider: { userId: session.userId, provider: row.provider } } });
       if (other && other.subject !== row.subject) throw new FederatedAuthError(409, "PROVIDER_ALREADY_LINKED", "此帳號已連結另一個同服務身分，不能自動替換");
-      if (!other) await tx.federatedIdentity.create({ data: { userId: session.userId, provider: row.provider, subject: row.subject, email: row.email, refreshTokenCiphertext: row.refreshTokenCiphertext } });
-      else if (row.refreshTokenCiphertext) await tx.federatedIdentity.update({ where: { id: other.id }, data: { refreshTokenCiphertext: row.refreshTokenCiphertext } });
+      const verifiedContact = row.provider === "apple" ? { email: row.email, securityEmailVerifiedAt: row.verifiedAt } : {};
+      if (!other) await tx.federatedIdentity.create({ data: { userId: session.userId, provider: row.provider, subject: row.subject, email: row.email, refreshTokenCiphertext: row.refreshTokenCiphertext, ...verifiedContact } });
+      else if (row.refreshTokenCiphertext) await tx.federatedIdentity.update({ where: { id: other.id }, data: { refreshTokenCiphertext: row.refreshTokenCiphertext, ...verifiedContact } });
       await tx.memberDataConsent.upsert({ where: { memberId_purpose_version: { memberId: session.memberId, purpose: "federated_auth", version: OAUTH_DATA_VERSION } },
         create: { memberId: session.memberId, purpose: "federated_auth", version: OAUTH_DATA_VERSION }, update: {} });
       await claimCompleted(tx as PrismaClient, row.id);
@@ -159,7 +166,8 @@ export async function finishOAuth(prisma: PrismaClient, state: string, browserSe
       const proof = randomOAuthSecret();
       if (row.verifiedAt.getTime() < Date.now() - 5 * 60_000) throw invalid();
       await claimCompleted(tx as PrismaClient, row.id, { reauthHash: hashOAuthSecret(proof), reauthExpiresAt: new Date(row.verifiedAt.getTime() + 5 * 60_000) });
-      if (row.refreshTokenCiphertext) await tx.federatedIdentity.update({ where: { id: identity!.id }, data: { refreshTokenCiphertext: row.refreshTokenCiphertext } });
+      if (row.refreshTokenCiphertext) await tx.federatedIdentity.update({ where: { id: identity!.id }, data: { refreshTokenCiphertext: row.refreshTokenCiphertext,
+        ...(row.provider === "apple" ? { email: row.email, securityEmailVerifiedAt: row.verifiedAt } : {}) } });
       return { kind: "reauthenticated" as const, proof };
     }
     if (row.purpose !== "login") throw invalid();
@@ -167,7 +175,8 @@ export async function finishOAuth(prisma: PrismaClient, state: string, browserSe
     await claimCompleted(tx as PrismaClient, row.id, { userId: user.id, sessionVersion: user.sessionVersion,
       ...(nativeHandoff ? { nativeState: row.nativeState, nativeCodeChallenge: row.nativeCodeChallenge,
         nativeHandoffHash: hashOAuthSecret(nativeHandoff.code), nativeHandoffExpiresAt: new Date(Math.min(+row.expiresAt, +issuedAt + NATIVE_OAUTH_HANDOFF_SECONDS * 1000)) } : {}) });
-    if (row.refreshTokenCiphertext) await tx.federatedIdentity.update({ where: { id: identity!.id }, data: { refreshTokenCiphertext: row.refreshTokenCiphertext } });
+    if (row.refreshTokenCiphertext) await tx.federatedIdentity.update({ where: { id: identity!.id }, data: { refreshTokenCiphertext: row.refreshTokenCiphertext,
+      ...(row.provider === "apple" ? { email: row.email, securityEmailVerifiedAt: row.verifiedAt } : {}) } });
     return { kind: "login" as const, session: { userId: user.id, memberId: user.member.id, email: user.email, sessionVersion: user.sessionVersion } };
   }, { isolationLevel: "Serializable" });
 }
@@ -187,15 +196,30 @@ export async function consumeOAuthReauth(prisma: PrismaClient, session: SessionP
   return claimed.count === 1;
 }
 export async function revokeLinkedAppleBeforeDeletion(prisma: PrismaClient, userId: string, revoke = revokeAppleToken,
-  resolveAppleConfig: () => Promise<ProviderConfig | null> = () => resolveProviderConfig("apple")) {
+  resolveAppleConfig: () => Promise<ProviderConfig | null> = resolveAppleRevocationConfig, expectedEmailAction?: EmailActionAuthorization) {
+  const recheckEmailAction = async () => {
+    if (!expectedEmailAction) return;
+    if (expectedEmailAction.userId !== userId) throw new FederatedAuthError(409, "SESSION_CHANGED", "本人驗證身分已更新，尚未刪除帳號。");
+    try { await assertConsumedEmailAction(prisma, { userId, memberId: expectedEmailAction.memberId,
+      sessionVersion: expectedEmailAction.sessionVersion, email: "" }, expectedEmailAction.id, "delete"); }
+    catch { throw new FederatedAuthError(409, "SESSION_CHANGED", "本人驗證身分已更新，尚未刪除帳號；請重新確認。"); }
+  };
+  await recheckEmailAction();
   let identities;
-  try { identities = await prisma.federatedIdentity.findMany({ where: { userId }, select: { id: true, provider: true, refreshTokenCiphertext: true, updatedAt: true } }); }
+  try { identities = await prisma.federatedIdentity.findMany({ where: { userId }, select: { id: true, provider: true, refreshTokenCiphertext: true, updatedAt: true,
+    email: true, securityEmailVerifiedAt: true } }); }
   catch (error) { if (isMissingFederatedTable(error)) return undefined; throw error; }
+  if (expectedEmailAction && (expectedEmailAction.userId !== userId || identities.length !== 1
+    || !emailActionIdentityMatches(expectedEmailAction, identities[0]))) throw new FederatedAuthError(409, "SESSION_CHANGED", "本人驗證身分已更新，尚未刪除帳號；請重新確認。");
   for (const identity of identities.filter(item => item.provider === "apple")) {
-    const config = await resolveAppleConfig();
+    let config;
+    try { config = await resolveAppleConfig(); }
+    catch { throw new FederatedAuthError(503, "APPLE_REVOCATION_UNAVAILABLE", "Apple 授權撤銷設定暫不可用，尚未刪除帳號。"); }
     if (!config || !identity.refreshTokenCiphertext) throw new FederatedAuthError(503, "APPLE_REVOCATION_UNAVAILABLE", "Apple 授權撤銷服務尚未可用，尚未刪除帳號；請稍後再試");
+    await recheckEmailAction();
     try { await revoke(identity.refreshTokenCiphertext, config); }
     catch { throw new FederatedAuthError(503, "APPLE_REVOCATION_FAILED", "Apple 授權撤銷暫時失敗，尚未刪除帳號；請重新驗證後再試"); }
+    await recheckEmailAction();
   }
   return identities.map(({ id, updatedAt }) => ({ id, updatedAt }));
 }

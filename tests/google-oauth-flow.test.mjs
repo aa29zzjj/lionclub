@@ -268,7 +268,7 @@ test("Google signed-JWT route/SQL flow preserves invitation, consent and identit
       // test-owned DB's tables so any attempted query would fail rather than
       // silently pass through a populated fixture. Existing local auth is not
       // exercised while its tables are absent.
-      await sim.database.exec('DROP TABLE "OAuthTransaction"; DROP TABLE "FederatedIdentity"; DROP TABLE "RateLimitAttempt";');
+      await sim.database.exec('DROP TABLE "EmailActionChallenge"; DROP TABLE "OAuthTransaction"; DROP TABLE "FederatedIdentity"; DROP TABLE "RateLimitAttempt";');
       const providers = await sim.call("/api/auth/providers");
       assert.equal(providers.status, 200);
       assert.equal(providers.data.providers.find((row) => row.id === "google").enabled, false);

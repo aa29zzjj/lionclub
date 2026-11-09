@@ -4,6 +4,8 @@ export type OAuthPurpose = "login" | "link" | "reauth";
 export type ReauthAction = "link" | "sessions" | "delete";
 export type PublicProvider = { id: AuthProvider; name: string; enabled: boolean; reasonCode?: string };
 export type AuthMethods = {
+  memberId?: string;
+  emailActionReauth?: { available: boolean; maskedEmail?: string };
   hasPassword: boolean; available: boolean;
   identities: { provider: AuthProvider; email: string | null; reauthAvailable: boolean; reauthReason?: string }[];
   reauthenticated: boolean; reauthActions: ("link" | "sessions" | "delete")[];
@@ -87,8 +89,16 @@ export async function readAuthMethods(transport: Transport = fetch, signal?: Abo
   });
   if (identities.length > 2 || new Set(identities.map((entry) => entry.provider)).size !== identities.length) throw new OAuthClientError("OAUTH_RESPONSE_INVALID");
   const reauthActions = (Array.isArray(data.reauthActions) ? data.reauthActions : []).filter((value): value is "link" | "sessions" | "delete" => value === "link" || value === "sessions" || value === "delete");
+  let emailActionReauth: AuthMethods["emailActionReauth"];
+  if (data.emailActionReauth !== undefined) {
+    const value = data.emailActionReauth;
+    if (!object(value) || typeof value.available !== "boolean" || value.available && (typeof value.maskedEmail !== "string"
+      || value.maskedEmail.length > 254 || !value.maskedEmail.includes("***@") || typeof data.memberId !== "string" || !data.memberId)) throw new OAuthClientError("OAUTH_RESPONSE_INVALID");
+    emailActionReauth = { available: value.available, ...(value.available ? { maskedEmail: value.maskedEmail as string } : {}) };
+  }
   return { hasPassword: data.hasPassword, identities, available: data.available === true,
-    reauthenticated: data.reauthenticated === true && reauthActions.length > 0, reauthActions };
+    reauthenticated: data.reauthenticated === true && reauthActions.length > 0, reauthActions,
+    ...(typeof data.memberId === "string" ? { memberId: data.memberId } : {}), ...(emailActionReauth ? { emailActionReauth } : {}) };
 }
 
 export async function readPendingFederatedProfile(transport: Transport = fetch, signal?: AbortSignal): Promise<PendingFederatedProfile> {
