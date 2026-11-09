@@ -26,7 +26,7 @@ Web 待審表單本身仍有預設今天的既有行為，本輪沒有重寫該 
 - 所有介面資料均為合成資料，CSP 禁止網路，條款同意、會員審核、發布及帳號寫入均拒絕；沒有對正式會員執行操作。日期／時間欄位以原生控制項操作核對。
 - 模擬前景切換及帳號交錯由純邏輯／真實 client 的注入式測試驗證；不代表相機、APNs、Google／Apple 真實登入、iPad 或真機驗收完成。
 
-## 簽章與發行描述檔已就緒，正在完成簽署
+## 簽章與發行描述檔已就緒，IPA 驗證通過
 
 使用者完成登入後，Xcode 已顯示 **Prepmate AI inc.／Admin** 團隊與 Certificates, Identifiers, & Profiles。最初三張既有 **Apple Distribution** 均為 **Not in Keychain**、本機 **0 valid identities**。接續已依使用者提供的 `.p12` 完成既有憑證及配對私鑰匯入；鑰匙圈「我的憑證」可展開看到配對的 Imported Private Key。
 
@@ -36,12 +36,16 @@ Developer 已重新登入。原有 Profiles 清單沒有 LionClubs；使用者�
 
 App Store Connect 的 TestFlight 上傳清單已唯讀確認最新為 **1.0.1（5）**，上傳完成時間顯示 Nov 5, 2026；清單沒有更高或處理中的建置。這次候選採 **1.0.1（6）**，在獨立本機 iOS 建置副本中只設定 App target 的 Release 簽章／版本；避免把 App 的描述檔套用到共用套件，主工作樹工程未綁死此機的 profile。
 
-簽署已啟動，目前停在 macOS 允許 codesign 使用 Imported Private Key 的驗證，需持有人在本機輸入登入密碼並按「允許」。尚未完成 signed Archive／IPA，也尚未上傳。通過後仍需簽章／權限／資源雜湊驗證、配套後端及 TestFlight 真機驗收，再送商店更新。當下簽章快照見 `output/acceptance/native-followup-20261109/SIGNING_STATUS.json`；較早的 `EVIDENCE.json` 保留當時 unsigned 建置的原始紀錄。
+持有人已完成 codesign 私鑰使用驗證，**signed Archive 與 IPA 匯出均成功**。兩者通過 strict／deep code signature、Team／Bundle ID／1.0.1（6）／指定 leaf certificate／profile 的驗證；最終 `aps-environment=production`、`get-task-allow=false`。來源、Archive 與 IPA 的 `app.js`、`app.css`、`index.html` SHA-256 完全相同。
+
+已簽署 IPA：`output/releases/LionClubs-iOS-1.0.1-build6-2026-11-09.ipa`（5,053,332 bytes），SHA-256 `d180332825645488f80515baea16b56b92bcaf721c633f960fb20c4a49778328`。尚未上傳、分發 TestFlight 或提交商店。接著須完成配套後端、舊版相容安排及真機驗收，不能以簽章成功代表已可公開發行。
+
+簽署證據見 `output/acceptance/native-followup-20261109/SIGNED_PACKAGE_EVIDENCE.json` 與 `SIGNED_IPA_VALIDATION.json`；`SIGNING_STATUS.json` 已更新。較早的 `EVIDENCE.json` 保留當時 unsigned 建置的原始紀錄。
 
 ## 仍保留的發行關卡
 
 1. **配套後端及 migration**：11 月 7 日的 native OAuth v2 migration 必須先於新後端；即使旗標關閉，共用 Web OAuth 仍會讀新增欄位。不能單獨部署會拒絕舊原生協定的新後端；需安排舊版影響、新 App 與回復方案。本輪新增條款及待審會員欄位亦須與候選後端配套。
-2. **Google／Apple 實際驗收**：正式環境開旗、第三方同意及帳號連結、取消／冷啟動／換帳號仍待真實驗收。Apple-only 敏感操作與刪帳所需 fresh reauth gate 仍未完成，不能因入口存在就宣稱可上線。
+2. **Google／Apple 實際驗收**：正式環境開旗、第三方同意及帳號連結、取消／冷啟動／換帳號仍待真實驗收。本輪公開 providers 回覆 Google=true、Apple=false／APPLE_UNAVAILABLE。Apple config 未提供 fresh reauth，不能只改旗標便宣稱完成。本機另實作預設關閉的 Apple-only 信箱本人驗證，限定既有經 Apple 驗證的登入信箱、本人及指定操作；這不是 Apple 密碼／Face ID 重新驗證。最終刪帳交易重查原驗證，失效競態的隔離測試通過。仍須先部署新增 schema，驗收真實 Apple 隱藏信箱收信、連結／撤銷裝置／刪帳及 Apple 憑證撤銷，才能開放此替代方式。無密碼的舊 OAuth 帳號也不能假定可用忘記密碼救援；舊版更新安排必須照顧這類帳號。
 3. **真機測試**：通知每個按鈕、原生相機／圖片上傳、鍵盤及大字、背景返回、APNs 登記／接收／點擊及登出停用，需在候選 iPhone／iPad 與配套後端驗收。舊 App Store 黑畫面尚未取得可重現記錄，不能宣稱已證明單一根因。
 4. **完整功能差異**：原生註冊／忘記密碼、活動編輯／刪除、月曆／組織目錄、會籍分派及部分管理流程等仍見固定基線矩陣。這次修掉其中活動授權、條款及歷史日期等缺口，兩端仍非完全一致。
 5. **隱私與資料收集**：仍須依最終實作核對政策、商店標示、推播託管及保留。CloudWatch 保留期限維持使用者「暫不變更，交 Jerry 確認」，未刪除日誌；隔離公開審查環境額外 AWS 預算仍未確認。
