@@ -4,6 +4,7 @@ import { generateMemberNo } from "./member-no";
 import { PRIVACY_POLICY_VERSION } from "./privacy-policy";
 import { TERMS_VERSION } from "./terms";
 import { OAUTH_DATA_VERSION } from "./federated-auth";
+import { registrationTargetsInvitedClub } from "./club-registration-policy";
 
 type Database = PrismaClient | Prisma.TransactionClient;
 export const ASSIGNMENT_MANAGER_ROLES = ["CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
@@ -63,7 +64,6 @@ export async function createCentralMember(
   // Never authorize by PIN or a retired open-mode flag. Legacy QR tokens stay valid.
   if (!input.token) throw new OnboardingError(400, "請掃描共同邀請 QR Code 開啟註冊頁面");
   const token = input.token;
-  const intake = await getIntakeOrganization(prisma);
   // Retry serializable conflicts; member number and invite quota share this transaction.
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -79,8 +79,6 @@ export async function createCentralMember(
           const claimed = await tx.oAuthTransaction.updateMany({ where: { id: oauth.id, completedAt: null, expiresAt: { gt: now } }, data: { completedAt: now } });
           if (claimed.count !== 1) throw new OnboardingError(400, "第三方驗證已使用，請重新開始");
         }
-        const activeIntake = await tx.organization.findFirst({ where: { id: intake.id, level: "club", isActive: true } });
-        if (!activeIntake) throw new OnboardingError(503, "中央註冊分會暫時無法使用");
         const duplicate = await tx.user.findFirst({ where: { email: { equals: input.email, mode: "insensitive" } }, select: { id: true } });
         const duplicateMember = await tx.member.findFirst({ where: { email: { equals: input.email, mode: "insensitive" } }, select: { id: true } });
         if (duplicate || duplicateMember) throw new OnboardingError(409, "此 Email 已經註冊過了");
@@ -95,6 +93,14 @@ export async function createCentralMember(
         if (invites.length !== 1 || !invite || (input.organizationId && input.organizationId !== invite.organizationId)) {
           throw new OnboardingError(400, "邀請 QR Code 不正確或已過期，請索取新的共同邀請");
         }
+        const directClub = registrationTargetsInvitedClub(invite.organizationId);
+        // Tonight's published native App accepts email/password only. A stale
+        // third-party signup cookie must not create an unusable OAuth-only user.
+        if (directClub && (federated || passwordHash === null)) throw new OnboardingError(400, "此活動請使用 Email 與密碼註冊，以便登入目前的 App；請先取消第三方驗證後繼續。");
+        const intake = directClub
+          ? await tx.organization.findFirst({ where: { id: invite.organizationId, level: "club", isActive: true }, select: { id: true, name: true, districtCode: true } })
+          : await getIntakeOrganization(tx);
+        if (!intake) throw new OnboardingError(503, "申請分會暫時無法使用，請聯絡邀請人");
         // Conditional increment makes a concurrent last-slot claim fail, not overbook.
         const claimed = await tx.clubInvite.updateMany({
           where: { id: invite.id, revokedAt: null, validFrom: { lte: now }, validUntil: { gte: now },
@@ -110,7 +116,7 @@ export async function createCentralMember(
             phone: input.phone, title: input.title, bio: input.bio,
             status: "ACTIVE", role: "MEMBER", organizationId: intake.id, memberNo,
             organizationAssignmentStatus: "NEEDS_ASSIGNMENT",
-            declaredOrganizationName: input.declaredOrganizationName || null,
+            declaredOrganizationName: directClub ? intake.name : input.declaredOrganizationName || null,
             privacyConsentedAt: now,
             privacyConsentVersion: PRIVACY_POLICY_VERSION,
             termsAcceptedAt: now,
@@ -120,7 +126,7 @@ export async function createCentralMember(
             organizationAssignments: { create: {
               toOrganizationId: intake.id, toOrganizationName: intake.name,
               previousAssignmentStatus: "NEEDS_ASSIGNMENT", assignmentStatus: "NEEDS_ASSIGNMENT",
-              reason: "中央註冊：先開通平台，正式分會待名單核對",
+              reason: directClub ? "聖迪活動邀請：直接開通分會平台，一般會員身分待名單人工核對" : "中央註冊：先開通平台，正式分會待名單核對",
             } },
           },
         });
@@ -132,7 +138,7 @@ export async function createCentralMember(
           await tx.oAuthTransaction.update({ where: { id: oauth.id }, data: { userId: user.id, sessionVersion: user.sessionVersion,
             subject: null, email: null, providerName: null, refreshTokenCiphertext: null, inviteToken: null, codeVerifier: null, nonce: "", browserHash: "" } });
         }
-        return { member, user, organization: intake };
+        return { member, user, organization: intake, registrationMode: directClub ? "direct_club" as const : "central" as const };
       }, { isolationLevel: "Serializable" });
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? error.code : undefined;

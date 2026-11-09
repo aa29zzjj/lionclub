@@ -51,9 +51,9 @@ function harness(file, { client = {}, props = {}, search = "", fetcher = () => {
   const baseClient = realClient(); const dependencies = { ...baseClient, ...client };
   const placeholder = () => null;
   const module = { exports: {} };
-  vm.runInNewContext(compile(file, exported === "RegisterForm" ? "\nexport { RegisterForm };\n" : ""), {
+  vm.runInNewContext(compile(file, exported !== "default" ? `\nexport { ${exported} };\n` : ""), {
     module, exports: module.exports, AbortController, URLSearchParams, setTimeout, clearTimeout,
-    fetch: fetcher, window: { location: { search, assign: url => redirects.push(url) } }, document: { getElementById: () => null },
+    fetch: fetcher, window: { location: { search, origin: "https://synthetic.example.test", assign: url => redirects.push(url) } }, document: { getElementById: () => null },
     require(name) {
       if (name === "react") return react;
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: Symbol("Fragment") };
@@ -63,7 +63,7 @@ function harness(file, { client = {}, props = {}, search = "", fetcher = () => {
       if (["./PasswordInput", "./Avatar", "./AccessibleDialog", "./LinkedIdentitySettings", "./EmailActionReauth"].includes(name)) return { __esModule: true, default: placeholder };
       if (name === "@/lib/avatar-color") return { colorFromId: () => "#123456" };
       if (name === "@/lib/mock-data") return { memberTitleOptions: [], tagOptions: [] };
-      if (name === "next/link" || name === "@/components/PasswordInput" || name === "@/components/FederatedAuthButtons") return { __esModule: true, default: placeholder };
+      if (name === "next/link" || ["PasswordInput", "FederatedAuthButtons", "AppShell", "QrCode", "InviteQrDialog"].some(component => name === `@/components/${component}`)) return { __esModule: true, default: placeholder };
       throw Error(`Unapproved UI test dependency: ${name}`);
     },
   });
@@ -212,4 +212,86 @@ test("spoofed or unrelated reauth returns cannot open the sessions panel", async
     await h.flush(); assert.ok(!h.nodes().some(node => node.type === "form"), `${actions}: ${search}: ${error}`);
     h.unmount();
   }
+});
+test("verified direct-club invitation names the club and completes same-password App signup without central-club copy", async () => {
+  const posts = [];
+  const h = harness("src/app/register/page.tsx", { exported: "RegisterForm", search: "token=synthetic-invite&org=synthetic-shengdi",
+    client: { readPendingFederatedProfile: async () => ({ pending: false }) },
+    fetcher: async (path, init) => {
+      if (path === "/api/onboarding") return json({ mode: "central", requiresInvite: true, inviteMethod: "qr", organization: { id: "synthetic-ai", name: "合成暫存分會", districtCode: "300A-1" } });
+      if (String(path).startsWith("/api/invites/verify?")) return json({ valid: true, organizationId: "synthetic-shengdi", organizationName: "聖迪獅子會", registrationMode: "direct_club" });
+      if (path === "/api/auth/register") { posts.push(JSON.parse(init.body)); return json({ ok: true, canLogin: true, organizationName: "聖迪獅子會", registrationMode: "direct_club" }); }
+      throw Error("Unexpected direct-club UI request");
+    } });
+  await h.flush();
+  assert.ok(h.nodes().some(node => node.type === "h1" && text(node).includes("聖迪獅子會")));
+  assert.ok(!text(h.render()).includes("合成暫存分會"));
+  const change = async (id, value) => { h.nodes().find(node => node.props?.id === id).props.onChange({ target: { value } }); await h.flush(); };
+  await change("register-name", "合成聖迪會員"); await change("register-email", "shengdi-ui@example.test");
+  await change("register-password", "SyntheticPass42!"); await change("register-confirm-password", "SyntheticPass42!");
+  for (let index = 0; index < 2; index++) { h.nodes().filter(node => node.type === "input" && node.props.type === "checkbox")[index].props.onChange({ target: { checked: true } }); await h.flush(); }
+  const profileForm = h.nodes().find(node => node.type === "form" && node.props["aria-busy"] !== undefined);
+  await profileForm.props.onSubmit({ preventDefault() {} }); await h.flush();
+  assert.equal(posts.length, 1); assert.equal(posts[0].token, "synthetic-invite"); assert.equal(posts[0].password, "SyntheticPass42!");
+  assert.ok(text(h.render()).includes("註冊完成，可立即使用"));
+  assert.ok(text(h.render()).includes("使用剛才設定的 Email 與密碼登入"));
+  assert.ok(h.nodes().some(node => node.type === "a" && node.props.href === "https://apps.apple.com/tw/app/lionclubs/id6826321953"));
+  assert.ok(!text(h.render()).includes("會再分派至您的所屬分會"));
+  h.unmount();
+});
+
+test("a URL-only direct-club hint cannot change the server-verified central enrollment display", async () => {
+  const { h } = registerHarness(async () => ({ pending: false }), async () => {});
+  h.setSearch("token=synthetic-invite&registrationMode=direct_club"); await h.flush();
+  assert.ok(text(h.render()).includes("合成暫存分會"));
+  assert.ok(text(h.render()).includes("實際加入的是上述中央分會"));
+  h.unmount();
+});
+
+test("scanning the direct-club QR with an older Google profile requires cancellation and preserves the password invitation", async () => {
+  const cancellation = deferred(); let cancellations = 0;
+  const h = harness("src/app/register/page.tsx", { exported: "RegisterForm", search: "token=synthetic-shengdi-invite&org=synthetic-shengdi",
+    client: { readPendingFederatedProfile: async () => ({ pending: true, provider: "google", email: "prior@example.test", hasInvite: true }),
+      cancelFederatedSignup: () => { cancellations++; return cancellation.promise; } },
+    fetcher: async path => {
+      if (path === "/api/onboarding") return json({ mode: "central", requiresInvite: true, inviteMethod: "qr", organization: { id: "synthetic-ai", name: "合成暫存分會", districtCode: "300A-1" } });
+      if (String(path).startsWith("/api/invites/verify?")) return json({ valid: true, organizationId: "synthetic-shengdi", organizationName: "聖迪獅子會", registrationMode: "direct_club" });
+      throw Error("No signup should run while the old OAuth profile is active");
+    } });
+  await h.flush();
+  assert.ok(!h.nodes().some(node => node.type === "form" && node.props["aria-busy"] !== undefined));
+  const cancel = h.button("取消第三方驗證，改用 Email／密碼"); cancel.props.onClick(); cancel.props.onClick();
+  assert.equal(cancellations, 1); await h.flush(); assert.equal(h.button("取消第三方驗證，改用 Email／密碼").props.disabled, true);
+  cancellation.resolve(); await h.flush();
+  assert.deepEqual(h.navigation, []);
+  assert.ok(text(h.render()).includes("聖迪獅子會會員註冊"));
+  const email = h.nodes().find(node => node.props?.id === "register-email");
+  assert.equal(email.props.value, ""); assert.equal(email.props.readOnly, false);
+  assert.ok(h.nodes().some(node => node.props?.id === "register-password"));
+  assert.ok(h.nodes().filter(node => node.type === "input" && node.props.type === "checkbox").every(node => node.props.checked === false));
+  h.unmount();
+});
+
+test("an old invite creation response cannot display its QR after navigating to another organization", async () => {
+  const creation = deferred();
+  const oldUrl = "https://synthetic.example.test/register?token=old-club-token";
+  const h = harness("src/app/admin/invites/page.tsx", { exported: "AdminInvitesForm", search: "organizationId=synthetic-old",
+    fetcher: async (path, init) => {
+      if (path === "/api/me") return json({ organization: { id: "synthetic-own", name: "合成所屬分會" }, adminRoles: [] });
+      if (String(path).startsWith("/api/invites?")) {
+        const target = new URL(path, "https://synthetic.example.test").searchParams.get("organizationId");
+        return json({ organization: { id: target, name: target === "synthetic-old" ? "舊分會" : "聖迪獅子會" }, registrationMode: "direct_club", invites: [] });
+      }
+      if (path === "/api/invites" && init?.method === "POST") return creation.promise;
+      throw Error("Unexpected invitation UI request");
+    } });
+  await h.flush(); h.button("產生新的邀請 QR").props.onClick();
+  h.setSearch("organizationId=synthetic-shengdi"); await h.flush();
+  creation.resolve(json({ organization: { id: "synthetic-old", name: "舊分會" }, registrationMode: "direct_club", registerUrl: oldUrl,
+    invite: { id: "old-invite", organization: { id: "synthetic-old", name: "舊分會" }, token: "old-club-token", validUntil: "2026-11-12T12:00:00Z" } }));
+  await h.flush();
+  assert.ok(text(h.render()).includes("聖迪獅子會"));
+  assert.ok(!h.nodes().some(node => node.props?.value === oldUrl));
+  assert.equal(h.button("產生新的邀請 QR").props.disabled, false);
+  h.unmount();
 });

@@ -15,7 +15,7 @@ type Onboarding = {
   inviteMethod: "qr";
   mode: "central";
 };
-type VerifiedInvite = { token: string; organizationId: string; organizationName: string };
+type VerifiedInvite = { token: string; organizationId: string; organizationName: string; registrationMode: "direct_club" | "central" };
 type InviteStatus = "idle" | "loading" | "valid" | "invalid";
 
 const inputClass = "w-full min-w-0 min-h-12 rounded-xl border border-lion-border bg-lion-soft px-4 py-3 text-base text-lion-cream outline-none placeholder:text-lion-muted focus:border-lion-gold";
@@ -69,6 +69,7 @@ function RegisterForm() {
   const [profileError, setProfileError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [registeredOrganizationName, setRegisteredOrganizationName] = useState("");
+  const [registeredDirectClub, setRegisteredDirectClub] = useState(false);
   const [federated, setFederated] = useState<{ provider: string; email: string; hasInvite: boolean } | null>(null);
   const [oauthConsent, setOauthConsent] = useState(false);
   const [federatedNotice, setFederatedNotice] = useState("");
@@ -108,7 +109,11 @@ function RegisterForm() {
       await cancelFederatedSignup();
       setFederated(null); setEmail(""); setPassword(""); setConfirmPassword("");
       setOauthConsent(false); setPrivacyConsent(false); setTermsConsent(false);
-      router.replace("/login");
+      if (directClub) {
+        // Keep the scanned club invitation and allow a password account for
+        // the currently published native App after discarding prior OAuth.
+        actionRef.current = false; setOauthBusy(false); setStep("profile");
+      } else router.replace("/login");
     } catch (error) {
       setFederatedNotice(error instanceof OAuthClientError ? oauthErrorMessage(error.code) : "目前無法取消驗證，請稍後再試。");
       actionRef.current = false; setOauthBusy(false);
@@ -116,6 +121,7 @@ function RegisterForm() {
   }
 
   const currentVerifiedInvite = verifiedInvite?.token === tokenFromUrl ? verifiedInvite : null;
+  const directClub = currentVerifiedInvite?.registrationMode === "direct_club";
   const configurationReady = Boolean(onboarding) && !onboardingLoading && !onboardingError;
   const invitationReady = configurationReady && (Boolean(federated?.hasInvite)
     || (Boolean(tokenFromUrl) && inviteStatus === "valid" && Boolean(currentVerifiedInvite)));
@@ -170,7 +176,7 @@ function RegisterForm() {
           throw new Error("這個邀請連結已失效或不正確，請向邀請人索取新的共同邀請連結。");
         }
         if (controller.signal.aborted) return;
-        setVerifiedInvite({ token: tokenFromUrl, organizationId: data.organizationId, organizationName: data.organizationName });
+        setVerifiedInvite({ token: tokenFromUrl, organizationId: data.organizationId, organizationName: data.organizationName, registrationMode: data.registrationMode === "direct_club" ? "direct_club" : "central" });
         setInviteStatus("valid");
         setStep("profile");
       } catch (error) {
@@ -233,7 +239,7 @@ function RegisterForm() {
 
   async function handleProfileSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (actionRef.current || formBusy || federatedNotice || !onboarding || !configurationReady || !invitationReady) return;
+    if (actionRef.current || formBusy || federatedNotice || !onboarding || !configurationReady || !invitationReady || (directClub && federated)) return;
     if (!name.trim() || !email.trim()) {
       setProfileError("請填寫姓名與 Email。");
       return;
@@ -284,6 +290,7 @@ function RegisterForm() {
         return;
       }
       setRegisteredOrganizationName(data.organizationName);
+      setRegisteredDirectClub(data.registrationMode === "direct_club");
       setPassword("");
       setConfirmPassword("");
       setStep("done");
@@ -300,23 +307,23 @@ function RegisterForm() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/lions-logo.png" alt="Lions Clubs International" className="h-full w-full object-contain" />
           </span>
-          <div><h1 className="text-lg font-bold">獅子會新會員註冊</h1><p className="mt-0.5 text-xs text-lion-muted">{step === "invite" ? "使用共同邀請加入" : step === "profile" ? "填寫個人資料" : "註冊完成"}</p></div>
+          <div><h1 className="text-lg font-bold">{directClub ? `${currentVerifiedInvite.organizationName}會員註冊` : "獅子會新會員註冊"}</h1><p className="mt-0.5 text-xs text-lion-muted">{step === "invite" ? "使用邀請連結加入" : step === "profile" ? "填寫個人資料" : "註冊完成"}</p></div>
         </div>
         {pendingLoading && <p role="status" className="mb-4 text-sm text-lion-muted">正在確認第三方驗證狀態…</p>}
         {federatedNotice && <div role="alert" className="mb-4 rounded-xl border border-lion-border p-4 text-sm"><p>{federatedNotice}</p><button type="button" disabled={formBusy} onClick={() => setPendingAttempt((value) => value + 1)} className="mt-2 min-h-12 text-lion-gold underline">重新確認驗證狀態</button><button type="button" disabled={formBusy} onClick={() => void cancelOAuth()} className="mt-2 flex min-h-12 items-center text-lion-gold underline">取消本次驗證，返回登入</button></div>}
-        {federated && step !== "done" && !federatedNotice && <div className="mb-4 rounded-xl border border-lion-border p-4 text-sm"><p className="break-all">本次使用 {federated.provider === "google" ? "Google" : "Apple"}：{federated.email}</p><p className="mt-2 text-lion-muted">尚未建立會員帳號。若選錯帳號，可取消後重新登入。</p><button type="button" disabled={formBusy} onClick={() => void cancelOAuth()} className="mt-2 min-h-12 text-lion-gold underline">取消驗證／更換帳號</button></div>}
+        {federated && step !== "done" && !federatedNotice && <div className="mb-4 rounded-xl border border-lion-border p-4 text-sm"><p className="break-all">本次使用 {federated.provider === "google" ? "Google" : "Apple"}：{federated.email}</p><p className="mt-2 text-lion-muted">{directClub ? "瀏覽器仍保留先前的第三方驗證，尚未建立會員帳號。今晚要登入目前的 App，請先取消這次驗證，再以 Email 與密碼註冊；聖迪邀請會保留。" : "尚未建立會員帳號。若選錯帳號，可取消後重新登入。"}</p><button type="button" disabled={formBusy} onClick={() => void cancelOAuth()} className="mt-2 min-h-12 text-lion-gold underline">{directClub ? "取消第三方驗證，改用 Email／密碼" : "取消驗證／更換帳號"}</button></div>}
         {onboardingLoading && <p className="py-10 text-center text-sm text-lion-muted" role="status">正在載入註冊設定…</p>}
         {onboardingError && <div className="rounded-2xl border border-lion-border bg-lion-card p-5">
           <p className="text-sm text-lion-cream" role="alert">{onboardingError}</p>
           <button type="button" className={`${primaryButtonClass} mt-4 w-full`} onClick={() => setOnboardingAttempt((value) => value + 1)}>重新載入</button>
           <Link href="/login" className="mt-2 flex min-h-12 items-center justify-center text-sm text-lion-gold">返回登入</Link>
         </div>}
-        {configurationReady && onboarding && step !== "done" && <div className="mb-6 rounded-2xl border border-lion-border bg-lion-card p-5">
-          <p className="text-xs text-lion-muted">新帳號統一加入</p>
-          <p className="mt-1 font-semibold">{onboarding.organization.name}</p>
-          {onboarding.organization.districtCode && <p className="mt-1 text-xs text-lion-muted">{onboarding.organization.districtCode}</p>}
-          <p className="mt-3 text-sm leading-relaxed text-lion-muted">掃邀請 QR 註冊完成即可使用。這是平台暫存分會，不代表正式獅子會會籍已核實；之後由授權管理者依名單或分會長確認結果分派。</p>
-          {currentVerifiedInvite && <p className="mt-3 border-t border-lion-border pt-3 text-xs leading-relaxed text-lion-muted">邀請來源：{currentVerifiedInvite.organizationName}。邀請來源只供核對，實際加入的是上述中央分會。</p>}
+        {configurationReady && onboarding && step !== "done" && (currentVerifiedInvite || (!tokenFromUrl && !federated?.hasInvite)) && <div className="mb-6 rounded-2xl border border-lion-border bg-lion-card p-5">
+          <p className="text-xs text-lion-muted">{directClub ? "註冊加入分會" : "新帳號統一加入"}</p>
+          <p className="mt-1 font-semibold">{directClub ? currentVerifiedInvite.organizationName : onboarding.organization.name}</p>
+          {!directClub && onboarding.organization.districtCode && <p className="mt-1 text-xs text-lion-muted">{onboarding.organization.districtCode}</p>}
+          <p className="mt-3 text-sm leading-relaxed text-lion-muted">{directClub ? "註冊後可立即使用聖迪獅子會的會員功能。正式會籍之後由授權管理者依名單人工核對；註冊不會授予幹部或管理權限。" : "掃邀請 QR 註冊完成即可使用。這是平台暫存分會，不代表正式獅子會會籍已核實；之後由授權管理者依名單或分會長確認結果分派。"}</p>
+          {currentVerifiedInvite && !directClub && <p className="mt-3 border-t border-lion-border pt-3 text-xs leading-relaxed text-lion-muted">邀請來源：{currentVerifiedInvite.organizationName}。邀請來源只供核對，實際加入的是上述中央分會。</p>}
         </div>}
         {configurationReady && onboarding && step === "invite" && <form onSubmit={handleInviteSubmit} className="flex flex-col gap-5">
           {federated && <p role="status" className="rounded-xl border border-lion-border p-3 text-sm">第三方身分已驗證，尚未建立會員帳號。請在本瀏覽器開啟有效邀請 QR 連結，再完成資料與同意；驗證會逾時，請勿將邀請轉貼至公開場所。</p>}
@@ -337,10 +344,10 @@ function RegisterForm() {
           {(tokenFromUrl || federated?.hasInvite) && <button type="submit" disabled={!invitationReady} className={`${primaryButtonClass} w-full`}>下一步</button>}
           <Link href="/login" className="flex min-h-12 items-center justify-center text-sm text-lion-muted">已經是會員？返回登入</Link>
         </form>}
-        {configurationReady && onboarding && step === "profile" && <form onSubmit={handleProfileSubmit} className="flex flex-col gap-5" aria-busy={formBusy}>
-          {!federated && <div className="space-y-3"><p className="text-sm">可先使用已啟用的第三方驗證身分，再完成下方會員資料。</p><FederatedAuthButtons token={currentVerifiedInvite?.token} onBusyChange={(busy) => { actionRef.current = busy; setOauthBusy(busy); }} disabled={submitting || pendingLoading || Boolean(federatedNotice) || !invitationReady} /><p className="text-center text-sm text-lion-muted">或以 Email／密碼註冊</p></div>}
-          <p className="text-base font-medium">{federated ? `已透過 ${federated.provider === "apple" ? "Apple" : "Google"} 驗證；請確認姓名及同意事項，不必設定本機密碼。` : "先填姓名、Email 與密碼即可開始使用；其他資料可稍後補上。"}</p>
-          <fieldset disabled={formBusy || Boolean(federatedNotice)} className="grid grid-cols-1 gap-4">
+        {configurationReady && onboarding && step === "profile" && !(directClub && federated) && <form onSubmit={handleProfileSubmit} className="flex flex-col gap-5" aria-busy={formBusy}>
+          {!federated && !directClub && <div className="space-y-3"><p className="text-sm">可先使用已啟用的第三方驗證身分，再完成下方會員資料。</p><FederatedAuthButtons token={currentVerifiedInvite?.token} onBusyChange={(busy) => { actionRef.current = busy; setOauthBusy(busy); }} disabled={submitting || pendingLoading || Boolean(federatedNotice) || !invitationReady} /><p className="text-center text-sm text-lion-muted">或以 Email／密碼註冊</p></div>}
+          <p className="text-base font-medium">{federated ? `已透過 ${federated.provider === "apple" ? "Apple" : "Google"} 驗證；請確認姓名及同意事項，不必設定本機密碼。` : directClub ? "請設定 Email 與密碼，註冊後可用同一帳密登入目前的 iPhone／iPad App。其他資料可稍後補上。" : "先填姓名、Email 與密碼即可開始使用；其他資料可稍後補上。"}</p>
+          <fieldset disabled={formBusy || Boolean(federatedNotice)} className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2">
             <div className="min-[360px]:col-span-2">
               <label htmlFor="register-name" className="mb-1 block text-sm font-medium">姓名</label>
               <input id="register-name" name="name" autoComplete="name" required value={name} onChange={(event) => setName(event.target.value)} placeholder="王小明" className={inputClass} />
@@ -477,7 +484,8 @@ function RegisterForm() {
           <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-lion-gold bg-lion-gold/10 text-3xl text-lion-gold" aria-hidden="true">✓</div>
           <h2 className="text-xl font-bold">註冊完成，可立即使用</h2>
           <p className="max-w-sm text-sm leading-relaxed text-lion-muted">{name} 您好，您已加入「{registeredOrganizationName}」，可以開始使用會員檔案、好友與活動功能。</p>
-          <p className="max-w-sm text-sm leading-relaxed text-lion-muted">正式會員名單核對後，授權管理者會再分派至您的所屬分會。</p>
+          <p className="max-w-sm text-sm leading-relaxed text-lion-muted">{registeredDirectClub ? "您可以開始使用 App。正式會籍之後再由授權管理者依名單人工核對。" : "正式會員名單核對後，授權管理者會再分派至您的所屬分會。"}</p>
+          {registeredDirectClub && !federated && <><p className="max-w-sm text-sm leading-relaxed text-lion-muted">開啟 LionClubs App，使用剛才設定的 Email 與密碼登入，不需要再註冊一次。</p><a href="https://apps.apple.com/tw/app/lionclubs/id6826321953" className={`${primaryButtonClass} flex min-h-12 w-full items-center justify-center`}>下載／開啟 iPhone、iPad App</a></>}
           <Link href="/profile/experience" className={`${secondaryButtonClass} w-full`}>查看名冊帶入與歷任資歷（需另行同意）</Link>
           <button type="button" onClick={() => { router.push("/home"); router.refresh(); }} className={`${primaryButtonClass} mt-3 w-full`}>開始使用</button>
         </div>}

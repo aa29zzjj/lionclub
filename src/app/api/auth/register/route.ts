@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     const limited = await consumeAuthLimits(prisma, "register", getClientIp(req), parsed.data.email, parsed.data.token);
     if (limited) return rateLimitResponse(limited);
     const passwordHash = await bcrypt.hash(parsed.data.password, 10);
-    const { member, user, organization } = await createCentralMember(prisma, parsed.data, passwordHash);
+    const { member, user, organization, registrationMode } = await createCentralMember(prisma, parsed.data, passwordHash);
     await createSession({ userId: user.id, memberId: member.id, email: user.email, sessionVersion: user.sessionVersion });
     const from = process.env.PASSWORD_RESET_FROM_EMAIL;
     if (from) {
@@ -29,12 +29,14 @@ export async function POST(req: NextRequest) {
       await sendSesEmail({
         region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-northeast-1",
         from, to: user.email, subject: "獅子會 App 註冊完成，可以開始使用",
-        text: `${member.name} 您好，\n\n您的平台帳號已開通，可以立即使用。目前統一暫存於「${organization.name}」，正式分會將由授權管理者依名單核對後分派；此安排不代表正式獅子會會籍已被驗證。\n\n如果不是您本人註冊，請聯絡服務管理者。`,
+        text: registrationMode === "direct_club"
+          ? `${member.name} 您好，\n\n您已透過活動邀請加入「${organization.name}」的平台，可以立即用註冊的 Email 與密碼登入 LionClubs App。您的正式會籍資料將由授權管理者依名單人工核對；此安排不代表正式獅子會會籍已被驗證。\n\n如果不是您本人註冊，請聯絡服務管理者。`
+          : `${member.name} 您好，\n\n您的平台帳號已開通，可以立即使用。目前統一暫存於「${organization.name}」，正式分會將由授權管理者依名單核對後分派；此安排不代表正式獅子會會籍已被驗證。\n\n如果不是您本人註冊，請聯絡服務管理者。`,
       }).catch(() => console.error("Registration welcome email failed"));
       try { await sendVerificationEmail(prisma, { userId: user.id, appOrigin: getAuthAppOrigin(req.nextUrl.origin) }); }
       catch { console.error("Verification email failed"); }
     }
     return NextResponse.json({ ok: true, memberId: member.id, organizationName: organization.name,
-      organizationAssignmentStatus: "NEEDS_ASSIGNMENT", canLogin: true });
+      organizationAssignmentStatus: "NEEDS_ASSIGNMENT", registrationMode, canLogin: true });
   } catch (error) { return onboardingErrorResponse(error); }
 }
