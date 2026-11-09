@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import AccessibleDialog from "./AccessibleDialog";
 import QrCode from "./QrCode";
 
-export default function InviteQrDialog({ value, validUntil, onClose }: { value: string; validUntil: string; onClose: () => void }) {
+export default function InviteQrDialog({ value, validUntil, organizationName, directClub = false, onClose }: { value: string; validUntil: string; organizationName?: string; directClub?: boolean; onClose: () => void }) {
   const qrRef = useRef<HTMLDivElement>(null);
   const [notice, setNotice] = useState("");
   const [downloading, setDownloading] = useState(false);
@@ -27,18 +27,19 @@ export default function InviteQrDialog({ value, validUntil, onClose }: { value: 
       context.fillStyle = "#FFFFFF"; context.fillRect(0, 0, canvas.width, canvas.height);
       context.drawImage(bitmap, 100, 60, 1000, 1000);
       context.fillStyle = "#12224A"; context.textAlign = "center"; context.font = "bold 38px sans-serif";
-      context.fillText("獅子會平台註冊邀請", 600, 1130);
-      context.font = "28px sans-serif"; context.fillText(`有效至 ${new Date(validUntil).toLocaleString("zh-TW")}`, 600, 1190);
-      context.fillText("平台邀請不代表正式獅子會會籍已核實", 600, 1250);
-      const anchor = document.createElement("a"); anchor.href = canvas.toDataURL("image/png"); anchor.download = "lionclub-registration-qr.png"; anchor.click();
+      context.fillText(directClub && organizationName ? `${organizationName}註冊邀請` : "獅子會平台註冊邀請", 600, 1130, 1100);
+      context.font = "28px sans-serif"; context.fillText(`有效至 ${new Date(validUntil).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}（臺灣時間）`, 600, 1190, 1100);
+      context.fillText(directClub ? "手機相機掃碼註冊 → 同一帳密登入 App" : "平台邀請不代表正式獅子會會籍已核實", 600, 1250, 1100);
+      if (directClub) { context.font = "24px sans-serif"; context.fillText("正式會籍之後依名單人工核對", 600, 1310, 1100); }
+      const anchor = document.createElement("a"); anchor.href = canvas.toDataURL("image/png"); anchor.download = directClub ? "shengdi-lionclubs-registration-qr.png" : "lionclub-registration-qr.png"; anchor.click();
       setNotice("QR 圖片已準備下載；手機也可長按圖片或使用截圖分享。");
     } catch { setNotice("此瀏覽器無法下載圖片，請使用放大 QR 後截圖分享。"); }
     finally { if (objectUrl) URL.revokeObjectURL(objectUrl); setDownloading(false); }
   }
 
-  return <AccessibleDialog open title="註冊邀請 QR" description={`有效至 ${new Date(validUntil).toLocaleString("zh-TW")}；只影響新註冊，不會停用既有帳號。`} onClose={onClose} fullscreen={large} busy={downloading}>
+  return <AccessibleDialog open title={directClub && organizationName ? `${organizationName}註冊 QR` : "註冊邀請 QR"} description={`有效至 ${new Date(validUntil).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}（臺灣時間）；只影響新註冊，不會停用既有帳號。`} onClose={onClose} fullscreen={large} busy={downloading}>
     <div ref={qrRef} className={`mx-auto aspect-square w-full rounded-xl bg-white p-2 ${large ? "max-w-[min(66dvh,900px)]" : "max-w-[300px]"}`}><QrCode value={value} /></div>
-    <p className="mt-4 text-sm leading-relaxed text-lion-muted">請受邀者使用手機相機掃描；平台註冊不代表正式獅子會會籍已驗證。</p>
+    <p className="mt-4 text-sm leading-relaxed text-lion-muted">{directClub ? `請使用手機相機掃描，註冊加入${organizationName || "本分會"}後，以同一 Email 與密碼登入 App。正式會籍之後依名單人工核對。` : "請受邀者使用手機相機掃描；平台註冊不代表正式獅子會會籍已驗證。"}</p>
     <div className="mt-4 grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
       <button type="button" onClick={() => setLarge((current) => !current)} className="min-h-12 rounded-xl border border-lion-border px-3 text-base">{large ? "恢復大小" : "放大／全螢幕顯示"}</button>
       <button type="button" disabled={downloading} onClick={() => void download()} className="min-h-12 rounded-xl bg-lion-action px-3 text-base font-semibold text-lion-navyDeep disabled:opacity-50">{downloading ? "準備圖片中…" : "下載 QR 圖片"}</button>

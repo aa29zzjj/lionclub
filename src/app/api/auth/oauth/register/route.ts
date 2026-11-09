@@ -25,11 +25,11 @@ export async function POST(request: NextRequest) {
     const token = parsed.data.token || row.inviteToken || undefined;
     const limited = await consumeAuthLimits(prisma, "register", getClientIp(request), row.email, token);
     if (limited) return rateLimitResponse(limited);
-    const { member, user, organization } = await createCentralMember(prisma, { ...parsed.data, token, email: row.email }, null, undefined,
+    const { member, user, organization, registrationMode } = await createCentralMember(prisma, { ...parsed.data, token, email: row.email }, null, undefined,
       { transactionId: row.id, browserHash: hashOAuthSecret(browser) });
     await createSession({ userId: user.id, memberId: member.id, email: user.email, sessionVersion: user.sessionVersion });
     await clearOAuthCookie(OAUTH_PENDING_COOKIE);
-    return oauthJson({ ok: true, memberId: member.id, organizationName: organization.name, organizationAssignmentStatus: "NEEDS_ASSIGNMENT", canLogin: true });
+    return oauthJson({ ok: true, memberId: member.id, organizationName: organization.name, organizationAssignmentStatus: "NEEDS_ASSIGNMENT", registrationMode, canLogin: true });
   } catch (error) {
     if (error instanceof OnboardingError) return oauthJson({ error: error.message }, error.status);
     return oauthErrorResponse(error);
