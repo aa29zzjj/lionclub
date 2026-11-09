@@ -46,3 +46,11 @@
 二進位檔上傳、Apple 處理完成、Build 8 選入並儲存草稿及正式後端部署均已完成；測試分發、正式送審與公開發布仍是後續獨立步驟。**目前仍未達送審條件**，不將商店草稿或部分模擬器操作當作完整整合驗收。
 
 Google／Apple 真實原生回跳、Apple 隱藏信箱收信及安全操作、真機通知／相機仍需完成相應驗收。APNs 金鑰先前僅授權建立與保管，本紀錄沒有啟用正式投遞或發送手機通知。CloudWatch retention 按持有人指示不變更，未新增未核准付費資源。
+
+## Build 9 follow-up
+
+Source 4f74bb094e066a9417f760803712ab6ffa0b0989 fixes two native padding declarations to respect independent left/right safe areas. PostCSS and Safari 15 CSS checks passed. The normally signed simulator restored the existing login after reinstall; the notifications button visibly clears the right-side status area. Evidence is retained locally under native-release-20261109-b9.
+
+1.0.1(9) archive/IPA validation passed, then upload succeeded at 2026-11-09 16:18:31 Asia/Taipei. IPA SHA256: 9e9b3ed36bf4946f20b366e972a8a0c48cbf8c47c75f96fb190f00ce6327b6bc. Apple processing has not been reverified. The saved version draft still selects Build 8; replace it with the validated latest candidate before submission. No review submission or public release occurred.
+
+The owner signed into AWS but the same restricted identity remains; Console ListSecrets was denied. The owner explicitly delegated the permission gap to Jerry. A private local PDF, a read-only-by-default installer and an exact-resource IAM review example are prepared. No IAM policy was applied, no keys were rotated, and no feature flags were enabled. The installer passed 12 synthetic checks with zero AWS calls. No handoff message was sent.

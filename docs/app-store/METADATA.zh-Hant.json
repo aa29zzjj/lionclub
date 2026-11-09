@@ -3,7 +3,7 @@
   "status": "blocked",
   "ready": false,
   "reviewedOn": "2026-11-09",
-  "readinessScope": "ios-1.0.1-build8-uploaded-processed-saved-in-version-draft-not-submitted",
+  "readinessScope": "ios-build9-uploaded-apple-processing-not-reverified-provider-acceptance-pending",
   "blockingReasons": [
     "NEXT_NATIVE_DEVICE_AND_PUSH_ACCEPTANCE_PENDING",
     "NATIVE_OAUTH_REAL_PROVIDER_ACCEPTANCE_PENDING",
@@ -84,15 +84,15 @@
   "release": {
     "version": "1.0",
     "buildNumber": "4",
-    "buildNumberScope": "published baseline is 1.0(4); next candidate 1.0.1(8) uploaded, processed and saved in version draft, not submitted or publicly released; builds 6 and 7 retained as historical checkpoints",
-    "nextBuildNumber": "8",
+    "buildNumberScope": "Published baseline 1.0(4); signed candidate 1.0.1(9) uploaded, not submitted. Saved draft still selects Build 8 pending replacement.",
+    "nextBuildNumber": "9",
     "nextCandidateVersion": "1.0.1",
-    "nextCandidateNativeSourceCommit": "cbe1e5fec4e978574ea98b8d1b10c6c207a3eef2",
+    "nextCandidateNativeSourceCommit": "4f74bb094e066a9417f760803712ab6ffa0b0989",
     "nextCandidateUploaded": true,
-    "nextCandidateUploadTimeTaiwan": "2026-11-09 15:33",
-    "nextCandidateAppleProcessingComplete": true,
-    "nextCandidateSelectedInVersionDraft": true,
-    "nextCandidateVersionDraftSaved": true,
+    "nextCandidateUploadTimeTaiwan": "2026-11-09 16:18:31",
+    "nextCandidateAppleProcessingComplete": null,
+    "nextCandidateSelectedInVersionDraft": false,
+    "nextCandidateVersionDraftSaved": false,
     "nextCandidateSubmittedForReview": false,
     "nextCandidatePubliclyReleased": false,
     "testFlightDistributionVerified": false,
@@ -114,14 +114,15 @@
     "androidDebugArtifactGenerated": true,
     "androidUnsignedBundleGenerated": true,
     "releaseArtifactGenerated": true,
-    "releaseArtifactGeneratedScope": "iOS App Store distribution IPA 1.0.1(8), includes server-verified native provider visibility and privacy/terms/support links; signature/profile/entitlements/assets verified 2026-11-09. Uploaded, Apple processing complete and saved in 1.0.1 draft; not submitted or publicly released. Android debug APK and unsigned AAB remain separate",
-    "releaseArtifactPath": "output/releases/LionClubs-iOS-1.0.1-build8-2026-11-09.ipa",
-    "releaseArtifactSha256": "815fe4080535ae4815b8d55b4e0413000c1902a2ee5482548934b23e3a08ebf7",
+    "releaseArtifactGeneratedScope": "Signed build 9 adds two-line independent left/right safe-area fix to build 8. Upload succeeded 2026-11-09 16:18:31 Taiwan; processing not reverified, not submitted or released.",
+    "releaseArtifactPath": "output/releases/LionClubs-iOS-1.0.1-build9-2026-11-09.ipa",
+    "releaseArtifactSha256": "9e9b3ed36bf4946f20b366e972a8a0c48cbf8c47c75f96fb190f00ce6327b6bc",
     "signingConfigured": true,
     "signingVerifiedOn": "2026-11-09",
-    "signingEvidencePath": "output/acceptance/native-release-20261109-b8/SIGNED_IPA_VALIDATION.json",
+    "signingEvidencePath": "output/acceptance/native-release-20261109-b9/SIGNED_IPA_VALIDATION.json",
     "physicalDeviceVerificationComplete": false,
-    "submissionReady": false
+    "submissionReady": false,
+    "currentlySelectedDraftBuild": "8"
   },
   "deploymentDependencies": {
     "status": "matching-api-and-additive-migrations-deployed-feature-opt-ins-off-acceptance-in-progress",
@@ -139,7 +140,12 @@
     "productionApiSourceCommit": "a3ae1ee38a48cc8af951126897ec7696adc9fab1",
     "amplifyJobId": "94",
     "amplifyJobStatus": "SUCCEED",
-    "featureOptIns": { "nativeOAuthV2": false, "appleOAuth": false, "emailActionReauth": false, "mobilePush": false },
+    "featureOptIns": {
+      "nativeOAuthV2": false,
+      "appleOAuth": false,
+      "emailActionReauth": false,
+      "mobilePush": false
+    },
     "appleRuntimeSecretInstallationStatus": "existing-approved-secret-write-denied-no-new-version-stage",
     "nativeLiveApiAcceptanceComplete": false,
     "order": [
@@ -167,7 +173,12 @@
     "ugcModerationImplemented": false
   },
   "operationalDecisions": {
-    "nextCandidatePushScope": ["activity", "friend_invitation", "experience_review", "membership_review"],
+    "nextCandidatePushScope": [
+      "activity",
+      "friend_invitation",
+      "experience_review",
+      "membership_review"
+    ],
     "nextCandidatePushScopeConfirmedOn": "2026-11-05",
     "membershipRejectionPushSupported": false,
     "membershipRejectionPushNote": "Existing rejection removes User/Member; do not enqueue an unreadable receipt or claim every rejection can be pushed.",
