@@ -34,6 +34,8 @@ export default function App() {
   const [signedOutNotice, setSignedOutNotice] = useState<string | null>(null);
   const [notificationNavigationRevision, setNotificationNavigationRevision] = useState(0);
   const oauthAvailable = nativeOAuthAvailable();
+  const [providerLookup, setProviderLookup] = useState<{ status: "loading" | "ready" | "error"; providers: OAuthProvider[] }>({ status: "loading", providers: [] });
+  const [providerAttempt, setProviderAttempt] = useState(0);
   const loadGeneration = useRef(0);
   const foregroundReady = useRef(false);
   foregroundReady.current = phase === "signed-in" && !busy && !endingSession;
@@ -106,6 +108,18 @@ export default function App() {
   }, [loadMe]);
 
   useEffect(() => {
+    if (phase !== "signed-out" || !oauthAvailable) return;
+    let active = true;
+    setProviderLookup({ status: "loading", providers: [] });
+    void api.getOAuthProviders().then(providers => {
+      if (active) setProviderLookup({ status: "ready", providers });
+    }).catch(() => {
+      if (active) setProviderLookup({ status: "error", providers: [] });
+    });
+    return () => { active = false; };
+  }, [phase, oauthAvailable, providerAttempt]);
+
+  useEffect(() => {
     if (phase !== "signed-in" || !member || busy || endingSession) {
       setForegroundRevalidating(false);
       return;
@@ -150,7 +164,9 @@ export default function App() {
   }
 
   async function handleOAuthLogin(provider: OAuthProvider) {
-    if (!oauthAvailable) { setError("第三方登入尚未開放，請使用會員信箱與密碼登入。"); return; }
+    if (!oauthAvailable || providerLookup.status !== "ready" || !providerLookup.providers.includes(provider)) {
+      setError("此登入方式尚未確認可用，請重新確認或使用會員信箱與密碼登入。"); return;
+    }
     if (busy || oauthBusy) return;
     loadGeneration.current++;
     setOauthBusy(provider);
@@ -273,15 +289,20 @@ export default function App() {
           {busy ? "登入中…" : "登入"}
         </button>
       </form>
-      {oauthAvailable ? <div className="oauth-block">
+      {oauthAvailable && providerLookup.status === "ready" && providerLookup.providers.length > 0 ? <div className="oauth-block">
         <p className="divider-text">或使用第三方帳號</p>
-        <button type="button" className="secondary" onClick={() => handleOAuthLogin("google")} disabled={busy || Boolean(oauthBusy)}>
+        {providerLookup.providers.includes("google") && <button type="button" className="secondary" onClick={() => handleOAuthLogin("google")} disabled={busy || Boolean(oauthBusy)}>
           {oauthBusy === "google" ? "正在開啟驗證…" : "使用 Google 繼續"}
-        </button>
-        <button type="button" className="secondary" onClick={() => handleOAuthLogin("apple")} disabled={busy || Boolean(oauthBusy)}>
+        </button>}
+        {providerLookup.providers.includes("apple") && <button type="button" className="secondary" onClick={() => handleOAuthLogin("apple")} disabled={busy || Boolean(oauthBusy)}>
           {oauthBusy === "apple" ? "正在開啟驗證…" : "使用 Apple 繼續"}
-        </button>
-      </div> : <p className="member-meta" role="status">第三方登入尚未開放，請使用會員信箱與密碼登入。</p>}
+        </button>}
+      </div> : (!oauthAvailable || providerLookup.status === "ready") ? <p className="member-meta" role="status">第三方登入尚未開放，請使用會員信箱與密碼登入。</p> : null}
+      {oauthAvailable && providerLookup.status === "loading" && <p role="status" className="member-meta">正在確認其他登入方式；您仍可使用會員信箱與密碼登入。</p>}
+      {oauthAvailable && providerLookup.status === "error" && <div>
+        <p role="status" className="member-meta">目前無法確認其他登入方式，請重新確認或使用會員信箱與密碼登入。</p>
+        <button type="button" className="secondary" disabled={busy || Boolean(oauthBusy)} onClick={() => setProviderAttempt(value => value + 1)}>重新確認登入方式</button>
+      </div>}
     </main>
   );
 }

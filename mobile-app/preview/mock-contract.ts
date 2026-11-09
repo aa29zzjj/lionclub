@@ -49,6 +49,7 @@ export function createApiClient(baseUrl: string): NativeApi {
     onSessionInvalidated: () => () => {},
     me: async () => getPreviewMember(),
     hasStoredSession: async () => false,
+    getOAuthProviders: async () => ["google", "apple"],
     getFriends: async () => {
       if (notificationFixture === "compose-error") throw new ApiError("NETWORK_ERROR", "合成情境：活動與好友尚未讀取完成，請重新讀取。");
       return copy(notificationFixture === "empty-friends" ? { friends: [], incoming: [], suggestions: [] } : { friends, incoming, suggestions: [] });

@@ -36,6 +36,30 @@ async function harness(handler: (options: any) => Promise<any>, platform = "ios"
 const pair = (account: string) => ({ accessToken: `access-${account}`, refreshToken: `refresh-${account}` });
 const response = (status: number, data: unknown = {}) => ({ status, data });
 
+test("provider discovery is public, credential-free and keeps password sessions unchanged", async () => {
+  const h = await harness(async options => {
+    assert.equal(options.method, "GET"); assert.ok(options.url.endsWith("/api/mobile/auth/providers"));
+    assert.equal(options.headers.Authorization, undefined);
+    return response(200, { protocolVersion: 2, providers: [{ id: "google", enabled: true }, { id: "apple", enabled: false }] });
+  });
+  assert.equal(JSON.stringify(await h.client.getOAuthProviders()), '["google"]');
+  assert.deepEqual(h.operations, []); assert.equal(h.storage.get(ACCESS), "access-A"); assert.equal(h.storage.get(REFRESH), "refresh-A");
+});
+
+test("legacy discovery and Android cannot expose unsupported native provider controls", async () => {
+  const legacy = await harness(async () => response(404));
+  assert.equal(JSON.stringify(await legacy.client.getOAuthProviders()), "[]"); assert.deepEqual(legacy.operations, []);
+  const android = await harness(async () => { throw Error("ANDROID_MUST_NOT_REQUEST_PROVIDERS"); }, "android");
+  assert.equal(JSON.stringify(await android.client.getOAuthProviders()), "[]"); assert.deepEqual(android.operations, []);
+});
+
+test("unavailable or malformed discovery is retryable uncertainty, never sign-out or enabled providers", async () => {
+  for (const result of [response(503), response(200, { providers: [] }), response(200, { protocolVersion: 2, providers: [{ id: "google", enabled: true }, { id: "google", enabled: false }] })]) {
+    const h = await harness(async () => result);
+    await assert.rejects(h.client.getOAuthProviders()); assert.deepEqual(h.operations, []); assert.equal(h.storage.get(ACCESS), "access-A");
+  }
+});
+
 function sessionCleanup(client: any, stopPush: () => Promise<{ serverConfirmed: boolean; nativeConfirmed: boolean }>) {
   const events: string[] = [];
   const controller = createSessionEndController({
@@ -134,13 +158,6 @@ test("a reauthentication password refusal after refresh never expires the curren
   await assert.rejects(h.client.revokeOtherSessions("synthetic-incorrect-password"));
   assert.equal(invalidations, 0); assert.equal(h.storage.get(ACCESS), "access-renewed");
   unsubscribe();
-});
-
-test("Android login UI gates both third-party buttons and uses plain unavailable copy", () => {
-  const app = readFileSync(new URL("../mobile-app/src/App.tsx", import.meta.url), "utf8");
-  assert.match(app, /const oauthAvailable = nativeOAuthAvailable\(\)/);
-  assert.match(app, /\{oauthAvailable \? <div className="oauth-block">[\s\S]*?handleOAuthLogin\("google"\)[\s\S]*?handleOAuthLogin\("apple"\)[\s\S]*?<\/div> : <p[^>]*>第三方登入尚未開放，請使用會員信箱與密碼登入。<\/p>\}/);
-  assert.match(app, /async function handleOAuthLogin[^]*?if \(!oauthAvailable\) \{[^]*?return; \}[^]*?loadGeneration\.current\+\+/);
 });
 
 test("Android direct Google/Apple calls fail before network, browser, listeners or secure-storage changes", async () => {

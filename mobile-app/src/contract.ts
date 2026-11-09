@@ -10,6 +10,7 @@ import { bytesToBase64, createImageUploadGrants } from "./native-upload";
 import { mobileActionAcknowledged, readBlockedMembersResponse, readSessionRevocationResponse } from "./security-contract";
 import { TERMS_VERSION } from "../../src/lib/terms";
 import { readPendingMembers, pendingMemberReviewAcknowledged, validPendingMemberReviewInput } from "./pending-member-review";
+import { readNativeOAuthProviders } from "./oauth-providers";
 
 export type OAuthProvider = "google" | "apple";
 export type TermsConsentStatus = { termsVersion: string; accepted: boolean; termsAcceptedAt: string | null };
@@ -210,6 +211,16 @@ export function createApiClient(baseUrl: string) {
     if (response.status === 429) throw new ApiError("RATE_LIMITED", response.data?.error ?? "嘗試次數過多，請稍後再試", 429);
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `登入失敗（HTTP ${response.status}）`, response.status);
     await mobileSession.writePair(epoch, response.data); mobileSession.assertCurrent(epoch);
+  }
+
+  async function getOAuthProviders(): Promise<OAuthProvider[]> {
+    if (!nativeOAuthAvailable()) return [];
+    const response = await request("/api/mobile/auth/providers", { method: "GET" });
+    // An older server does not implement the v2 provider discovery contract.
+    if (response.status === 404) return [];
+    if (response.status !== 200) throw new ApiError("NETWORK_ERROR", "目前無法確認其他登入方式，仍可使用會員信箱與密碼登入。", response.status);
+    try { return readNativeOAuthProviders(response.data); }
+    catch { throw new ApiError("UNKNOWN", "其他登入方式的設定尚未確認，請重新確認或使用會員信箱與密碼登入。"); }
   }
 
   async function loginWithProvider(provider: OAuthProvider): Promise<void> {
@@ -683,6 +694,7 @@ export function createApiClient(baseUrl: string) {
   }
 
   return {
+    getOAuthProviders,
     onSessionInvalidated(listener: (isCurrent: () => boolean) => void) { invalidatedListeners.add(listener); return () => { invalidatedListeners.delete(listener); }; },
     captureSessionGuard() { const epoch = mobileSession.capture(); return () => mobileSession.isCurrent(epoch); },
     getPushConfig, registerPushDevice, disablePushDevice, getPushReceipts, markPushReceiptsRead,
