@@ -13,6 +13,14 @@ declare const API_BASE_URL: string;
 const api = createApiClient(API_BASE_URL);
 
 type View = "overview" | "profile" | "admin" | "experience";
+const WEBSITE_PAGES = {
+  profile: { url: "https://lionclubsmembership.com/profile", error: "無法開啟帳號管理網頁，請確認連線後重試。App 內的設定尚未變更。" },
+  delete: { url: "https://lionclubsmembership.com/account/delete", error: "無法開啟刪除帳號網頁，請確認連線後重試。尚未提出刪除申請。" },
+  privacy: { url: "https://lionclubsmembership.com/privacy", error: "無法開啟隱私權政策，請確認連線後重試。" },
+  terms: { url: "https://lionclubsmembership.com/terms", error: "無法開啟使用條款，請確認連線後重試。" },
+  support: { url: "https://lionclubsmembership.com/support", error: "無法開啟支援與聯絡資訊，請確認連線後重試。" },
+} as const;
+type WebsiteTarget = keyof typeof WEBSITE_PAGES;
 
 /** The native "我的" tab — mirrors the website's /profile page, which combines
  * identity, security tools and (for officers) admin tool links on one page
@@ -37,7 +45,7 @@ export default function MyScreen({
   const [resending, setResending] = useState(false);
   const [resendMessage, setResendMessage] = useState<{ memberId: string; email: string; text: string } | null>(null);
   const [openingWebsite, setOpeningWebsite] = useState(false);
-  const [websiteError, setWebsiteError] = useState<string | null>(null);
+  const [websiteError, setWebsiteError] = useState<{ memberId: string; target: WebsiteTarget; text: string } | null>(null);
   const screenRef = useRef<HTMLDivElement>(null);
   const mounted = useRef(false);
   const resendLock = useRef(false);
@@ -45,7 +53,9 @@ export default function MyScreen({
   const identity = useRef({ id: member.id, email: member.email });
   identity.current = { id: member.id, email: member.email };
   const resendNotice = resendMessage?.memberId === member.id && resendMessage.email === member.email ? resendMessage.text : null;
+  const visibleWebsiteError = websiteError?.memberId === member.id ? websiteError : null;
   useEffect(() => { setResendMessage(null); }, [member.id, member.email]);
+  useEffect(() => { setWebsiteError(null); }, [member.id]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useLayoutEffect(() => { screenRef.current?.closest(".shell-content")?.scrollTo(0, 0); }, [view]);
 
@@ -67,15 +77,15 @@ export default function MyScreen({
     }
   }
 
-  async function openWebsite(target: "profile" | "delete") {
+  async function openWebsite(target: WebsiteTarget) {
     if (websiteLock.current || busy) return;
     websiteLock.current = true;
-    const isCurrent = api.captureSessionGuard();
+    const owner = identity.current.id, isCurrent = api.captureSessionGuard();
     setOpeningWebsite(true); setWebsiteError(null);
     try {
-      await Browser.open({ url: target === "profile" ? "https://lionclubsmembership.com/profile" : "https://lionclubsmembership.com/account/delete", presentationStyle: "popover" });
+      await Browser.open({ url: WEBSITE_PAGES[target].url, presentationStyle: "popover" });
     } catch {
-      if (mounted.current && isCurrent()) setWebsiteError("無法開啟帳號管理網頁，請確認連線後重試。App 內的設定尚未變更。");
+      if (mounted.current && isCurrent() && identity.current.id === owner) setWebsiteError({ memberId: owner, target, text: WEBSITE_PAGES[target].error });
     } finally { websiteLock.current = false; if (mounted.current) setOpeningWebsite(false); }
   }
 
@@ -152,9 +162,26 @@ export default function MyScreen({
 
       <NotificationSettings push={push} />
 
+      <section className="my-screen-section" aria-labelledby="my-help-title">
+        <h2 className="section-title" id="my-help-title">說明與政策</h2>
+        {visibleWebsiteError && ["privacy", "terms", "support"].includes(visibleWebsiteError.target)
+          ? <p className="error" role="alert">{visibleWebsiteError.text}</p> : null}
+        <div className="list-stack">
+          <button type="button" className="secondary" disabled={openingWebsite || busy} onClick={() => void openWebsite("privacy")}>
+            閱讀隱私權政策
+          </button>
+          <button type="button" className="secondary" disabled={openingWebsite || busy} onClick={() => void openWebsite("terms")}>
+            閱讀使用條款
+          </button>
+          <button type="button" className="secondary" disabled={openingWebsite || busy} onClick={() => void openWebsite("support")}>
+            查看支援與聯絡方式
+          </button>
+        </div>
+      </section>
+
       <section className="my-screen-section">
         <h2 className="section-title">帳號登入方式</h2>
-        {websiteError ? <p className="error" role="alert">{websiteError}</p> : null}
+        {visibleWebsiteError?.target === "profile" ? <p className="error" role="alert">{visibleWebsiteError.text}</p> : null}
         <p className="member-meta">綁定 Google／Apple 帳號請至網站操作，需要重新驗證身分。</p>
         <button
           type="button"
@@ -168,6 +195,7 @@ export default function MyScreen({
 
       <section className="my-screen-section">
         <h2 className="section-title">刪除帳號</h2>
+        {visibleWebsiteError?.target === "delete" ? <p className="error" role="alert">{visibleWebsiteError.text}</p> : null}
         <p className="member-meta">刪除帳號需要重新驗證身分，請至網站完成操作。</p>
         <button
           type="button"
