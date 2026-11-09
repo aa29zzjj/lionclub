@@ -53,6 +53,6 @@ App Store Connect 的 TestFlight 上傳清單已唯讀確認最新為 **1.0.1（
 
 ## GitHub 與其他平台
 
-本輪重新 fetch 後，`origin/main` 仍為 `844e82defbe459700a29dcb56adc1e7238907de8`。本機基於 `601043af4d1f12e209ceca163d9274f3f4e66c04` 接續，沒有推送、合併、雲端部署、正式 migration 或商店上傳。最終本機修正提交與證據索引見 `output/acceptance/native-followup-20261109/EVIDENCE.json`。
+本輪初次 fetch 時，`origin/main` 為 `844e82defbe459700a29dcb56adc1e7238907de8`。本機基於 `601043af4d1f12e209ceca163d9274f3f4e66c04` 接續。其後為今晚活動獨立發布聖迪註冊修正（PR #2／`d922b8f`／Amplify job 93 成功），並已合回本機原生候選；該正式發布沒有包含這份原生修正、推播、OAuth v2、Email 安全驗證、新政策或資料庫遷移。原生候選依然沒有上傳 App Store 或正式送審。後續狀態見 `RELEASE_CONTINUATION_2026-11-09.md`；較早證據索引為 `output/acceptance/native-followup-20261109/EVIDENCE.json`。
 
 Google Play 另線仍未確認 US$25 付款／開發者帳號成立；沒有因 Xcode 登入而完成 Google Play 或 Android 發布。
