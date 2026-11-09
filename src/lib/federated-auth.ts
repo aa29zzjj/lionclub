@@ -13,7 +13,7 @@ export const hashOAuthSecret = (value: string) => crypto.createHash("sha256").up
 export const validOAuthSecret = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
 export const isAuthProvider = (value: string): value is AuthProvider => value === "google" || value === "apple";
 type Environment = Record<string, string | undefined>;
-export type ProviderConfig = { provider: AuthProvider; clientId: string; clientSecret?: string; origin: string; callback: string; reauthEnabled?: boolean; teamId?: string; keyId?: string; privateKey?: string };
+export type ProviderConfig = { provider: AuthProvider; clientId: string; clientSecret?: string; origin: string; callback: string; reauthEnabled?: boolean; teamId?: string; keyId?: string; privateKey?: string; tokenEncryptionKey?: string };
 
 export function providerConfig(provider: AuthProvider, env: Environment = process.env): ProviderConfig | null {
   if (env.FEDERATED_AUTH_ENABLED !== "true") return null;
@@ -30,12 +30,23 @@ export function providerConfig(provider: AuthProvider, env: Environment = proces
       || /[\s\0]/.test(env.GOOGLE_OAUTH_CLIENT_ID) || /[\s\0]/.test(env.GOOGLE_OAUTH_CLIENT_SECRET)) return null;
     return { ...base, clientId: env.GOOGLE_OAUTH_CLIENT_ID.trim(), clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET, reauthEnabled: env.GOOGLE_OAUTH_FRESH_REAUTH_ENABLED === "true" };
   }
-  // Apple uses form_post and requires a public HTTPS domain, not localhost/IP.
-  if (env.APPLE_OAUTH_FRESH_REAUTH_ENABLED !== "true" || origin.protocol !== "https:" || local || /^[\d.:]+$/.test(origin.hostname)
+  // Email step-up is a separate implemented method, not evidence of a fresh
+  // Apple auth_time. Both production switches remain explicitly default-off.
+  if (env.APPLE_OAUTH_ENABLED !== "true" || env.EMAIL_ACTION_REAUTH_ENABLED !== "true") return null;
+  return appleCredentialConfig(env);
+}
+/** Credentials for existing-account revocation; availability flags must not
+ * prevent users from revoking an identity after sign-in is switched off. */
+export function appleCredentialConfig(env: Environment): ProviderConfig | null {
+  let origin: URL;
+  const value = env.OAUTH_APP_ORIGIN || env.NEXT_PUBLIC_APP_URL || "";
+  try { origin = new URL(value); } catch { return null; }
+  if (value.trim() !== value || origin.protocol !== "https:" || origin.username || origin.password || origin.search || origin.hash || origin.pathname !== "/"
+    || ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname) || /^[\d.:]+$/.test(origin.hostname)
     || !env.APPLE_OAUTH_CLIENT_ID?.trim() || !env.APPLE_OAUTH_TEAM_ID?.trim() || !env.APPLE_OAUTH_KEY_ID?.trim()
     || !env.APPLE_OAUTH_PRIVATE_KEY?.includes("PRIVATE KEY") || !validEncryptionKey(env.OAUTH_TOKEN_ENCRYPTION_KEY)) return null;
-  return { ...base, clientId: env.APPLE_OAUTH_CLIENT_ID.trim(), teamId: env.APPLE_OAUTH_TEAM_ID,
-    keyId: env.APPLE_OAUTH_KEY_ID, privateKey: env.APPLE_OAUTH_PRIVATE_KEY.replace(/\\n/g, "\n") };
+  return { provider: "apple", origin: origin.origin, callback: `${origin.origin}/api/auth/oauth/apple/callback`, clientId: env.APPLE_OAUTH_CLIENT_ID.trim(),
+    teamId: env.APPLE_OAUTH_TEAM_ID, keyId: env.APPLE_OAUTH_KEY_ID, privateKey: env.APPLE_OAUTH_PRIVATE_KEY.replace(/\\n/g, "\n"), tokenEncryptionKey: env.OAUTH_TOKEN_ENCRYPTION_KEY };
 }
 export function publicProviders(env: Environment = process.env) {
   return (["google", "apple"] as const).map(id => ({ id, name: id === "apple" ? "Apple" : "Google", enabled: Boolean(providerConfig(id, env)),
@@ -134,5 +145,5 @@ export function decryptProviderToken(ciphertext: string, encodedKey = process.en
 }
 export async function revokeAppleToken(ciphertext: string, config: ProviderConfig, fetcher: typeof fetch = fetch) {
   await postProvider("https://appleid.apple.com/auth/revoke", new URLSearchParams({ client_id: config.clientId,
-    client_secret: await appleClientSecret(config), token: decryptProviderToken(ciphertext), token_type_hint: "refresh_token" }), fetcher);
+    client_secret: await appleClientSecret(config), token: decryptProviderToken(ciphertext, config.tokenEncryptionKey ?? ""), token_type_hint: "refresh_token" }), fetcher);
 }

@@ -11,10 +11,12 @@ import metadata from "../docs/app-store/METADATA.zh-Hant.json";
 // its own compiler in production. No browser, cookies, DB or mail is accessed.
 Object.assign(globalThis, { React });
 
-test("privacy page discloses current deletion/retention limits rather than promising total immediate erasure", () => {
+test("privacy page discloses shared-data retention and unconfirmed cleanup instead of unsupported deletion deadlines", () => {
   const html = renderToStaticMarkup(React.createElement(PrivacyPage));
-  assert.match(html, /id="deletion"/); assert.match(html, /六分鐘/);
-  assert.match(html, /共享活動/); assert.match(html, /30 天內清除/);
+  assert.match(html, /id="deletion"/);
+  assert.match(html, /共享活動/);
+  assert.match(html, /保存與清除期限[^<]*待營運方/);
+  assert.doesNotMatch(html, /30\s*天內清除|操作日誌保留\s*90\s*天/);
   assert.match(html, /href="\/account\/delete"/);
 });
 

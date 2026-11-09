@@ -21,6 +21,8 @@ backups/
 *.tsbuildinfo
 next-env.d.ts
 tmp/
+# Generated source-transfer archives are delivered locally, not nested in Git.
+/output/handoff/
 # Real-person roster inputs and operator mapping/approval files never belong in Git.
 private-data/
 *.private.json

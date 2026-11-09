@@ -1,0 +1,53 @@
+# 下一版手機推播：資料核對與隱私修訂草案
+
+2026-11-05。技術核對草案，未發布公開政策或改動 App Store 問卷。推播預設關閉，不能把以下候選流程描述成目前已在正式服務收集。正式啟用前應以實際部署、Apple 設定、日誌、資料庫與備份安排重新核對。
+
+## 資料流
+
+本人按開啟 → iOS 通知授權 → Apple 回傳 APNs Token → App 用已登入 API 登記裝置 → 加密 Token 保存於受控資料庫 → 成功建立通知來源的同一交易產生 receipt／outbox → worker 再核對權限後把通用提示交 APNs → 點擊後 App 向本人 API 讀取實際內容。
+
+鎖屏 payload 僅含 LionClubs、通用提示、固定版本及四種已知事件種類；不含姓名、活動標題、審核理由、訊息全文、會員 ID 或可執行 URL。APNs 請求另含配送必要的 Token、topic、到期時間、隨機請求 ID 及去重雜湊；去重雜湊不應被宣稱匿名化證據。
+
+## 候選資料對照
+
+| 資料 | 位置與用途 | 商店核對方向 |
+| --- | --- | --- |
+| APNs Token、Token 雜湊、安裝 UUID | Keychain／受控 API／DB，加密配送與去重，連結 User／Member | 本實作有持久裝置層級識別資料，建議核對「裝置識別碼」；App 功能、與身分連結：是、追蹤：否（限本推播實作） |
+| User／Member ID、sessionVersion、綁定版本 | 裝置歸屬、換帳號、撤銷與角色核對 | 既有「使用者識別碼」須涵蓋這些用途；加密不會解除身分連結 |
+| 開啟偏好、權限結果、登記／最後活動時間、revision、租約 | Keychain／DB，避免未同意啟用與晚回覆重新綁定 | 逐一核對使用狀況資料；不能因屬功能用途而自動省略申報 |
+| 通知種類、來源／審核稽核參照、發送者／收件者、已讀／到期時間 | receipt／outbox，本人查詢及配送去重 | 與身分連結；既有內容與產品互動宣告需涵蓋實際保存資料 |
+| APNs 接受／重試／失效等固定結果碼與計數 | outbox／受控工作記錄，維運與停用失效裝置 | 核對診斷／使用狀況的實際保存；沒有新增第三方分析 SDK |
+
+上述是依程式推論的待填方向，並非已讀取現行商店問卷後的完整結論。本實作沒有廣告 ID、跨業廣告、資料經紀或行銷推播；整個服務的其他 SDK、網頁嵌入、IP／服務日誌及第三方登入仍須另核對。
+
+Apple 的資料類型、功能用途、身分連結及追蹤定義見 [App Privacy Details](https://developer.apple.com/app-store/app-privacy-details/)。以本候選新增資料建議裝置識別碼，是技術對照推論；不是說使用 APNs 就一律代替 Apple 申報其自身所有資料處理。
+
+## 公開說明修訂草案
+
+以下段落僅供確認後套用，仍需配合全篇實際功能與聯絡資料校訂：
+
+> 手機 App 可在您主動開啟並允許系統通知後，提供活動公告、好友邀請及可讀取的審核結果提醒，不用於行銷。為將通知送到您的裝置，我們會處理 Apple 推播 Token、App 安裝識別碼、通知偏好及與會員帳號的綁定，並透過 Apple Push Notification service 配送。鎖定畫面只顯示通用提示，詳細內容須登入 App 並通過當下權限核對後查看。您可以在 App 暫停此裝置通知，或在 iPhone 系統設定撤回顯示權限；站內通知仍保留其原有使用方式。已交付 Apple 或已顯示於裝置的通知無法保證召回。
+
+> 登出時 App 會嘗試解除此安裝的推播綁定；離線或儲存失敗會提示尚未確認。停用成功或 Apple 回報 Token 失效時，服務會清除裝置登記中的 Token 值；部分最小識別與版本記錄可能仍用於阻擋晚到的舊註冊，應依已核定的清理與備份安排處理。
+
+此草案不能直接取代全篇政策。需一併修正 `src/app/privacy/page.tsx` 還將 App 稱為未來功能、Apple 登入未啟用及「站內通知不是背景推播」的時間狀態，並核對正式營運主體、聯絡方式、每一登入方式實際可用性與權限。
+
+## 保存與刪除：目前能證明的界線
+
+- 24 小時裝置租約是停止配送的時限；不是 Token 在所有資料庫／備份永久刪除的承諾。
+- receipt 7 天、delivery 24 小時是可讀／配送期限；尚未配置完成的物理清理排程不能寫成已落地的自動刪除。
+- 登出／停用會以遞增 revision 保留必要 tombstone；刪帳透過 User 關聯刪除裝置及推播資料，仍須核對備份與日誌的獨立安排。
+- 既有公開政策寫「操作日誌保留 90 天」，但使用者於 10 月 27 日明確選擇暫不變更、交 Jerry 確認。本輪沒有更改或刪除日誌；政策數字與實際 enforcement 的差異仍是正式啟用前待辦，不可以推播的 TTL 取代核實。
+- 上線前需核定 Token／tombstone／receipt／delivery 的清理、失敗監控、備份週期及責任人，完成有界清理的驗證，再填入可兌現的期限。
+
+## 2026-11-06 日誌留存現況續查
+
+沿用先前已授權的 LionClubs 專用 AWS 認證，在記憶體中先核對正確帳號，再僅查指定資源；未抄錄認證或讀取日誌內容。
+
+- 台灣時間 20:31（UTC 12:31:52），`DescribeLogGroups` 成功返回精確群組 `/aws/amplify/d3e0lg3sq8xr96`、區域 `us-east-2`。`retentionInDays` 欄位不存在，群組層級沒有設定 90 天；`inheritedProperties` 為空。
+- 台灣時間 20:32（UTC 12:32:55），僅查留存類型的 `DescribeAccountPolicies` 收到 `AccessDeniedException`，隨即停止。未擴充 IAM、調整認證權限或修改任何留存設定。
+- 台灣時間 20:38（UTC 12:38:10），限定查詢同一 Amplify App 的 `lionclubsmembership.com` 網域關聯，回應 200、狀態 `AVAILABLE`；`www` 對應 `main` 且已驗證。另一筆未提供 prefix 的對應亦為 `main`，但 verified 為 false，因此不宣稱所有 DNS 項目皆已驗證。此步補足本次日誌目標與現有 App 網域的關聯證據，未讀取 App 或分支的環境變數。[AWS 指定網域查詢](https://docs.aws.amazon.com/amplify/latest/APIReference/API_GetDomainAssociation.html)
+
+因此可確認群組層級沒有設定保留天數；帳號層級的實際有效規則尚未核實，不能把結果直接寫成永久保留，也不能宣稱公開政策中的 90 天自動清理已落實。[AWS 留存規則說明](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html#SettingLogRetention)
+
+10/27 的暫不變更決定仍保留；本次 Google Play 分工更新沒有執行日誌刪除。送審前須由具既有管理權限的人核對有效規則及必要保留目的，再確認政策與實際處理一致。任何會令既有日誌永久到期刪除的變更，均須針對精確資源另行確認。

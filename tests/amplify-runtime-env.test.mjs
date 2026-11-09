@@ -22,3 +22,10 @@ test("public build-env writer rejects newline interpolation, invalid flags and n
     { OAUTH_APP_ORIGIN: "https://app.example.test/path" }, { OAUTH_APP_ORIGIN: "https://app.example.test/#fragment" },
     { OAUTH_APP_ORIGIN: "https://user:pass@app.example.test" }, { FEDERATED_AUTH_ENABLED: " true" }]) assert.throws(() => publicRuntimeEnvironment(input));
 });
+test("native v2 and Apple deployment flags propagate without copying Apple credentials or enabling defaults", () => {
+  assert.deepEqual(publicRuntimeEnvironment({}), {});
+  assert.deepEqual(publicRuntimeEnvironment({ MOBILE_OAUTH_V2_ENABLED: "false", APPLE_OAUTH_ENABLED: "false", APPLE_OAUTH_FRESH_REAUTH_ENABLED: "false",
+    APPLE_OAUTH_PRIVATE_KEY: "synthetic-private-key", APPLE_OAUTH_CLIENT_ID: "synthetic-client", APPLE_OAUTH_KEY_ID: "synthetic-key", APPLE_OAUTH_TEAM_ID: "synthetic-team" }),
+    { MOBILE_OAUTH_V2_ENABLED: "false", APPLE_OAUTH_ENABLED: "false", APPLE_OAUTH_FRESH_REAUTH_ENABLED: "false" });
+  for (const name of ["MOBILE_OAUTH_V2_ENABLED", "APPLE_OAUTH_ENABLED", "APPLE_OAUTH_FRESH_REAUTH_ENABLED"]) assert.throws(() => publicRuntimeEnvironment({ [name]: "yes" }));
+});

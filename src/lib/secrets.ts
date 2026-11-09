@@ -10,3 +10,4 @@ const resolver = createRuntimeSecretsResolver({ environment: process.env, fetchS
 } });
 export const getAppSecrets = resolver.getAppSecrets;
 export const getOAuthRuntimeSettings = resolver.getOAuthRuntimeSettings;
+export const getAppleCredentialSettings = resolver.getAppleCredentialSettings;

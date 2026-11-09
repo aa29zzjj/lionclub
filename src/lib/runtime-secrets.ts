@@ -1,6 +1,10 @@
 // Pure, dependency-injected resolver for tests. The AWS adapter lives in the
 // server-only secrets-aws.ts module; never import that adapter from a client module.
-export const OAUTH_RUNTIME_KEYS = ["FEDERATED_AUTH_ENABLED", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_FRESH_REAUTH_ENABLED", "OAUTH_APP_ORIGIN", "NEXT_PUBLIC_APP_URL"] as const;
+const GOOGLE_RUNTIME_KEYS = ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_FRESH_REAUTH_ENABLED"] as const;
+const COMMON_RUNTIME_KEYS = ["FEDERATED_AUTH_ENABLED", "OAUTH_APP_ORIGIN", "NEXT_PUBLIC_APP_URL"] as const;
+const APPLE_CREDENTIAL_KEYS = ["APPLE_OAUTH_CLIENT_ID", "APPLE_OAUTH_TEAM_ID", "APPLE_OAUTH_KEY_ID", "APPLE_OAUTH_PRIVATE_KEY", "OAUTH_TOKEN_ENCRYPTION_KEY"] as const;
+const APPLE_RUNTIME_KEYS = [...APPLE_CREDENTIAL_KEYS, "APPLE_OAUTH_FRESH_REAUTH_ENABLED"] as const;
+export const OAUTH_RUNTIME_KEYS = [...COMMON_RUNTIME_KEYS, ...GOOGLE_RUNTIME_KEYS, "APPLE_OAUTH_ENABLED", "EMAIL_ACTION_REAUTH_ENABLED", ...APPLE_RUNTIME_KEYS] as const;
 const SECRET_KEYS = ["DATABASE_URL", "AUTH_SECRET", ...OAUTH_RUNTIME_KEYS] as const;
 type SecretKey = typeof SECRET_KEYS[number];
 export type OAuthRuntimeSettings = Partial<Record<typeof OAUTH_RUNTIME_KEYS[number], string>> & { NODE_ENV?: string };
@@ -53,8 +57,19 @@ export function createRuntimeSecretsResolver(options: { environment: Environment
     // public providers request must not probe the AWS metadata credential chain.
     const hasGoogle = present(env.GOOGLE_OAUTH_CLIENT_ID) && present(env.GOOGLE_OAUTH_CLIENT_SECRET)
       && (present(env.OAUTH_APP_ORIGIN) || present(env.NEXT_PUBLIC_APP_URL)) && present(env.FEDERATED_AUTH_ENABLED);
-    const fallback = env.OAUTH_RUNTIME_SECRETS_ENABLED === "true" && env.FEDERATED_AUTH_ENABLED !== "false" && !hasGoogle ? await stored() : undefined;
-    if (fallback) {
+    // A stored legacy Apple flag cannot turn on a newly supported provider.
+    // The operator must explicitly opt in in this server's runtime environment.
+    const appleRequested = env.APPLE_OAUTH_ENABLED === "true";
+    const hasApple = APPLE_CREDENTIAL_KEYS.every(key => present(env[key]))
+      && (present(env.OAUTH_APP_ORIGIN) || present(env.NEXT_PUBLIC_APP_URL)) && present(env.FEDERATED_AUTH_ENABLED);
+    const needsAppleFallback = appleRequested && !hasApple;
+    let fallback: Partial<Record<SecretKey, string>> | undefined;
+    if (env.OAUTH_RUNTIME_SECRETS_ENABLED === "true" && env.FEDERATED_AUTH_ENABLED !== "false" && (!hasGoogle || needsAppleFallback)) {
+      try { fallback = await stored(); }
+      catch (error) { if (!hasGoogle) throw error; }
+      // Optional Apple fallback failure must not disable complete Google env.
+    }
+    if (fallback && !hasGoogle) {
       // An incomplete env credential bundle may borrow only from the SAME
       // stored client, never silently pair client A with client B's secret.
       const envId = present(env.GOOGLE_OAUTH_CLIENT_ID) ? env.GOOGLE_OAUTH_CLIENT_ID : undefined;
@@ -66,9 +81,40 @@ export function createRuntimeSecretsResolver(options: { environment: Environment
       if (present(envOrigin) && present(storedOrigin) && (!canonicalOrigin(envOrigin) || canonicalOrigin(envOrigin) !== canonicalOrigin(storedOrigin))) throw Error("APP_OAUTH_SOURCE_CONFLICT");
     }
     const result: OAuthRuntimeSettings = { NODE_ENV: env.NODE_ENV };
-    for (const key of OAUTH_RUNTIME_KEYS) { const value = preferred(key, fallback); if (value !== undefined) result[key] = value; }
-    // Apple credentials are intentionally not allowlisted for this release.
+    // This public readiness switch cannot be enabled by a legacy stored value.
+    result.EMAIL_ACTION_REAUTH_ENABLED = env.EMAIL_ACTION_REAUTH_ENABLED === "true" ? "true" : "false";
+    for (const key of COMMON_RUNTIME_KEYS) { const value = preferred(key, fallback); if (value !== undefined) result[key] = value; }
+    // Reading a fallback for Apple must not mix into a complete Google bundle.
+    for (const key of GOOGLE_RUNTIME_KEYS) { const value = preferred(key, hasGoogle ? undefined : fallback); if (value !== undefined) result[key] = value; }
+    result.APPLE_OAUTH_ENABLED = "false";
+    if (appleRequested) {
+      const appleFallback = hasApple ? undefined : fallback;
+      const envOrigin = env.OAUTH_APP_ORIGIN || env.NEXT_PUBLIC_APP_URL;
+      const storedOrigin = appleFallback?.OAUTH_APP_ORIGIN || appleFallback?.NEXT_PUBLIC_APP_URL;
+      const sourceConflict = appleFallback && (APPLE_CREDENTIAL_KEYS.some(key => present(env[key]) && env[key] !== appleFallback[key])
+        || present(envOrigin) && present(storedOrigin) && (!canonicalOrigin(envOrigin) || canonicalOrigin(envOrigin) !== canonicalOrigin(storedOrigin)));
+      // A bad optional Apple bundle cannot disable otherwise working Google or
+      // password sign-in. Missing/invalid settings still fail providerConfig.
+      if (!sourceConflict) {
+        result.APPLE_OAUTH_ENABLED = "true";
+        for (const key of APPLE_RUNTIME_KEYS) { const value = preferred(key, appleFallback); if (value !== undefined) result[key] = value; }
+      }
+    }
     return result;
   }
-  return { getAppSecrets, getOAuthRuntimeSettings };
+  async function getAppleCredentialSettings(): Promise<OAuthRuntimeSettings> {
+    // Existing-account revocation survives a disabled sign-in flag. The source
+    // remains the same explicit env or approved APP_SECRETS_NAME fallback.
+    const complete = APPLE_CREDENTIAL_KEYS.every(key => present(env[key])) && present(env.OAUTH_APP_ORIGIN || env.NEXT_PUBLIC_APP_URL);
+    const fallback = !complete && env.OAUTH_RUNTIME_SECRETS_ENABLED === "true" ? await stored() : undefined;
+    const envOrigin = env.OAUTH_APP_ORIGIN || env.NEXT_PUBLIC_APP_URL, storedOrigin = fallback?.OAUTH_APP_ORIGIN || fallback?.NEXT_PUBLIC_APP_URL;
+    if (fallback && (APPLE_CREDENTIAL_KEYS.some(key => present(env[key]) && env[key] !== fallback[key])
+      || present(envOrigin) && present(storedOrigin) && (!canonicalOrigin(envOrigin) || canonicalOrigin(envOrigin) !== canonicalOrigin(storedOrigin)))) throw Error("APP_OAUTH_SOURCE_CONFLICT");
+    const result: OAuthRuntimeSettings = { NODE_ENV: env.NODE_ENV };
+    for (const key of [...APPLE_CREDENTIAL_KEYS, "OAUTH_APP_ORIGIN", "NEXT_PUBLIC_APP_URL"] as const) {
+      const value = preferred(key, fallback); if (value !== undefined) result[key] = value;
+    }
+    return result;
+  }
+  return { getAppSecrets, getOAuthRuntimeSettings, getAppleCredentialSettings };
 }

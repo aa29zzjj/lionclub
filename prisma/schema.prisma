@@ -124,6 +124,10 @@ model Member {
 
   sentNotifications      EventNotification[]          @relation("NotificationSender")
   receivedNotifications  EventNotificationRecipient[]
+  mobilePushDevices MobilePushDevice[]
+  mobilePushReceipts MobilePushReceipt[] @relation("PushReceiptRecipient")
+  mobilePushReceiptsAuthored MobilePushReceipt[] @relation("PushReceiptActor")
+  emailActionChallenges EmailActionChallenge[]
 
   issuedInvites ClubInvite[] @relation("InviteIssuedBy")
 
@@ -178,6 +182,9 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   federatedIdentities FederatedIdentity[]
   oauthTransactions OAuthTransaction[]
+  mobilePushDevices MobilePushDevice[]
+  mobilePushReceipts MobilePushReceipt[]
+  emailActionChallenges EmailActionChallenge[]
 }
 
 model MemberDataConsent {
@@ -199,12 +206,44 @@ model FederatedIdentity {
   provider String
   subject String
   email String
+  securityEmailVerifiedAt DateTime? // Set only after a newly verified Apple authorization; legacy rows are not backfilled.
   refreshTokenCiphertext String? // Apple revocation token, AES-256-GCM encrypted
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  emailActionChallenges EmailActionChallenge[]
 
   @@unique([provider, subject])
   @@unique([userId, provider])
+}
+
+// Separate from provider authentication: a code sent to an immutable,
+// provider-attested contact authorizes one explicit sensitive action only.
+model EmailActionChallenge {
+  id String @id @db.Uuid
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  sessionVersion Int
+  identityId String
+  identity FederatedIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  identityUpdatedAt DateTime
+  identityVerifiedAt DateTime
+  email String
+  action String
+  codeHash String? @db.Char(64)
+  deliveryState String @default("PENDING")
+  attempts Int @default(0)
+  expiresAt DateTime
+  verifiedAt DateTime?
+  invalidatedAt DateTime?
+  proofHash String? @unique @db.Char(64)
+  proofExpiresAt DateTime?
+  proofUsedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, action, createdAt])
+  @@index([expiresAt])
 }
 
 // Short-lived, browser-bound, one-use authorization/registration/reauth state.
@@ -233,7 +272,14 @@ model OAuthTransaction {
   reauthExpiresAt DateTime?
   reauthUsedAt DateTime?
   reauthAction String? // which sensitive action ("link" | "sessions" | "delete") this proof may authorize; consumeOAuthReauth must match it exactly
+  emailActionChallengeId String? @db.Uuid // Consumed email step-up for web linking; missing/expired source must fail closed.
   nativeRedirectUri String? // set only for native-app flows; web flows stay null and keep today's cookie-session completion
+  nativeState String? // app-generated state; independent of the provider's state/nonce
+  nativeCodeChallenge String? // app S256 challenge, never its verifier
+  nativeBootstrapUsedAt DateTime?
+  nativeHandoffHash String? @unique // opaque one-use handoff; no user data in its URL
+  nativeHandoffExpiresAt DateTime?
+  nativeHandoffUsedAt DateTime?
   createdAt DateTime @default(now())
 
   @@index([expiresAt])
@@ -604,6 +650,85 @@ model EventNotificationRecipient {
   readAt         DateTime?
 
   @@unique([notificationId, recipientId])
+}
+
+// Optional native push foundation. No existing route queries these tables while
+// MOBILE_PUSH_ENABLED is off. The migration must be explicitly deployed first.
+model MobilePushDevice {
+  id String @id @default(cuid())
+  installationId String @unique @db.Uuid
+  revision BigInt
+  bindingVersion Int @default(1)
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  sessionVersion Int
+  environment String
+  topic String
+  tokenHash String? @db.Char(64)
+  tokenCiphertext String?
+  enabled Boolean @default(true)
+  lastSeenAt DateTime @default(now())
+  leaseExpiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deliveries MobilePushDelivery[]
+
+  @@unique([environment, topic, tokenHash])
+  @@index([memberId, enabled, leaseExpiresAt])
+  @@index([userId, enabled, leaseExpiresAt])
+}
+
+// Generic receipt only; never copies names, message bodies or review reasons.
+// Polymorphic source identifiers are re-authorized against their real source
+// before every feed response and delivery, not trusted as permission by themselves.
+model MobilePushReceipt {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberId String
+  member Member @relation("PushReceiptRecipient", fields: [memberId], references: [id], onDelete: Cascade)
+  actorId String
+  actor Member @relation("PushReceiptActor", fields: [actorId], references: [id], onDelete: Cascade)
+  kind String
+  sourceId String
+  sourceRevision String @default("")
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  readAt DateTime?
+  deliveries MobilePushDelivery[]
+
+  @@unique([userId, kind, sourceId, sourceRevision])
+  @@index([memberId, createdAt])
+  @@index([expiresAt])
+}
+
+// Durable per-device transactional outbox. ACCEPTED means APNs accepted it,
+// never proof of display/delivery. A claimed job is bounded and single-worker.
+model MobilePushDelivery {
+  id String @id @default(cuid())
+  apnsId String @unique @default(uuid()) @db.Uuid
+  receiptId String
+  receipt MobilePushReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  deviceId String
+  device MobilePushDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  bindingVersion Int
+  sessionVersion Int
+  status String @default("PENDING")
+  attemptCount Int @default(0)
+  availableAt DateTime @default(now())
+  expiresAt DateTime
+  lockId String? @db.Uuid
+  lockedAt DateTime?
+  acceptedAt DateTime?
+  lastErrorCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([receiptId, deviceId, bindingVersion])
+  @@index([status, availableAt])
+  @@index([expiresAt])
 }
 
 // ────────────────────────────────

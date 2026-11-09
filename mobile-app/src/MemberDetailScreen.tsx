@@ -6,6 +6,7 @@ import { formatJoinDate, positionOptions, verificationLabels } from "../../src/l
 
 declare const API_BASE_URL: string;
 const api = createApiClient(API_BASE_URL);
+const REPORT_REASON_MAX_LENGTH = 200;
 
 function positionName(experience: { kind: string; positionCode: string }) {
   if (experience.kind === "membership") return "加入獅子會";
@@ -20,6 +21,7 @@ export default function MemberDetailScreen({ memberId, onBack }: { memberId: str
   const [busy, setBusy] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
   const [reportReason, setReportReason] = useState("");
+  const reportReasonTooLong = reportReason.length > REPORT_REASON_MAX_LENGTH;
 
   const load = useCallback(async () => {
     setError(null);
@@ -56,7 +58,11 @@ export default function MemberDetailScreen({ memberId, onBack }: { memberId: str
   }
 
   async function submitReport() {
-    if (!member || reportReason.trim().length < 2) return;
+    if (!member || busy || reportReason.trim().length < 2) return;
+    if (reportReasonTooLong) {
+      setError("檢舉原因最多 200 字，請刪減後再送出。");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -103,10 +109,13 @@ export default function MemberDetailScreen({ memberId, onBack }: { memberId: str
           {showReportForm ? (
             <div className="my-screen-section">
               <label htmlFor="member-report-reason">檢舉原因</label>
-              <textarea id="member-report-reason" rows={3} maxLength={1000} value={reportReason} onChange={(e) => setReportReason(e.target.value)} placeholder="請簡述檢舉原因" />
+              <textarea id="member-report-reason" rows={3} maxLength={REPORT_REASON_MAX_LENGTH} aria-describedby="member-report-reason-limit" aria-invalid={reportReasonTooLong || undefined} value={reportReason} onChange={(e) => setReportReason(e.target.value)} placeholder="請簡述檢舉原因" />
+              <p id="member-report-reason-limit" className={reportReasonTooLong ? "error" : "member-meta"}>
+                請輸入 2 至 200 字。目前 {reportReason.length}／200 字。
+              </p>
               <div className="form-actions" style={{ marginTop: "0.5rem" }}>
                 <button type="button" className="secondary" disabled={busy} onClick={() => setShowReportForm(false)}>取消</button>
-                <button type="button" className="primary" disabled={busy || reportReason.trim().length < 2} onClick={submitReport}>送出檢舉</button>
+                <button type="button" className="primary" disabled={busy || reportReason.trim().length < 2 || reportReasonTooLong} onClick={submitReport}>送出檢舉</button>
               </div>
             </div>
           ) : null}

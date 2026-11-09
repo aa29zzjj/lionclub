@@ -3,8 +3,9 @@
 import { writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-const flags = ["FEDERATED_AUTH_ENABLED", "OAUTH_RUNTIME_SECRETS_ENABLED", "GOOGLE_OAUTH_FRESH_REAUTH_ENABLED"];
+const flags = ["FEDERATED_AUTH_ENABLED", "OAUTH_RUNTIME_SECRETS_ENABLED", "GOOGLE_OAUTH_FRESH_REAUTH_ENABLED", "APPLE_OAUTH_ENABLED", "APPLE_OAUTH_FRESH_REAUTH_ENABLED", "EMAIL_ACTION_REAUTH_ENABLED", "MOBILE_OAUTH_V2_ENABLED", "MOBILE_PUSH_ENABLED", "MOBILE_PUSH_RUNTIME_SECRETS_ENABLED"];
 const origins = ["OAUTH_APP_ORIGIN", "NEXT_PUBLIC_APP_URL"];
+/** @param {Record<string, string | undefined>} environment */
 export function publicRuntimeEnvironment(environment = process.env) {
   const result = {};
   const optional = name => typeof environment[name] === "string" && environment[name] !== "" ? environment[name] : undefined;
@@ -19,11 +20,15 @@ export function publicRuntimeEnvironment(environment = process.env) {
     if (value.trim() !== value || url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION");
     result[name] = url.origin;
   }
-  const secretName = optional("APP_SECRETS_NAME");
-  if (secretName !== undefined) {
+  for (const reference of ["APP_SECRETS_NAME", "MOBILE_PUSH_SECRETS_NAME"]) {
+    const secretName = optional(reference);
+    if (secretName === undefined) continue;
     if (!/^[A-Za-z0-9/_+=.@:-]{1,2048}$/.test(secretName)) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION");
-    result.APP_SECRETS_NAME = secretName;
+    result[reference] = secretName;
   }
+  const pushMode = optional("APNS_ENVIRONMENT"), pushTopic = optional("APNS_TOPIC");
+  if (pushMode !== undefined) { if (!["sandbox", "production"].includes(pushMode)) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION"); result.APNS_ENVIRONMENT = pushMode; }
+  if (pushTopic !== undefined) { if (pushTopic !== "com.lionclubsmembership.app") throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION"); result.APNS_TOPIC = pushTopic; }
   for (const name of ["AVATAR_BUCKET_NAME", "AVATAR_PUBLIC_BASE_URL", "PASSWORD_RESET_FROM_EMAIL"]) {
     const value = optional(name); if (value === undefined) continue;
     if (/[\r\n\0$]/.test(value) || value.trim() !== value) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION");
@@ -37,6 +42,7 @@ export function publicRuntimeEnvironment(environment = process.env) {
   }
   return result;
 }
+/** @param {Record<string, string | undefined>} environment */
 export function renderPublicRuntimeEnvironment(environment = process.env) {
   return Object.entries(publicRuntimeEnvironment(environment)).map(([name, value]) => `${name}=${JSON.stringify(value)}`).join("\n") + "\n";
 }

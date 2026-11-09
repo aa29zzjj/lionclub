@@ -210,7 +210,8 @@ test("federated identities, central signup and security reauthentication are iso
     await t.test("missing new OAuth tables leave auth-methods and existing local login functional", async () => {
       const localJar = sim.jar();
       assert.equal((await sim.call("/api/auth/login", "POST", { email: seed.chair.email, password: seed.password }, localJar)).status, 200);
-      await sim.database.exec('DROP TABLE "OAuthTransaction"; DROP TABLE "FederatedIdentity";');
+      // Drop dependent step-up data first to simulate a pre-federated schema.
+      await sim.database.exec('DROP TABLE "EmailActionChallenge"; DROP TABLE "OAuthTransaction"; DROP TABLE "FederatedIdentity";');
       assert.equal((await sim.call("/api/auth/login", "POST", { email: seed.chair.email, password: seed.password }, localJar)).status, 200);
       const legacySignup = await sim.call("/api/auth/register", "POST", { name: "合成本地密碼會員", email: "local-no-oauth-tables@example.test", password: "SyntheticPass42!", token: seed.invite.token, privacyConsent: true, termsConsent: true }, sim.jar());
       assert.equal(legacySignup.status, 200, "existing password registration must not query new OAuth/consent tables");

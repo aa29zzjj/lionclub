@@ -8,6 +8,7 @@ import { consumeAuthLimits, getClientIp, rateLimitResponse } from "@/lib/rate-li
 import { beginOAuth, consumeOAuthReauth } from "@/lib/federated-auth-service";
 import { FederatedAuthError, isAuthProvider, randomOAuthSecret, validOAuthSecret } from "@/lib/federated-auth";
 import { resolveProviderConfig } from "@/lib/federated-auth-runtime";
+import { EMAIL_ACTION_COOKIE, consumeEmailActionProof } from "@/lib/email-action-reauth";
 import { oauthErrorResponse, oauthJson, OAUTH_BROWSER_COOKIE, OAUTH_REAUTH_COOKIE, readOAuthCookie, setOAuthCookie } from "@/lib/federated-auth-http";
 const schema = z.object({ purpose: z.enum(["login", "link", "reauth"]).default("login"), password: z.string().max(200).optional(), token: z.string().min(1).max(200).optional(), oauthConsent: z.literal(true).optional(),
   reauthAction: z.enum(["link", "sessions", "delete"]).optional() });
@@ -27,15 +28,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const limited = await consumeAuthLimits(prisma, "oauth-start", getClientIp(request), session?.userId || browserSecret);
     if (limited) return rateLimitResponse(limited);
     let confirmed = false;
+    let emailActionChallengeId: string | undefined;
     if (parsed.data.purpose === "link") {
       if (!session) throw new FederatedAuthError(401, "LOGIN_REQUIRED", "請先登入本人帳號");
       if (parsed.data.oauthConsent !== true) throw new FederatedAuthError(400, "OAUTH_CONSENT_REQUIRED", "請先同意連結第三方帳號及資料處理");
       const user = await prisma.user.findUnique({ where: { id: session.userId } });
       confirmed = Boolean(user?.passwordHash && parsed.data.password && await bcrypt.compare(parsed.data.password, user.passwordHash));
       if (!confirmed) confirmed = await consumeOAuthReauth(prisma, session, await readOAuthCookie(OAUTH_REAUTH_COOKIE), "link");
+      if (!confirmed) {
+        const binding = await consumeEmailActionProof(prisma, session, await readOAuthCookie(EMAIL_ACTION_COOKIE), "link");
+        if (binding) { confirmed = true; emailActionChallengeId = binding.id; }
+      }
     }
     const result = await beginOAuth(prisma, provider, parsed.data.purpose, browserSecret, session, confirmed, new Date(), parsed.data.token, config,
-      undefined, parsed.data.purpose === "reauth" ? parsed.data.reauthAction : undefined);
+      undefined, parsed.data.purpose === "reauth" ? parsed.data.reauthAction : undefined, undefined, emailActionChallengeId);
     await setOAuthCookie(OAUTH_BROWSER_COOKIE, browserSecret, 15 * 60, true, config.origin);
     return oauthJson(result);
   } catch (error) { return oauthErrorResponse(error); }

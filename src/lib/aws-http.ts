@@ -37,7 +37,9 @@ export async function createS3UploadUrl(input: {
   key: string;
   contentType: string;
 }) {
-  const client = new S3Client({ region: input.region });
+  // Presigning has no image body yet. The SDK's automatic CRC32 would sign an
+  // empty-body checksum into the URL and reject the eventual non-empty image.
+  const client = new S3Client({ region: input.region, requestChecksumCalculation: "WHEN_REQUIRED" });
   const command = new PutObjectCommand({ Bucket: input.bucket, Key: input.key, ContentType: input.contentType });
   return getSignedUrl(client, command, { expiresIn: 300 });
 }

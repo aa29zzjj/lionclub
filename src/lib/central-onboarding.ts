@@ -132,7 +132,8 @@ export async function createCentralMember(
         });
         const user = await tx.user.create({ data: { email: input.email, passwordHash, memberId: member.id } });
         if (oauth) {
-          await tx.federatedIdentity.create({ data: { userId: user.id, provider: oauth.provider, subject: oauth.subject!, email: oauth.email!, refreshTokenCiphertext: oauth.refreshTokenCiphertext } });
+          await tx.federatedIdentity.create({ data: { userId: user.id, provider: oauth.provider, subject: oauth.subject!, email: oauth.email!, refreshTokenCiphertext: oauth.refreshTokenCiphertext,
+            ...(oauth.provider === "apple" ? { securityEmailVerifiedAt: oauth.verifiedAt } : {}) } });
           await tx.memberDataConsent.create({ data: { memberId: member.id, purpose: "federated_auth", version: OAUTH_DATA_VERSION } });
           await tx.oAuthTransaction.update({ where: { id: oauth.id }, data: { userId: user.id, sessionVersion: user.sessionVersion,
             subject: null, email: null, providerName: null, refreshTokenCiphertext: null, inviteToken: null, codeVerifier: null, nonce: "", browserHash: "" } });

@@ -61,7 +61,11 @@ export async function createSimulation({ beforeFinalMigration, environment = {},
         // or inspect ambient OAuth credentials in an isolated simulation.
         getOAuthRuntimeSettings: async () => Object.fromEntries([
           "NODE_ENV", "FEDERATED_AUTH_ENABLED", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET",
-          "GOOGLE_OAUTH_FRESH_REAUTH_ENABLED", "OAUTH_APP_ORIGIN", "NEXT_PUBLIC_APP_URL",
+          "GOOGLE_OAUTH_FRESH_REAUTH_ENABLED", "OAUTH_APP_ORIGIN", "NEXT_PUBLIC_APP_URL", "APPLE_OAUTH_ENABLED", "EMAIL_ACTION_REAUTH_ENABLED",
+          "APPLE_OAUTH_CLIENT_ID", "APPLE_OAUTH_TEAM_ID", "APPLE_OAUTH_KEY_ID", "APPLE_OAUTH_PRIVATE_KEY", "OAUTH_TOKEN_ENCRYPTION_KEY", "APPLE_OAUTH_FRESH_REAUTH_ENABLED",
+        ].filter(key => env[key] !== undefined).map(key => [key, env[key]])),
+        getAppleCredentialSettings: async () => Object.fromEntries([
+          "NODE_ENV", "OAUTH_APP_ORIGIN", "NEXT_PUBLIC_APP_URL", "APPLE_OAUTH_CLIENT_ID", "APPLE_OAUTH_TEAM_ID", "APPLE_OAUTH_KEY_ID", "APPLE_OAUTH_PRIVATE_KEY", "OAUTH_TOKEN_ENCRYPTION_KEY",
         ].filter(key => env[key] !== undefined).map(key => [key, env[key]])),
       };
       if (name === "@/lib/aws-http" || name === "./aws-http") return { sendSesEmail: async input => {
@@ -122,6 +126,7 @@ function resolveRoute(path) {
   const pathname = new URL(path, ORIGIN).pathname.replace(/^\/api\//, "");
   if (existsSync(join(ROOT, "src/app/api", pathname, "route.ts"))) return { file: pathname, params: {} };
   const candidates = [
+    [/^mobile\/auth\/oauth\/([^/]+)\/start$/, m => ({ file: "mobile/auth/oauth/[provider]/start", params: { provider: m[1] } })],
     [/^auth\/oauth\/([^/]+)\/(start|callback)$/, m => ({ file: `auth/oauth/[provider]/${m[2]}`, params: { provider: m[1] } })],
     [/^events\/([^/]+)\/(check-in|register|registrations|report)$/, m => ({ file: `events/[id]/${m[2]}`, params: { id: m[1] } })],
     [/^events\/([^/]+)$/, m => ({ file: "events/[id]", params: { id: m[1] } })],

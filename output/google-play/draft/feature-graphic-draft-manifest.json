@@ -1,0 +1,27 @@
+{
+  "status": "draft-unapproved-unpublished",
+  "purpose": "Google Play feature graphic candidate; not a device screenshot",
+  "width": 1024,
+  "height": 500,
+  "color": "24-bit RGB PNG, sRGB, no alpha",
+  "sourceLogo": {
+    "path": "mobile-app/src/lions-logo.png",
+    "sha256": "eef9b548c0a28f1d840256bea647a6ce32d0b146e83817ee1ba7ab4c1ce9364b",
+    "bytesUnchanged": true
+  },
+  "files": {
+    "LionClubs_feature_graphic_draft_1024x500.svg": {
+      "sha256": "4694c483503d8d7e5b37719080986beffe1a94f54ede091549639bec91fda2ec",
+      "bytes": 128287
+    },
+    "LionClubs_feature_graphic_draft_1024x500.png": {
+      "sha256": "9dfdf483d4dfec0f8edb084e4c32e624e1373fe17bebcca7401f43f774a65306",
+      "bytes": 153379
+    }
+  },
+  "approvalRequired": [
+    "brand and logo usage rights",
+    "visual/content review before upload"
+  ],
+  "uploaded": false
+}

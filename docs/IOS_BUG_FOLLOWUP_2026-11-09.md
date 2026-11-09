@@ -1,0 +1,58 @@
+# iOS 問題修正與發行續作進度
+
+更新：2026-11-09（台灣）。這份文件接續 11 月 7 日的 [差異矩陣](WEB_IOS_PARITY_AUDIT_2026-11-07.md) 與 [發行關卡](NATIVE_PARITY_FIXES_AND_RELEASE_GATES_2026-11-07.md)。本輪為本機候選，尚未更新 App Store 或正式後端。
+
+## 已完成的修正
+
+| 項目 | 現在的行為 |
+| --- | --- |
+| 活動發布 | 從伺服器提供的授權選項選取「發布層級＋主辦單位」，不再固定分會；校驗日期、台灣時間、名額、字數及圖片。發布設定失敗可重試或取消。未知發布結果不會自動重送。 |
+| App 內條款 | 新增 mobile 條款讀取／同意 API 與 App 提示；必須核對目前版本並明確勾選。同意後只返回編輯，仍須另外按發布，不會代為發布；稍後再確認可保留草稿。沒有替真實會員同意條款。 |
+| 返回 App 保留草稿 | 背景／前景切換期間隱藏並停用會員畫面，重新驗證同一身分成功後才恢復；維持原畫面元件，避免正常返回就清空草稿。失敗或身分變更不會顯示舊會員資料。 |
+| 帳號失效／登出競態 | 改成 App 全域接收已確認的登入失效，不依賴原本的帳號頁仍在。推播停用、登出及撤銷回覆使用同一流程；延遲回覆不能登出替代帳號。替代登入尚未完成時只隱藏內容，不會自動讀取暫空的憑證而中斷登入。 |
+| 帳號頁錯誤處理 | 封鎖名單格式或讀取失敗不再顯示為空名單；解除封鎖、重新寄送驗證信均須明確成功回覆。開啟帳號管理／刪帳網頁失敗會顯示訊息。驗證信狀態綁定本次會員及信箱，不會留在修改後的新信箱上。 |
+| 待審會員入會日期 | App 預填原始歷史年月，未知值保持未知；確認視窗列出組織、原值與核准值，帶版本及組織快照避免審到已變更資料。Web／mobile API 支援省略即保留、null 即未知，並阻止刪除已有組織分派歷史的帳號。詳細見 [日期修正文件](PENDING_MEMBER_JOIN_DATE_FIX_2026-11-08.md)。 |
+| 確認視窗辨識度 | 修正白色確認視窗裡「取消」按鈕的白字問題；改成深色文字、淺底與可見邊框。 |
+
+Web 待審表單本身仍有預設今天的既有行為，本輪沒有重寫該 Web 表單；不能把 API 的省略值保留誤稱為該表單也修完。
+
+## 本輪驗證
+
+- 全部 TypeScript 測試 **523／523**；全部隔離整合／demo 測試 **226／226**；隔離介面安全測試 **16／16**。
+- TypeScript 全專案檢查與 Next production build 通過。Next 使用合成 DB／session 設定並關閉 provider、推播與秘密查詢；未以正式資料或秘密建置。
+- iPhoneOS 27.1 Release 編譯通過。另產生 unsigned Archive 作為可續作候選；unsigned 不是有效發行簽章或可上傳 IPA。最終產物與雜湊見本輪 `EVIDENCE.json`。
+- 相同 App React 畫面的隔離互動檢查：官方主辦選項、重新確認權限保留草稿、發布設定失敗及取消、條款提示未勾選時不能同意、稍後返回保留草稿、封鎖名單格式錯誤、解除封鎖未確認仍保留該列、外部帳號頁開啟失敗、入會原值／空值、核准前確認、未知審核結果要求重新載入。
+- 隔離 iOS 宿主 `com.lionclubsmembership.uipreview` 已重新建置並安裝於 iOS 27.1 模擬器；實際 WKWebView 確認首頁、直式畫面、發布設定失敗、返回列表及通知分頁可顯示。來源、建置與安裝 bundle 的 CSS／JS 雜湊相同。這是無網路合成候選，並非正式 App Store 二進位或真機完整驗收。
+- 所有介面資料均為合成資料，CSP 禁止網路，條款同意、會員審核、發布及帳號寫入均拒絕；沒有對正式會員執行操作。日期／時間欄位以原生控制項操作核對。
+- 模擬前景切換及帳號交錯由純邏輯／真實 client 的注入式測試驗證；不代表相機、APNs、Google／Apple 真實登入、iPad 或真機驗收完成。
+
+## 簽章與發行描述檔已就緒，IPA 驗證通過
+
+使用者完成登入後，Xcode 已顯示 **Prepmate AI inc.／Admin** 團隊與 Certificates, Identifiers, & Profiles。最初三張既有 **Apple Distribution** 均為 **Not in Keychain**、本機 **0 valid identities**。接續已依使用者提供的 `.p12` 完成既有憑證及配對私鑰匯入；鑰匙圈「我的憑證」可展開看到配對的 Imported Private Key。
+
+匯入後先出現有配對 identity 但 valid=0，鑰匙圈顯示不受信任。補入 [Apple 官方 WWDR G3 公用中繼憑證](https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer)，保留系統預設信任後，系統已列出 **2 valid identities**，包含 **Apple Distribution: Prepmate AI inc. (2TWCSJNDWG)**。該發行憑證有效至 `2027-10-30T17:46:22Z`。沒有建立、撤銷或替換發行憑證，沒有設定 Always Trust，也未將私鑰或密碼寫入 repo／證據。官方用途說明見 [WWDR intermediate certificates](https://developer.apple.com/help/account/certificates/wwdr-intermediate-certificates/)。
+
+Developer 已重新登入。原有 Profiles 清單沒有 LionClubs；使用者於 Generate 前明確核准後，已建立、下載並安裝 **LionClubs App Store 20261109**，UUID `63cc0c31-642b-47fd-8dd4-1fb21a9a90be`。已核對 Team `2TWCSJNDWG`、明確 Bundle ID `com.lionclubsmembership.app`、指定 Distribution 憑證、`aps-environment=production`、`get-task-allow=false`，且無 Ad Hoc 裝置清單或 Enterprise 全裝置授權；描述檔有效至 `2027-10-30T17:46:22Z`。
+
+App Store Connect 的 TestFlight 上傳清單已唯讀確認最新為 **1.0.1（5）**，上傳完成時間顯示 Nov 5, 2026；清單沒有更高或處理中的建置。這次候選採 **1.0.1（6）**，在獨立本機 iOS 建置副本中只設定 App target 的 Release 簽章／版本；避免把 App 的描述檔套用到共用套件，主工作樹工程未綁死此機的 profile。
+
+持有人已完成 codesign 私鑰使用驗證，**signed Archive 與 IPA 匯出均成功**。兩者通過 strict／deep code signature、Team／Bundle ID／1.0.1（6）／指定 leaf certificate／profile 的驗證；最終 `aps-environment=production`、`get-task-allow=false`。來源、Archive 與 IPA 的 `app.js`、`app.css`、`index.html` SHA-256 完全相同。
+
+已簽署 IPA：`output/releases/LionClubs-iOS-1.0.1-build6-2026-11-09.ipa`（5,053,332 bytes），SHA-256 `d180332825645488f80515baea16b56b92bcaf721c633f960fb20c4a49778328`。尚未上傳、分發 TestFlight 或提交商店。接著須完成配套後端、舊版相容安排及真機驗收，不能以簽章成功代表已可公開發行。
+
+簽署證據見 `output/acceptance/native-followup-20261109/SIGNED_PACKAGE_EVIDENCE.json` 與 `SIGNED_IPA_VALIDATION.json`；`SIGNING_STATUS.json` 已更新。較早的 `EVIDENCE.json` 保留當時 unsigned 建置的原始紀錄。
+
+## 仍保留的發行關卡
+
+1. **配套後端及 migration**：11 月 7 日的 native OAuth v2 migration 必須先於新後端；即使旗標關閉，共用 Web OAuth 仍會讀新增欄位。不能單獨部署會拒絕舊原生協定的新後端；需安排舊版影響、新 App 與回復方案。本輪新增條款及待審會員欄位亦須與候選後端配套。
+2. **Google／Apple 實際驗收**：正式環境開旗、第三方同意及帳號連結、取消／冷啟動／換帳號仍待真實驗收。本輪公開 providers 回覆 Google=true、Apple=false／APPLE_UNAVAILABLE。Apple config 未提供 fresh reauth，不能只改旗標便宣稱完成。本機另實作預設關閉的 Apple-only 信箱本人驗證，限定既有經 Apple 驗證的登入信箱、本人及指定操作；這不是 Apple 密碼／Face ID 重新驗證。最終刪帳交易重查原驗證，失效競態的隔離測試通過。仍須先部署新增 schema，驗收真實 Apple 隱藏信箱收信、連結／撤銷裝置／刪帳及 Apple 憑證撤銷，才能開放此替代方式。無密碼的舊 OAuth 帳號也不能假定可用忘記密碼救援；舊版更新安排必須照顧這類帳號。
+3. **真機測試**：通知每個按鈕、原生相機／圖片上傳、鍵盤及大字、背景返回、APNs 登記／接收／點擊及登出停用，需在候選 iPhone／iPad 與配套後端驗收。舊 App Store 黑畫面尚未取得可重現記錄，不能宣稱已證明單一根因。
+4. **完整功能差異**：原生註冊／忘記密碼、活動編輯／刪除、月曆／組織目錄、會籍分派及部分管理流程等仍見固定基線矩陣。這次修掉其中活動授權、條款及歷史日期等缺口，兩端仍非完全一致。
+5. **隱私與資料收集**：仍須依最終實作核對政策、商店標示、推播託管及保留。CloudWatch 保留期限維持使用者「暫不變更，交 Jerry 確認」，未刪除日誌；隔離公開審查環境額外 AWS 預算仍未確認。
+6. **儲存暫時不可讀**：SecureStorage 讀取失敗屬狀態未確認，不冒稱已撤銷或借失效通知自動清除有效帳號。頁面會顯示錯誤、前景驗證失敗會隱藏資料；此狀態與已確認失效分開，仍需真機驗收。
+
+## GitHub 與其他平台
+
+本輪初次 fetch 時，`origin/main` 為 `844e82defbe459700a29dcb56adc1e7238907de8`。本機基於 `601043af4d1f12e209ceca163d9274f3f4e66c04` 接續。其後為今晚活動獨立發布聖迪註冊修正（PR #2／`d922b8f`／Amplify job 93 成功），並已合回本機原生候選；該正式發布沒有包含這份原生修正、推播、OAuth v2、Email 安全驗證、新政策或資料庫遷移。原生候選依然沒有上傳 App Store 或正式送審。後續狀態見 `RELEASE_CONTINUATION_2026-11-09.md`；較早證據索引為 `output/acceptance/native-followup-20261109/EVIDENCE.json`。
+
+Google Play 另線仍未確認 US$25 付款／開發者帳號成立；沒有因 Xcode 登入而完成 Google Play 或 Android 發布。
