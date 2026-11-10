@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
-import { randomUUID } from "node:crypto";
+import { webcrypto } from "node:crypto";
 import { build } from "esbuild";
 
 const compiled = build({ entryPoints: ["mobile-app/src/service-export.ts"], bundle: true, write: false, format: "cjs", platform: "node", external: ["@capacitor/core", "@capacitor/filesystem", "@capacitor/share"] }).then(r => r.outputFiles[0].text);
 async function harness(options: { afterWrite?: () => void; shareFails?: boolean; android?: boolean } = {}) {
   const calls: { action: string; value: any }[] = [];
-  const context = { module: { exports: {} as any }, exports: {}, crypto: { randomUUID }, require(name: string) {
+  const context = { module: { exports: {} as any }, exports: {}, crypto: { getRandomValues: (bytes: Uint8Array) => webcrypto.getRandomValues(bytes) }, require(name: string) {
     if (name === "@capacitor/core") return { Capacitor: { getPlatform: () => options.android ? "android" : "ios" } };
     if (name === "@capacitor/filesystem") return { Directory: { Cache: "CACHE" }, Encoding: { UTF8: "UTF8" }, Filesystem: {
       async readdir() { return { files: [] }; }, async rmdir() {},
@@ -44,3 +44,10 @@ test("cancelled sharing keeps errors generic and removes the file; invalid or st
 });
 
 test("Android keeps the private cache file available after the chooser so the receiving app can read it", async () => { const h = await harness({ android: true }); await h.exportFile(file, () => true); assert.deepEqual(h.calls.map(c => c.action), ["write", "share"]); });
+
+test("exports work without randomUUID and use distinct private files", async () => {
+  const h = await harness(); await h.exportFile(file, () => true); await h.exportFile(file, () => true);
+  const writes = h.calls.filter(c => c.action === "write");
+  assert.equal(writes.length, 2); assert.notEqual(writes[0].value.path, writes[1].value.path);
+  for (const write of writes) assert.match(write.value.path, /[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/);
+});
