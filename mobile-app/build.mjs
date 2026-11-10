@@ -1,4 +1,4 @@
-import { mkdir, copyFile } from "node:fs/promises";
+import { mkdir, copyFile, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -33,5 +33,5 @@ await build({
   },
 });
 await copyFile(join(root, "index.html"), join(output, "index.html"));
-await copyFile(join(root, "src/styles.css"), join(output, "app.css"));
+await writeFile(join(output, "app.css"), (await readFile(join(root, "src/styles.css"), "utf8")) + "\n" + (await readFile(join(root, "../src/components/service-hub.css"), "utf8")));
 console.log(`Built mobile-app/dist against API_BASE_URL=${API_BASE_URL}`);

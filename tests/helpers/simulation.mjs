@@ -103,6 +103,7 @@ export async function createSimulation({ beforeFinalMigration, environment = {},
   async function call(path, method = "GET", body, cookieJar = jar(), options = {}) {
     const { NextRequest } = require("next/server");
     const headers = new Headers({ "x-forwarded-for": options.ip ?? "192.0.2.1" });
+    for (const [name, value] of Object.entries(options.headers ?? {})) headers.set(name, value);
     if (!["GET", "HEAD"].includes(method)) {
       headers.set("Content-Type", options.contentType ?? "application/json");
       if (options.origin !== null) headers.set("Origin", options.origin ?? ORIGIN);

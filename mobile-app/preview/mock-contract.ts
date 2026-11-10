@@ -1,3 +1,4 @@
+import { servicePreviewData } from "./service-fixtures";
 import type { createApiClient as RealClient } from "../src/contract";
 import { member, friends, incoming, events, experiences, eventPublishingOptions, blockedMembers, pendingMembers } from "./fixtures";
 import { readNotificationsResponse } from "../src/notification-contract";
@@ -47,6 +48,7 @@ export function createApiClient(baseUrl: string): NativeApi {
   const reads: Record<string, (...args: any[]) => unknown> = {
     captureSessionGuard: () => () => true,
     onSessionInvalidated: () => () => {},
+    serviceRequest: async (method: string, query: string) => method !== "GET" ? { status: 409, data: { error: "合成介面預覽：操作未儲存，草稿保留。" } } : new URLSearchParams(query).get("view")?.endsWith("export") ? { status: 200, data: { filename: "LionClubs-synthetic-preview.md", content: "# 合成服務摘要\n\n此文件只有合成資料，不是正式會員紀錄。\n\n已確認服務：4 小時\n待確認：2 小時\n\n不是官方核定服務證明。" } } : { status: 200, data: servicePreviewData(getPreviewMember().id) },
     me: async () => getPreviewMember(),
     hasStoredSession: async () => false,
     getOAuthProviders: async () => ["google", "apple"],

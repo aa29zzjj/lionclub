@@ -11,6 +11,8 @@ export async function POST(request: NextRequest) {
   if (!isTrustedBrowserMutation(request)) return NextResponse.json({ error: "請從網站操作" }, { status: 403 });
   const me = await getCurrentMember();
   if (!me) return NextResponse.json({ error: "未登入" }, { status: 401 });
+  const expectedMemberId = request.headers.get("x-lionclubs-member");
+  if (expectedMemberId !== null && expectedMemberId !== me.id) return NextResponse.json({ error: "登入帳號已切換，請返回首頁重新確認。", code: "SESSION_CHANGED" }, { status: 409 });
   if (!bodySchema.safeParse(await request.json().catch(() => null)).success) {
     return NextResponse.json({ error: "請先勾選同意使用條款" }, { status: 400 });
   }

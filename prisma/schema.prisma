@@ -48,6 +48,8 @@ model Organization {
   clubInvites         ClubInvite[]
   memberExperiences   MemberExperience[]
   annualAppointments  AnnualAppointment[]
+  resourceNeeds       ResourceNeed[]
+  serviceEntries      ServiceEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -141,6 +143,12 @@ model Member {
   reportsReviewed MemberReport[] @relation("ReportReviewedBy")
   eventReportsMade     EventReport[] @relation("EventReporter")
   eventReportsReviewed EventReport[] @relation("EventReportReviewedBy")
+  resourceNeeds ResourceNeed[]
+  resourceResponses ResourceResponse[]
+  serviceEntries ServiceEntry[] @relation("ServiceEntryMember")
+  serviceEntriesReviewed ServiceEntry[] @relation("ServiceEntryReviewer")
+  serviceOutcomesEdited EventOutcome[]
+  serviceAudits ServiceAudit[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -571,6 +579,8 @@ model Event {
   checkInHistory EventCheckInAudit[]
   notifications EventNotification[]
   reports       EventReport[]
+  serviceOutcome EventOutcome?
+  serviceEntries ServiceEntry[]
 
   createdAt DateTime @default(now())
 }
@@ -781,4 +791,104 @@ model AdminRole {
 
   @@index([memberId])
   @@index([scopeType, scopeId])
+}
+
+// Service hub: group outcomes never create individual confirmed hours.
+model EventOutcome {
+  eventId String @id
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  endAt DateTime
+  beneficiaryCount Int?
+  quantity Int @default(0)
+  quantityUnit String
+  totalServiceMinutes Int @default(0)
+  summary String
+  editedById String
+  editedBy Member @relation(fields: [editedById], references: [id], onDelete: Restrict)
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ResourceNeed {
+  id String @id @default(cuid())
+  ownerId String
+  owner Member @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId String
+  kind String @default("NEED")
+  title String
+  category String
+  description String
+  targetDate DateTime @db.Date
+  quantity Int
+  quantityUnit String
+  status String @default("OPEN")
+  version Int @default(1)
+  acceptedResponseId String? @unique
+  acceptedResponse ResourceResponse? @relation("AcceptedResourceResponse", fields: [acceptedResponseId], references: [id], onDelete: Restrict)
+  responses ResourceResponse[] @relation("ResourceResponses")
+  completionNote String?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([ownerId, requestId])
+  @@index([status, createdAt, id])
+  @@index([organizationId])
+}
+
+model ResourceResponse {
+  id String @id @default(cuid())
+  needId String
+  need ResourceNeed @relation("ResourceResponses", fields: [needId], references: [id], onDelete: Restrict)
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  message String
+  status String @default("PENDING")
+  acceptedByNeed ResourceNeed? @relation("AcceptedResourceResponse")
+  createdAt DateTime @default(now())
+  @@unique([needId, memberId])
+}
+
+model ServiceEntry {
+  id String @id @default(cuid())
+  memberId String
+  member Member @relation("ServiceEntryMember", fields: [memberId], references: [id], onDelete: Restrict)
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  eventId String?
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  requestId String
+  dedupKey String
+  title String
+  date DateTime @db.Date
+  category String
+  minutes Int
+  note String?
+  status String @default("PENDING")
+  version Int @default(1)
+  reviewedById String?
+  reviewedBy Member? @relation("ServiceEntryReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+  reviewedAt DateTime?
+  reviewReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([memberId, requestId])
+  @@unique([memberId, dedupKey])
+  @@index([memberId, date, id])
+  @@index([organizationId, status, date])
+}
+
+model ServiceAudit {
+  id String @id @default(cuid())
+  actorId String
+  actor Member @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  entityType String
+  entityId String
+  action String
+  version Int
+  reason String?
+  createdAt DateTime @default(now())
+  @@index([entityType, entityId, createdAt])
 }

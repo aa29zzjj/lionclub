@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { hasServiceSchema } from "./service-hub";
 import { assertConsumedEmailAction } from "./email-action-reauth";
 
 export class AccountDeletionError extends Error {
@@ -43,6 +44,12 @@ export async function anonymizeAccount(
         catch { throw new AccountDeletionError(409, "本人驗證已更新或到期，尚未刪除帳號；請重新驗證後確認。"); }
       }
 
+      // Rolling deployment: older databases may not have the additive service tables yet.
+      if (await hasServiceSchema(tx)) {
+        await tx.serviceEntry.deleteMany({ where: { memberId: input.memberId } });
+        await tx.resourceNeed.updateMany({ where: { ownerId: input.memberId }, data: { title: "已刪除會員的媒合", description: "原發布內容已移除", category: "其他", quantity: 1, quantityUnit: "", completionNote: null, status: "CLOSED", version: { increment: 1 } } });
+        await tx.resourceResponse.updateMany({ where: { memberId: input.memberId }, data: { message: "此回應的會員已刪除，原內容已移除" } });
+      }
       await tx.memberExperience.deleteMany({ where: { memberId: input.memberId } });
       await tx.friendship.deleteMany({ where: { OR: [{ requesterId: input.memberId }, { addresseeId: input.memberId }] } });
       await tx.memberBlock.deleteMany({ where: { OR: [{ blockerId: input.memberId }, { blockedId: input.memberId }] } });

@@ -70,6 +70,12 @@ export class TransactionFake {
         upsert: async (query: Query) => { capture("upsert", query); let row = rows(query)[0]; if (!row) row = create(query.create); else apply(row, query.update); return structuredClone(row); },
       };
     }
+    // Only the fixed additive-schema capability query is supported by this fake.
+    output.$queryRaw = async (strings: TemplateStringsArray) => {
+      const sql = strings.join("");
+      if (!sql.includes("to_regclass") || !["EventOutcome", "ResourceNeed", "ResourceResponse", "ServiceEntry", "ServiceAudit"].every(name => sql.includes(name))) throw new Error("UNSUPPORTED_FAKE_SQL");
+      return [{ available: ["eventOutcome", "resourceNeed", "resourceResponse", "serviceEntry", "serviceAudit"].every(table => table in state) }];
+    };
     if (root) output.$transaction = async (callback: (tx: Prisma.TransactionClient) => Promise<unknown>, options: Row) => {
       this.calls.push({ table: "$transaction", method: "run", query: { data: options } });
       if (this.conflicts-- > 0) throw Object.assign(new Error("SERIALIZABLE_CONFLICT"), { code: "P2034" });

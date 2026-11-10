@@ -10,6 +10,7 @@ const output = resolve(root, "tmp/native-ui-preview");
 const mock = resolve(here, "mock-contract.ts");
 const native = resolve(here, "native-stubs.ts");
 const push = resolve(here, "push-stubs.ts");
+const serviceExport = resolve(here, "service-export-stub.ts");
 const html = await readFile(resolve(here, "index.html"), "utf8");
 if (!html.includes("connect-src 'none'") || !html.includes("img-src 'self' data:")) throw Error("PREVIEW_CSP_REQUIRED");
 const result = await build({
@@ -20,6 +21,7 @@ const result = await build({
   define: { "process.env.NODE_ENV": '"production"', API_BASE_URL: '"https://native-preview.invalid"' },
   plugins: [{ name: "isolated-native-preview", setup(builder) {
     builder.onResolve({ filter: /^\.\/contract$/ }, () => ({ path: mock }));
+    builder.onResolve({ filter: /^\.\/service-export$/ }, () => ({ path: serviceExport }));
     builder.onResolve({ filter: /^\.\/native-push$/ }, () => ({ path: push }));
     builder.onResolve({ filter: /^@(?:capacitor|aparajita)\// }, (args) => {
       if (["@capacitor/browser", "@capacitor/camera", "@capacitor/app"].includes(args.path)) return { path: native };
@@ -33,7 +35,7 @@ const css = await readFile(resolve(root, "mobile-app/src/styles.css"), "utf8");
 const previewCss = await readFile(resolve(here, "preview.css"), "utf8");
 await mkdir(output, { recursive: true });
 for (const file of result.outputFiles) await writeFile(file.path, file.contents);
-await writeFile(resolve(output, "app.css"), css + "\n" + previewCss);
+await writeFile(resolve(output, "app.css"), css + "\n" + await readFile(resolve(root, "src/components/service-hub.css"), "utf8") + "\n" + previewCss);
 await copyFile(resolve(here, "index.html"), resolve(output, "index.html"));
 await writeFile(resolve(output, "build-evidence.json"), JSON.stringify({
   mode: "isolated-native-ui-candidate-synthetic-only", output: relative(root, output),

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 
-export default function TermsConsentPrompt({ onAccepted }: { onAccepted: () => void }) {
+export default function TermsConsentPrompt({ onAccepted, expectedMemberId }: { onAccepted: () => void; expectedMemberId?: string }) {
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -15,7 +15,7 @@ export default function TermsConsentPrompt({ onAccepted }: { onAccepted: () => v
     try {
       const response = await fetch("/api/me/terms-consent", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(expectedMemberId ? { "x-lionclubs-member": expectedMemberId } : {}) },
         body: JSON.stringify({ accept: true }),
       });
       const data = await response.json().catch(() => ({}));
