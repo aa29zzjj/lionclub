@@ -5,6 +5,7 @@ import ProfileScreen from "./ProfileScreen";
 import SecurityScreen from "./SecurityScreen";
 import AdminScreen from "./AdminScreen";
 import ExperienceScreen from "./ExperienceScreen";
+import ServiceScreen from "./ServiceScreen";
 import Avatar from "./Avatar";
 import NotificationSettings, { type MobilePushUi } from "./NotificationSettings";
 import { colorFromId } from "../../src/lib/avatar-color";
@@ -12,7 +13,7 @@ import { colorFromId } from "../../src/lib/avatar-color";
 declare const API_BASE_URL: string;
 const api = createApiClient(API_BASE_URL);
 
-type View = "overview" | "profile" | "admin" | "experience";
+type View = "overview" | "profile" | "admin" | "experience" | "services";
 const WEBSITE_PAGES = {
   profile: { url: "https://lionclubsmembership.com/profile", error: "無法開啟帳號管理網頁，請確認連線後重試。App 內的設定尚未變更。" },
   delete: { url: "https://lionclubsmembership.com/account/delete", error: "無法開啟刪除帳號網頁，請確認連線後重試。尚未提出刪除申請。" },
@@ -111,6 +112,8 @@ export default function MyScreen({
     );
   }
 
+  if (view === "services") return <div ref={screenRef}><button type="button" className="profile-back" onClick={() => setView("overview")}>‹ 返回</button><ServiceScreen key={member.id} memberId={member.id} /></div>;
+
   if (view === "experience") {
     return (
       <div ref={screenRef}>
@@ -159,6 +162,8 @@ export default function MyScreen({
           管理我的資歷
         </button>
       </section>
+
+      <section className="my-screen-section"><h2 className="section-title">獅友服務中心</h2><p className="member-meta">資源媒合、活動成果與個人服務護照</p><button type="button" className="secondary" onClick={() => setView("services")}>開啟服務中心</button></section>
 
       <NotificationSettings push={push} />
 

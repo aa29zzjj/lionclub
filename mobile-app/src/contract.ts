@@ -186,13 +186,14 @@ export async function uploadToPresignedUrl(url: string, contentType: string, blo
 export function createApiClient(baseUrl: string) {
   const origin = baseUrl.replace(/\/$/, "");
 
-  async function request(path: string, init: { method: string; body?: unknown; accessToken?: string | null }) {
+  async function request(path: string, init: { method: string; body?: unknown; expectedMemberId?: string; accessToken?: string | null }) {
     try {
       return await CapacitorHttp.request({
         method: init.method,
         url: `${origin}${path}`,
         headers: {
           "Content-Type": "application/json",
+          ...(init.expectedMemberId ? { "x-lionclubs-member": init.expectedMemberId } : {}),
           ...(init.accessToken ? { Authorization: `Bearer ${init.accessToken}` } : {}),
         },
         data: init.body,
@@ -291,7 +292,7 @@ export function createApiClient(baseUrl: string) {
   }
 
   /** Authenticated call with one automatic retry after a refresh, for any /api/mobile/* route. */
-  async function authedRequest(path: string, init: { method: string; body?: unknown }) {
+  async function authedRequest(path: string, init: { method: string; body?: unknown; expectedMemberId?: string }) {
     const epoch = mobileSession.capture();
     const { accessToken } = await mobileSession.snapshot(epoch); mobileSession.assertCurrent(epoch);
     if (!accessToken) {
@@ -693,8 +694,13 @@ export function createApiClient(baseUrl: string) {
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `刪除資歷失敗（HTTP ${response.status}）`, response.status);
   }
 
+  async function serviceRequest(method: "GET" | "POST", query: string, body: unknown, expectedMemberId: string) {
+    const response = await authedRequest(`/api/mobile/services${query ? `?${query}` : ""}`, { method, body, expectedMemberId });
+    return { status: response.status, data: response.data as unknown };
+  }
+
   return {
-    getOAuthProviders,
+    serviceRequest, getOAuthProviders,
     onSessionInvalidated(listener: (isCurrent: () => boolean) => void) { invalidatedListeners.add(listener); return () => { invalidatedListeners.delete(listener); }; },
     captureSessionGuard() { const epoch = mobileSession.capture(); return () => mobileSession.isCurrent(epoch); },
     getPushConfig, registerPushDevice, disablePushDevice, getPushReceipts, markPushReceiptsRead,

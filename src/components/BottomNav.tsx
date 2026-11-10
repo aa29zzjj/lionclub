@@ -18,7 +18,7 @@ export default function BottomNav() {
   return (
     <nav aria-label="主要導覽" className="bottom-nav-safe sticky bottom-0 z-10 flex shrink-0 items-stretch border-t border-lion-border bg-lion-page/95 px-1 pt-2 backdrop-blur">
       {tabs.map(({ href, label, Icon }) => {
-        const active = pathname?.startsWith(href) || (href === "/profile" && pathname?.startsWith("/admin"));
+        const active = pathname?.startsWith(href) || (href === "/profile" && (pathname?.startsWith("/admin") || pathname?.startsWith("/services")));
         return (
           <Link
             key={href}
