@@ -66,7 +66,7 @@ button {
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
-  padding: max(3rem, env(safe-area-inset-top)) max(1.5rem, env(safe-area-inset-left)) max(3rem, env(safe-area-inset-bottom));
+  padding: max(3rem, env(safe-area-inset-top)) max(1.5rem, env(safe-area-inset-right)) max(3rem, env(safe-area-inset-bottom)) max(1.5rem, env(safe-area-inset-left));
 }
 
 /* Auto margins center a short login screen, but collapse to zero when the
@@ -240,7 +240,7 @@ button.secondary:disabled {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: calc(max(2rem, env(safe-area-inset-top)) + 0.75rem) max(1.25rem, env(safe-area-inset-left)) 1.5rem;
+  padding: calc(max(2rem, env(safe-area-inset-top)) + 0.75rem) max(1.25rem, env(safe-area-inset-right)) 1.5rem max(1.25rem, env(safe-area-inset-left));
 }
 
 .home-tab {
