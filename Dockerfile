@@ -16,6 +16,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY next.config.js postcss.config.js tailwind.config.ts tsconfig.json ./
 COPY prisma/schema.prisma ./prisma/schema.prisma
+COPY certificates/aws-rds-us-east-2-root.pem ./certificates/aws-rds-us-east-2-root.pem
 COPY src ./src
 COPY public ./public
 COPY scripts/copy-card-ocr.mjs ./scripts/copy-card-ocr.mjs

@@ -10,6 +10,7 @@ npm-debug.log*
 # Deployment secrets, database backups and native signing material stay local.
 backups/
 *.pem
+!/certificates/aws-rds-us-east-2-root.pem
 *.p8
 *.p12
 *.mobileprovision
