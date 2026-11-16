@@ -71,3 +71,28 @@ test("AWS adapter has a server-only boundary and no client module imports runtim
   } } }
   walk(fileURLToPath(root));
 });
+
+test("isolated review requires its own verified database and never loads default production secrets", async () => {
+  const environment = { ISOLATED_APP_REVIEW_ENABLED: "true", LIONCLUBS_REVIEW_DB_CONFIRM: "review-db.example.test:5432/review" };
+  const review = { ...record, DATABASE_URL: "postgresql://synthetic:synthetic@review-db.example.test:5432/review" };
+  const reads: string[] = [];
+  const fetchSecret = async (name: string) => {
+    reads.push(name);
+    return name === "review/app" ? review : record;
+  };
+  for (const APP_SECRETS_NAME of [undefined, "lionclub/app-secrets"]) {
+    const resolver = createRuntimeSecretsResolver({ environment: { ...environment, APP_SECRETS_NAME }, fetchSecret });
+    await assert.rejects(resolver.getAppSecrets(), /REVIEW_SECRET_REQUIRED/);
+  }
+  assert.deepEqual(reads, []);
+  const mismatched = createRuntimeSecretsResolver({ environment: { ...record, ...environment }, fetchSecret });
+  await assert.rejects(mismatched.getAppSecrets(), /REVIEW_TARGET_NOT_CONFIRMED/);
+
+  const isolated = createRuntimeSecretsResolver({ environment: {
+    ...environment, APP_SECRETS_NAME: "review/app", FEDERATED_AUTH_ENABLED: "true", OAUTH_RUNTIME_SECRETS_ENABLED: "true",
+  }, fetchSecret });
+  assert.equal((await isolated.getAppSecrets()).DATABASE_URL, review.DATABASE_URL);
+  assert.equal((await isolated.getOAuthRuntimeSettings()).FEDERATED_AUTH_ENABLED, "false");
+  assert.equal((await isolated.getAppleCredentialSettings()).APPLE_OAUTH_PRIVATE_KEY, undefined);
+  assert.deepEqual(reads, ["review/app"]);
+});

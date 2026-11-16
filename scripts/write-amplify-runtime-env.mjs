@@ -3,7 +3,7 @@
 import { writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-const flags = ["REGISTRATION_CLUB_APPLICATION_ENABLED", "NEXT_PUBLIC_NEXT_PHASE_ENABLED", "SERVICE_FEATURES_ENABLED", "FEDERATED_AUTH_ENABLED", "OAUTH_RUNTIME_SECRETS_ENABLED", "GOOGLE_OAUTH_FRESH_REAUTH_ENABLED", "APPLE_OAUTH_ENABLED", "APPLE_OAUTH_FRESH_REAUTH_ENABLED", "EMAIL_ACTION_REAUTH_ENABLED", "MOBILE_OAUTH_V2_ENABLED", "MOBILE_PUSH_ENABLED", "MOBILE_PUSH_RUNTIME_SECRETS_ENABLED"];
+const flags = ["ISOLATED_APP_REVIEW_ENABLED", "REGISTRATION_CLUB_APPLICATION_ENABLED", "NEXT_PUBLIC_NEXT_PHASE_ENABLED", "SERVICE_FEATURES_ENABLED", "FEDERATED_AUTH_ENABLED", "OAUTH_RUNTIME_SECRETS_ENABLED", "GOOGLE_OAUTH_FRESH_REAUTH_ENABLED", "APPLE_OAUTH_ENABLED", "APPLE_OAUTH_FRESH_REAUTH_ENABLED", "EMAIL_ACTION_REAUTH_ENABLED", "MOBILE_OAUTH_V2_ENABLED", "MOBILE_PUSH_ENABLED", "MOBILE_PUSH_RUNTIME_SECRETS_ENABLED"];
 const origins = ["OAUTH_APP_ORIGIN", "NEXT_PUBLIC_APP_URL"];
 /** @param {Record<string, string | undefined>} environment */
 export function publicRuntimeEnvironment(environment = process.env) {
@@ -13,6 +13,11 @@ export function publicRuntimeEnvironment(environment = process.env) {
     const value = optional(name); if (value === undefined) continue;
     if (!["true", "false"].includes(value)) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION");
     result[name] = value;
+  }
+  if (result.ISOLATED_APP_REVIEW_ENABLED === "true") {
+    const target = optional("LIONCLUBS_REVIEW_DB_CONFIRM");
+    if (!target || !/^[a-z0-9.-]+(?::[0-9]+)?\/[a-z0-9_-]+$/i.test(target)) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION");
+    result.LIONCLUBS_REVIEW_DB_CONFIRM = target;
   }
   for (const name of origins) {
     const value = optional(name); if (value === undefined) continue;
