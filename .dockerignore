@@ -4,6 +4,9 @@
 !.dockerignore
 !package.json
 !package-lock.json
+!scripts/
+scripts/**
+!scripts/copy-card-ocr.mjs
 !next.config.js
 !postcss.config.js
 !tailwind.config.ts
