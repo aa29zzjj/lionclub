@@ -9,7 +9,7 @@ export type MobilePushSettings = { enabled: false } | {
 };
 export function mobilePushSettings(environment: Record<string, string | undefined> = process.env): MobilePushSettings {
   const mode = environment.APNS_ENVIRONMENT, key = environment.PUSH_DEVICE_ENCRYPTION_KEY;
-  if (environment.MOBILE_PUSH_ENABLED !== "true" || !["sandbox", "production"].includes(mode ?? "")
+  if (environment.ISOLATED_APP_REVIEW_ENABLED === "true" || environment.MOBILE_PUSH_ENABLED !== "true" || !["sandbox", "production"].includes(mode ?? "")
     || environment.APNS_TOPIC !== MOBILE_PUSH_TOPIC || !key || !/^[0-9a-fA-F]{64}$/.test(key)) return { enabled: false };
   return { enabled: true, environment: mode as MobilePushEnvironment, topic: MOBILE_PUSH_TOPIC, encryptionKey: key.toLowerCase() };
 }

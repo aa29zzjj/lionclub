@@ -51,6 +51,7 @@ export async function sendSesEmail(input: {
   subject: string;
   text: string;
 }) {
+  if (process.env.ISOLATED_APP_REVIEW_ENABLED === "true") throw Error("REVIEW_OUTBOUND_EMAIL_DISABLED");
   const hostname = `email.${input.region}.amazonaws.com`;
   const body = JSON.stringify({
     FromEmailAddress: input.from,

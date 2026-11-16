@@ -8,7 +8,7 @@
 
 ## 公開隔離審查環境
 
-在審查站設定 `ISOLATED_APP_REVIEW_ENABLED=true`，並在伺服器執行環境設定與初始化相同的 `LIONCLUBS_REVIEW_DB_CONFIRM`。容器使用成對注入的 `DATABASE_URL` 與 `AUTH_SECRET`。Amplify 則指定獨立的 `APP_SECRETS_NAME`，由該分支的 SSR 角色讀取。審查模式會拒絕預設正式機密、拒絕與確認目標不符的資料庫，並停用第三方登入。
+在審查站設定 `ISOLATED_APP_REVIEW_ENABLED=true`，並在伺服器執行環境設定與初始化相同的 `LIONCLUBS_REVIEW_DB_CONFIRM`。容器使用成對注入的 `DATABASE_URL` 與 `AUTH_SECRET`。Amplify 則指定獨立的 `APP_SECRETS_NAME`，由該分支的 SSR 角色讀取。審查模式會拒絕預設正式機密、拒絕與確認目標不符的資料庫，並停用第三方登入、對外寄信與 APNs 推播。站內通知仍可驗收。
 
 使用獨立 PostgreSQL 資料庫與 HTTPS 網址，設定專用的 `AUTH_SECRET`，並將 `NEXT_PUBLIC_APP_URL` 指向審查環境。此環境只載入合成審查資料；使用自己的資料庫連線與媒體設定。維持 OAuth、對外郵件和手機推播關閉，直到擬測的功能及使用的服務確認可用。
 
