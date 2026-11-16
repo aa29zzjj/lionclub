@@ -31,6 +31,14 @@
 
 **隱私權資料待審核**
 
-名片照片會在本人確認儲存時上傳；揪團訊息、邀請留言及分享的專長標籤也會儲存並與帳號連結。請依正式版本的實際行為核對 App Store Connect 中的「照片或影片」「其他使用者內容」「電子郵件或訊息」及對應用途，再保存或發佈。iOS 審查人員應能從公開網址存取後端並使用可用測試帳戶。[Apple 審查指南](https://developer.apple.com/app-store/review/guidelines/)
+依新版程式資料流，App Store Connect 應核對以下既有類別的涵蓋範圍。三類資料都用於 App 功能、與使用者身分連結。就這些新功能的實作，未發現廣告追蹤用途。發佈前仍須核對實際送審建置、服務設定與第三方 SDK 的完整資料用途。[Apple App 隱私權詳細資訊](https://developer.apple.com/app-store/app-privacy-details/)
+
+| App Store Connect 類別 | 新增或擴充的資料用途 |
+| --- | --- |
+| 照片或影片 | 名片選取後在裝置上辨識。會員按儲存後，圖片連同會員識別寫入資料庫，會員介面僅本人可讀取圖片。 |
+| 電子郵件或訊息 | 揪團聊天及定向合作邀請的訊息內容與發送、接收或群組識別，用於提供對話與通知。 |
+| 其他使用者內容 | 揪團主題、說明、手動填寫地點、檢舉理由，以及使用者確認的名片標籤與分享設定。開啟分享後，相符結果會顯示姓名、分會及符合的標籤。 |
+
+在正式站確認公開隱私政策已包含「揪團、名片與合作邀請」段落及刪除說明。將對照結果與 App Store Connect 的現有項目核對後再保存或發佈。Apple 審查人員應能從公開網址存取後端並使用有效測試帳戶。[Apple 審查指南](https://developer.apple.com/app-store/review/guidelines/)
 
 從外部網路執行 `node scripts/check-isolated-review.mjs`，並透過環境傳入 `MOBILE_APP_REVIEW_API_ORIGIN` 與 `LIONCLUBS_REVIEW_PASSWORD`。此檢查使用實際的 App API 驗證匿名存取遭拒、審查帳號能登入及更新憑證，以及揪團、名片和通知可讀取。工具會拒絕正式站網址和重新導向，也不會輸出密碼或憑證。通過後，仍要在送審建置上操作上傳名片與聊天室，並確認正式會員登入與 App Store Connect 驗證。
