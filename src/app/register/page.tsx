@@ -312,6 +312,58 @@ function RegisterForm() {
     } finally { actionRef.current = false; setSubmitting(false); }
   }
 
+  const clubPicker = (
+    <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOrgSuggestionsOpen(false); }}>
+      <label htmlFor="register-declared-organization" className="mb-1 block text-sm font-medium">{clubApplication ? "申請加入的分會（必填）" : "原所屬分會（選填）"}</label>
+      <input
+        id="register-declared-organization"
+        name="declaredOrganizationName"
+        value={declaredOrganizationName}
+        onChange={(event) => { setDeclaredOrganizationName(event.target.value); setRequestedClub(null); setOrgSuggestionsOpen(true); setActiveOrgIndex(-1); }}
+        onFocus={() => setOrgSuggestionsOpen(true)}
+        role="combobox"
+        required={clubApplication}
+        aria-autocomplete="list"
+        aria-expanded={orgSuggestionsOpen && orgSuggestions.length > 0}
+        aria-controls={orgListId}
+        aria-activedescendant={orgSuggestionsOpen && activeOrgIndex >= 0 ? `${orgListId}-${activeOrgIndex}` : undefined}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") { setOrgSuggestionsOpen(false); setActiveOrgIndex(-1); }
+          if (["ArrowDown", "ArrowUp"].includes(event.key) && orgSuggestions.length) {
+            event.preventDefault(); setOrgSuggestionsOpen(true);
+            setActiveOrgIndex((index) => event.key === "ArrowDown" ? (index + 1) % orgSuggestions.length : (index <= 0 ? orgSuggestions.length - 1 : index - 1));
+          }
+          if (event.key === "Enter" && orgSuggestionsOpen && activeOrgIndex >= 0) {
+            event.preventDefault(); chooseClub(orgSuggestions[activeOrgIndex]);
+          }
+        }}
+        placeholder={clubApplication ? "輸入分會名稱，從清單選擇" : "輸入分會名稱搜尋，或直接手動輸入"}
+        autoComplete="off"
+        aria-describedby="register-declared-organization-help"
+        className={inputClass}
+      />
+      {orgSuggestionsOpen && orgSuggestions.length > 0 && (
+        <ul id={orgListId} role="listbox" aria-label="分會搜尋結果" className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-lion-border bg-lion-page shadow-lg">
+          {orgSuggestions.map((org, index) => (
+            <li key={org.id} id={`${orgListId}-${index}`} role="option" aria-selected={activeOrgIndex === index}>
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => { chooseClub(org); }}
+                className={`flex min-h-12 w-full flex-col items-start px-4 py-2.5 text-left text-base hover:bg-lion-soft ${activeOrgIndex === index ? "bg-lion-soft" : ""}`}
+              >
+                <span>{org.name}</span>
+                {org.districtCode && <span className="text-xs text-lion-muted">{org.districtCode}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p id="register-declared-organization-help" className="mt-2 text-xs leading-relaxed text-lion-muted">{clubApplication ? requestedClub ? `已選擇 ${requestedClub.name}，送出後由分會幹部或全站管理員審核。` : "請從結果清單選擇分會，審核通過後即可登入。" : "這是待核對的參考資料，可從清單選擇或手動輸入。"}</p>
+      {clubApplication && clubSearchError && <p role="alert" className="text-sm text-lion-danger">暫時無法搜尋分會，請重新輸入分會名稱再試。</p>}
+    </div>
+  );
+
   return (
     <div className="app-canvas flex w-full justify-center bg-lion-canvas">
       <div className="app-frame auth-frame flex w-full max-w-[480px] flex-col bg-lion-page px-6 py-10 text-lion-cream">
@@ -378,6 +430,7 @@ function RegisterForm() {
               <PasswordInput id="register-confirm-password" name="confirmPassword" autoComplete="new-password" required minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="再輸入一次密碼" className={inputClass} />
             </div>}
           </fieldset>
+          {clubApplication && <fieldset disabled={formBusy || Boolean(federatedNotice)}>{clubPicker}</fieldset>}
           <details className="rounded-2xl border border-lion-border bg-lion-card p-4">
             <summary className="flex min-h-12 cursor-pointer items-center text-base font-semibold">補充資料（選填，可稍後補上）</summary>
             <fieldset disabled={formBusy || Boolean(federatedNotice)} className="mt-4 grid grid-cols-1 gap-4">
@@ -396,55 +449,7 @@ function RegisterForm() {
               <label htmlFor="register-phone" className="mb-1 block text-sm font-medium">手機（選填）</label>
               <input id="register-phone" name="phone" type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="09xx-xxx-xxx" className={inputClass} />
             </div>
-            <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOrgSuggestionsOpen(false); }}>
-              <label htmlFor="register-declared-organization" className="mb-1 block text-sm font-medium">{clubApplication ? "申請加入的分會（必填）" : "原所屬分會（選填）"}</label>
-              <input
-                id="register-declared-organization"
-                name="declaredOrganizationName"
-                value={declaredOrganizationName}
-                onChange={(event) => { setDeclaredOrganizationName(event.target.value); setRequestedClub(null); setOrgSuggestionsOpen(true); setActiveOrgIndex(-1); }}
-                onFocus={() => setOrgSuggestionsOpen(true)}
-                role="combobox"
-                required={clubApplication}
-                aria-autocomplete="list"
-                aria-expanded={orgSuggestionsOpen && orgSuggestions.length > 0}
-                aria-controls={orgListId}
-                aria-activedescendant={orgSuggestionsOpen && activeOrgIndex >= 0 ? `${orgListId}-${activeOrgIndex}` : undefined}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") { setOrgSuggestionsOpen(false); setActiveOrgIndex(-1); }
-                  if (["ArrowDown", "ArrowUp"].includes(event.key) && orgSuggestions.length) {
-                    event.preventDefault(); setOrgSuggestionsOpen(true);
-                    setActiveOrgIndex((index) => event.key === "ArrowDown" ? (index + 1) % orgSuggestions.length : (index <= 0 ? orgSuggestions.length - 1 : index - 1));
-                  }
-                  if (event.key === "Enter" && orgSuggestionsOpen && activeOrgIndex >= 0) {
-                    event.preventDefault(); chooseClub(orgSuggestions[activeOrgIndex]);
-                  }
-                }}
-                placeholder={clubApplication ? "輸入分會名稱，從清單選擇" : "輸入分會名稱搜尋，或直接手動輸入"}
-                autoComplete="off"
-                aria-describedby="register-declared-organization-help"
-                className={inputClass}
-              />
-              {orgSuggestionsOpen && orgSuggestions.length > 0 && (
-                <ul id={orgListId} role="listbox" aria-label="分會搜尋結果" className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-lion-border bg-lion-page shadow-lg">
-                  {orgSuggestions.map((org, index) => (
-                    <li key={org.id} id={`${orgListId}-${index}`} role="option" aria-selected={activeOrgIndex === index}>
-                      <button
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => { chooseClub(org); }}
-                        className={`flex min-h-12 w-full flex-col items-start px-4 py-2.5 text-left text-base hover:bg-lion-soft ${activeOrgIndex === index ? "bg-lion-soft" : ""}`}
-                      >
-                        <span>{org.name}</span>
-                        {org.districtCode && <span className="text-xs text-lion-muted">{org.districtCode}</span>}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p id="register-declared-organization-help" className="mt-2 text-xs leading-relaxed text-lion-muted">{clubApplication ? requestedClub ? `已選擇 ${requestedClub.name}，送出後由分會幹部或全站管理員審核。` : "請從結果清單選擇分會，審核通過後即可登入。" : "這是待核對的參考資料，可從清單選擇或手動輸入。"}</p>
-              {clubApplication && clubSearchError && <p role="alert" className="text-sm text-lion-danger">暫時無法搜尋分會，請重新輸入分會名稱再試。</p>}
-            </div>
+            {!clubApplication && clubPicker}
           </fieldset>
           <fieldset disabled={formBusy || Boolean(federatedNotice)}>
             <legend className="mb-2 text-sm font-medium">專長／興趣標籤（選填）</legend>
