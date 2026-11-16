@@ -138,3 +138,25 @@ test("meetup reservations and discussion stay within the eligible club; private 
   assert.equal((await mobile("POST", { action: "card.delete" })).status, 200);
   assert.equal((await guest.read("view=card")).data.card, null);
 });
+
+test("isolated reviewer receives a seeded cooperation invitation linked to the demo need", async t => {
+  const { seedIsolatedReview } = await import("../scripts/seed-isolated-review.mjs");
+  const { hash } = await import("bcryptjs");
+  const sim = await createSimulation({ environment: { NEXT_PUBLIC_NEXT_PHASE_ENABLED: "true" } });
+  t.after(() => sim.close());
+  const password = "synthetic-review-credential";
+  const { email } = await seedIsolatedReview(sim.prisma, await hash(password, 4));
+  assert.equal((await seedIsolatedReview(sim.prisma, await hash("different-synthetic-password", 4))).alreadyProvisioned, true);
+  const login = await sim.call("/api/mobile/auth/login", "POST", { email, password });
+  assert.equal(login.status, 200);
+  const auth = { headers: { Authorization: `Bearer ${login.data.accessToken}`, "x-lionclubs-member": login.data.memberId } };
+  const notices = await sim.call("/api/mobile/next-phase?view=notices", "GET", undefined, sim.jar(), auth);
+  assert.equal(notices.status, 200);
+  assert.equal(notices.data.items.length, 1);
+  const [invitation] = notices.data.items;
+  assert.equal(invitation.title, "收到合作邀請");
+  assert.equal(invitation.target, "need");
+  const resources = await sim.call(`/api/mobile/services?needId=${invitation.targetId}`, "GET", undefined, sim.jar(), auth);
+  assert.equal(resources.status, 200);
+  assert.equal(resources.data.needs[0].title, "公益講座保險協助");
+});

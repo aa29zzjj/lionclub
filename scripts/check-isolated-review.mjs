@@ -51,7 +51,11 @@ export async function checkIsolatedReview(origin, password, fetcher = fetch) {
   const notices = await request("NOTICES", "/api/mobile/next-phase?view=notices", context);
   if (!Array.isArray(notices?.items)) throw Error("NOTICES_INVALID");
   const resources = await request("RESOURCES", "/api/mobile/services", context);
-  if (!Array.isArray(resources?.needs) || !resources.needs.some(need => need.title === "公益講座保險協助")) throw Error("RESOURCES_REVIEW_FIXTURE_MISSING");
+  const need = Array.isArray(resources?.needs) && resources.needs.find(item => item.title === "公益講座保險協助");
+  if (!need) throw Error("RESOURCES_REVIEW_FIXTURE_MISSING");
+  if (!notices.items.some(item => item.title === "收到合作邀請" && item.target === "need" && item.targetId === need.id)) {
+    throw Error("COOPERATION_INVITE_REVIEW_FIXTURE_MISSING");
+  }
   return { origin, verified: ["anonymous access denied", "review login", "token refresh", "meetups", "meetup detail", "business card", "notifications", "resource matching"] };
 }
 
