@@ -597,7 +597,14 @@ export function createApiClient(baseUrl: string) {
     catch { throw new ApiError("UNKNOWN", "登出結果尚未確認，請重新確認登入狀態；不會自動重送。", response.status); }
     let isCurrent = () => mobileSession.isCurrent(epoch);
     if (result.currentSessionRetained) {
-      try { await mobileSession.writePair(epoch, result.pair); mobileSession.assertCurrent(epoch); }
+      try {
+        const { accessToken } = await mobileSession.snapshot(epoch);
+        if (!accessToken || !tokenPairMatchesBackend(result.pair, isolatedReviewToken(accessToken))) {
+          throw Error("TOKEN_BACKEND_MISMATCH");
+        }
+        await mobileSession.writePair(epoch, result.pair);
+        mobileSession.assertCurrent(epoch);
+      }
       catch {
         publishSessionInvalidation(epoch);
         throw new ApiError("UNKNOWN", "其他裝置已登出，但此裝置登入更新尚未保存，請重新登入。", undefined, () => mobileSession.isCurrent(epoch));
