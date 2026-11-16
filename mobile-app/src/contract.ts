@@ -1,3 +1,6 @@
+import { isIsolatedReviewer, isolatedReviewToken, selectBackend, tokenPairMatchesBackend } from "./review-backend";
+declare const REVIEW_API_ORIGIN: string;
+const reviewOrigin = typeof REVIEW_API_ORIGIN === "string" ? REVIEW_API_ORIGIN : "";
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { SecureStorage } from "@aparajita/capacitor-secure-storage";
 import { Browser } from "@capacitor/browser";
@@ -186,11 +189,15 @@ export async function uploadToPresignedUrl(url: string, contentType: string, blo
 export function createApiClient(baseUrl: string) {
   const origin = baseUrl.replace(/\/$/, "");
 
-  async function request(path: string, init: { method: string; body?: unknown; expectedMemberId?: string; accessToken?: string | null }) {
+  async function request(path: string, init: { method: string; body?: unknown; expectedMemberId?: string; accessToken?: string | null; refreshToken?: string; loginEmail?: string }) {
+    let target: string;
+    try { target = selectBackend(origin, reviewOrigin, { email: init.loginEmail, token: init.accessToken ?? init.refreshToken }); }
+    catch { throw new ApiError("UNKNOWN", "審查環境目前未開放。"); }
     try {
       return await CapacitorHttp.request({
         method: init.method,
-        url: `${origin}${path}`,
+        url: `${target}${path}`,
+        ...(target === reviewOrigin ? { disableRedirects: true, webFetchExtra: { redirect: "error" as const } } : {}),
         headers: {
           "Content-Type": "application/json",
           ...(init.expectedMemberId ? { "x-lionclubs-member": init.expectedMemberId } : {}),
@@ -206,12 +213,14 @@ export function createApiClient(baseUrl: string) {
   async function login(email: string, password: string): Promise<void> {
     const epoch = mobileSession.beginChange();
     await mobileSession.clear(epoch); mobileSession.assertCurrent(epoch);
-    const response = await request("/api/mobile/auth/login", { method: "POST", body: { email, password } });
+    const response = await request("/api/mobile/auth/login", { method: "POST", body: { email, password }, loginEmail: email });
     mobileSession.assertCurrent(epoch);
     if (response.status === 401) throw new ApiError("INVALID_CREDENTIALS", response.data?.error ?? "帳號或密碼錯誤", 401);
     if (response.status === 429) throw new ApiError("RATE_LIMITED", response.data?.error ?? "嘗試次數過多，請稍後再試", 429);
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `登入失敗（HTTP ${response.status}）`, response.status);
-    await mobileSession.writePair(epoch, response.data); mobileSession.assertCurrent(epoch);
+    const pair = mobileTokenPair(response.data);
+    if (!tokenPairMatchesBackend(pair, isIsolatedReviewer(email))) throw new ApiError("UNKNOWN", "登入環境無法確認。");
+    await mobileSession.writePair(epoch, pair); mobileSession.assertCurrent(epoch);
   }
 
   async function getOAuthProviders(): Promise<OAuthProvider[]> {
@@ -264,14 +273,16 @@ export function createApiClient(baseUrl: string) {
     } });
     mobileSession.assertCurrent(epoch);
     if (exchange.status !== 200) throw new ApiError("UNAUTHENTICATED", exchange.data?.error ?? "登入連結已過期，請重新開始", exchange.status);
-    await mobileSession.writePair(epoch, exchange.data); mobileSession.assertCurrent(epoch);
+    const pair = mobileTokenPair(exchange.data);
+    if (!tokenPairMatchesBackend(pair, false)) throw new ApiError("UNKNOWN", "登入環境無法確認。");
+    await mobileSession.writePair(epoch, pair); mobileSession.assertCurrent(epoch);
   }
 
   async function refresh(epoch: number): Promise<boolean> {
     return mobileSession.refreshOnce(epoch, async () => {
       const { refreshToken } = await mobileSession.snapshot(epoch); mobileSession.assertCurrent(epoch);
       if (!refreshToken) return invalidateExpiredSession(epoch);
-      const response = await request("/api/mobile/auth/refresh", { method: "POST", body: { refreshToken } });
+      const response = await request("/api/mobile/auth/refresh", { method: "POST", body: { refreshToken }, refreshToken });
       mobileSession.assertCurrent(epoch);
       if (response.status === 401) {
         // Only explicit current-session rejection invalidates the pair. A late
@@ -280,7 +291,10 @@ export function createApiClient(baseUrl: string) {
       }
       if (response.status !== 200) throw new ApiError("UNKNOWN", "登入更新暫時無法確認，請稍後重試", response.status);
       let pair: ReturnType<typeof mobileTokenPair>;
-      try { pair = mobileTokenPair(response.data); }
+      try {
+        pair = mobileTokenPair(response.data);
+        if (!tokenPairMatchesBackend(pair, isolatedReviewToken(refreshToken))) throw Error("TOKEN_BACKEND_MISMATCH");
+      }
       catch { throw new ApiError("UNKNOWN", "登入更新回覆尚未確認，請稍後重試。", response.status); }
       try { await mobileSession.writePair(epoch, pair); mobileSession.assertCurrent(epoch); }
       catch {

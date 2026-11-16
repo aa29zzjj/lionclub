@@ -12,7 +12,7 @@
 
 在已遷移的審查資料庫執行 `node scripts/seed-isolated-review.mjs`。外部注入 `LIONCLUBS_REVIEW_DATABASE_URL` 和 `LIONCLUBS_REVIEW_PASSWORD`，並以 `LIONCLUBS_REVIEW_DB_CONFIRM` 指定該連線的主機、埠（如有）與資料庫路徑。初次執行會建立一個合成分會、普通會員和示範揪團。重跑保留既有帳密。將審查密碼交由受控管道提供。
 
-容器建置傳入 `--build-arg NEXT_PUBLIC_NEXT_PHASE_ENABLED=true` 以包含新功能和名片辨識資產。部署後從外部設備確認 HTTPS、App 登入、揪團與名片。隔離驗收用的 iOS 建置將 `MOBILE_APP_API_BASE_URL` 設為該 HTTPS 網址，正式商店候選則指向正式網址。若審查人員要用正式商店候選連到隔離審查環境，須先建立該候選可用的隔離路由並核對審查帳號完整體驗。
+容器建置傳入 `--build-arg NEXT_PUBLIC_NEXT_PHASE_ENABLED=true` 以包含新功能和名片辨識資產。部署後從外部設備確認 HTTPS、App 登入、揪團與名片。送審建置保留正式 `MOBILE_APP_API_BASE_URL`，另外設定 `MOBILE_APP_REVIEW_API_ORIGIN` 為獨立審查站的 HTTPS origin。只有初始化腳本建立的 `reviewer@lionclubs-review.example.test` 及該帳號的憑證會連到審查站。請以同一個實際送審建置驗證審查帳號和一般會員、重開 App、更新登入及登出。Build 14 早於這項分流，須在審查網址確定後重新建置、簽署並核對可用的建置編號。
 
 ## App Store Connect 填寫草稿
 

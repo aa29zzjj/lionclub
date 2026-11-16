@@ -13,6 +13,15 @@ try {
 
 const API_BASE_URL = process.env.MOBILE_APP_API_BASE_URL ?? "https://lionclubsmembership.com";
 
+const reviewInput = process.env.MOBILE_APP_REVIEW_API_ORIGIN ?? "";
+let reviewOrigin = "";
+if (reviewInput) {
+  const url = new URL(reviewInput);
+  if (!/^[a-z0-9]+(?:[.-][a-z0-9]+)*\.[a-z0-9]+$/i.test(url.hostname) || url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash
+    || url.origin === new URL(API_BASE_URL).origin) throw new Error("Review API must be a distinct HTTPS origin.");
+  reviewOrigin = url.origin;
+}
+
 const nextPhase = process.env.NEXT_PUBLIC_NEXT_PHASE_ENABLED === "true";
 const output = process.argv.includes("--web-preview") ? join(root, "../public/native-preview") : join(root, "dist");
 await mkdir(output, { recursive: true });
@@ -33,11 +42,13 @@ await build({
     "process.env.NODE_ENV": '"production"',
     "process.env.NEXT_PUBLIC_NEXT_PHASE_ENABLED": JSON.stringify(String(nextPhase)),
     API_BASE_URL: JSON.stringify(API_BASE_URL),
+    REVIEW_API_ORIGIN: JSON.stringify(reviewOrigin),
   },
 });
-if (nextPhase) {
-  const html = (await readFile(join(root, "index.html"), "utf8"))
-    .replace("script-src 'self';", "script-src 'self' 'wasm-unsafe-eval';").replace("worker-src 'none'", "worker-src 'self'");
+if (nextPhase || reviewOrigin) {
+  let html = await readFile(join(root, "index.html"), "utf8");
+  if (nextPhase) html = html.replace("script-src 'self';", "script-src 'self' 'wasm-unsafe-eval';").replace("worker-src 'none'", "worker-src 'self'");
+  if (reviewOrigin) html = html.replace("connect-src ", `connect-src ${reviewOrigin} `);
   await writeFile(join(output, "index.html"), html);
 } else {
   await copyFile(join(root, "index.html"), join(output, "index.html"));

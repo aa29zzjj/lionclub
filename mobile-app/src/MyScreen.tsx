@@ -1,3 +1,5 @@
+import { isIsolatedReviewer } from "./review-backend";
+declare const REVIEW_API_ORIGIN: string;
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Browser } from "@capacitor/browser";
 import { createApiClient, ApiError, type Member } from "./contract";
@@ -86,7 +88,8 @@ export default function MyScreen({
     const owner = identity.current.id, isCurrent = api.captureSessionGuard();
     setOpeningWebsite(true); setWebsiteError(null);
     try {
-      await Browser.open({ url: WEBSITE_PAGES[target].url, presentationStyle: "popover" });
+      await Browser.open({ url: typeof REVIEW_API_ORIGIN === "string" && REVIEW_API_ORIGIN && isIsolatedReviewer(member.email ?? "")
+        ? new URL(new URL(WEBSITE_PAGES[target].url).pathname, REVIEW_API_ORIGIN).href : WEBSITE_PAGES[target].url, presentationStyle: "popover" });
     } catch {
       if (mounted.current && isCurrent() && identity.current.id === owner) setWebsiteError({ memberId: owner, target, text: WEBSITE_PAGES[target].error });
     } finally { websiteLock.current = false; if (mounted.current) setOpeningWebsite(false); }
