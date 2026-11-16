@@ -41,7 +41,7 @@ export async function checkIsolatedReview(origin, password, fetcher = fetch) {
   if (!refreshed?.accessToken || typeof refreshed.accessToken !== "string" || typeof refreshed.refreshToken !== "string") throw Error("REFRESH_INVALID_SESSION");
   const context = { token: refreshed.accessToken, memberId };
   const meetups = await request("MEETUPS", "/api/mobile/next-phase?view=meetups", context);
-  const example = Array.isArray(meetups?.meetups) && meetups.meetups.find(item => item.title === "志工交流晚餐" && typeof item.id === "string");
+  const example = Array.isArray(meetups?.meetups) && meetups.meetups.find(item => item.title === "志工交流晚餐" && item.isHost === false && typeof item.id === "string");
   if (meetups?.organizationName !== "LionClubs 審查示範分會" || !example) throw Error("MEETUPS_REVIEW_FIXTURE_MISSING");
   const query = new URLSearchParams({ view: "meetup", id: example.id });
   const detail = await request("MEETUP_DETAIL", `/api/mobile/next-phase?${query}`, context);
@@ -50,7 +50,9 @@ export async function checkIsolatedReview(origin, password, fetcher = fetch) {
   if (!card || !Object.hasOwn(card, "card")) throw Error("BUSINESS_CARD_INVALID");
   const notices = await request("NOTICES", "/api/mobile/next-phase?view=notices", context);
   if (!Array.isArray(notices?.items)) throw Error("NOTICES_INVALID");
-  return { origin, verified: ["anonymous access denied", "review login", "token refresh", "meetups", "meetup detail", "business card", "notifications"] };
+  const resources = await request("RESOURCES", "/api/mobile/services", context);
+  if (!Array.isArray(resources?.needs) || !resources.needs.some(need => need.title === "公益講座保險協助")) throw Error("RESOURCES_REVIEW_FIXTURE_MISSING");
+  return { origin, verified: ["anonymous access denied", "review login", "token refresh", "meetups", "meetup detail", "business card", "notifications", "resource matching"] };
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
