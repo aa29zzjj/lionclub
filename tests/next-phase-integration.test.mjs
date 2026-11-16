@@ -154,6 +154,15 @@ test("isolated reviewer receives a seeded cooperation invitation linked to the d
   assert.equal(notices.status, 200);
   assert.equal(notices.data.items.length, 1);
   const [invitation] = notices.data.items;
+  const future = new Date(Date.now() + 32 * 86_400_000);
+  const initialMeetup = await sim.prisma.meetup.findFirstOrThrow({ where: { requestId: "review-meetup" } });
+  await seedIsolatedReview(sim.prisma, await hash(password, 4), future);
+  const renewed = await sim.prisma.meetup.findUniqueOrThrow({ where: { id: initialMeetup.id } });
+  assert.ok(renewed.startsAt > future);
+  assert.equal(renewed.revision, initialMeetup.revision + 1);
+  const renewedNotice = await sim.prisma.phaseNotice.findUniqueOrThrow({ where: { id: invitation.id } });
+  assert.equal(+renewedNotice.availableAt, +future);
+
   assert.equal(invitation.title, "收到合作邀請");
   assert.equal(invitation.target, "need");
   const resources = await sim.call(`/api/mobile/services?needId=${invitation.targetId}`, "GET", undefined, sim.jar(), auth);

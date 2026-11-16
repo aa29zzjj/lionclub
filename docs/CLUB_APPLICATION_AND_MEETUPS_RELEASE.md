@@ -12,7 +12,7 @@
 
 使用獨立 PostgreSQL 資料庫與 HTTPS 網址，設定專用的 `AUTH_SECRET`，並將 `NEXT_PUBLIC_APP_URL` 指向審查環境。此環境只載入合成審查資料；使用自己的資料庫連線與媒體設定。維持 OAuth、對外郵件和手機推播關閉，直到擬測的功能及使用的服務確認可用。
 
-在已遷移的審查資料庫執行 `node scripts/seed-isolated-review.mjs`。外部注入 `LIONCLUBS_REVIEW_DATABASE_URL` 和 `LIONCLUBS_REVIEW_PASSWORD`，並以 `LIONCLUBS_REVIEW_DB_CONFIRM` 指定該連線的主機、埠（如有）與資料庫路徑。初次執行會建立一個合成分會、審查帳號、無登入帳號的示範主揪，以及可報名的揪團、可回應的資源需求和一筆站內合作邀請。重跑保留既有帳密。將審查密碼交由受控管道提供。
+在已遷移的審查資料庫執行 `node scripts/seed-isolated-review.mjs`。外部注入 `LIONCLUBS_REVIEW_DATABASE_URL` 和 `LIONCLUBS_REVIEW_PASSWORD`，並以 `LIONCLUBS_REVIEW_DB_CONFIRM` 指定該連線的主機、埠（如有）與資料庫路徑。初次執行會建立一個合成分會、審查帳號、無登入帳號的示範主揪，以及可報名的揪團、可回應的資源需求和一筆站內合作邀請。送審前可重跑以展延已過期的示範資料，保留既有帳密及審查員的操作紀錄。將審查密碼交由受控管道提供。
 
 容器建置傳入 `--build-arg NEXT_PUBLIC_NEXT_PHASE_ENABLED=true` 以包含新功能和名片辨識資產。部署後從外部設備確認 HTTPS、App 登入、揪團與名片。送審建置保留正式 `MOBILE_APP_API_BASE_URL`，另外設定 `MOBILE_APP_REVIEW_API_ORIGIN` 為獨立審查站的 HTTPS origin。只有初始化腳本建立的 `reviewer@lionclubs-review.example.test` 及該帳號的憑證會連到審查站。請以同一個實際送審建置驗證審查帳號和一般會員、重開 App、更新登入及登出。Build 14 早於這項分流，須在審查網址確定後重新建置、簽署並核對可用的建置編號。
 

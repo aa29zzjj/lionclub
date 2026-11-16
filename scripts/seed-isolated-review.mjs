@@ -2,12 +2,13 @@ import { pathToFileURL } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
+const day = 86_400_000;
 const organizationId = "review-only-club";
 const peerId = "isolated-review-host";
 const email = "reviewer@lionclubs-review.example.test";
 
 /** Provision one synthetic member in a fresh, separately migrated database. */
-export async function seedIsolatedReview(prisma, passwordHash) {
+export async function seedIsolatedReview(prisma, passwordHash, now = new Date()) {
   return prisma.$transaction(async tx => {
     const organizations = await tx.organization.findMany({ select: { id: true }, take: 2 });
     const users = await tx.user.findMany({ select: { id: true, email: true, memberId: true }, take: 2 });
@@ -23,7 +24,7 @@ export async function seedIsolatedReview(prisma, passwordHash) {
       where: { id: organizationId }, update: {},
       create: { id: organizationId, level: "club", name: "LionClubs 審查示範分會", districtCode: "REVIEW" },
     });
-    const now = new Date();
+    const nextDate = new Date(+now + 30 * day);
     const reviewMember = reviewer ?? await tx.member.create({
       data: { email, organizationId, name: "審查示範會員", status: "ACTIVE", emailVerifiedAt: now,
         organizationAssignmentStatus: "ASSIGNED", user: { create: { email, passwordHash } } },
@@ -32,27 +33,40 @@ export async function seedIsolatedReview(prisma, passwordHash) {
       where: { id: peerId }, update: {},
       create: { id: peerId, organizationId, name: "示範主揪", status: "ACTIVE", organizationAssignmentStatus: "ASSIGNED" },
     });
-    await tx.meetup.upsert({
+    const meetup = await tx.meetup.upsert({
       where: { hostId_requestId: { hostId: peerId, requestId: "review-meetup" } }, update: {},
       create: { organizationId, hostId: peerId, requestId: "review-meetup", title: "志工交流晚餐", category: "餐敘",
-        startsAt: new Date(+now + 30 * 86_400_000), location: "示範集合點", description: "此為合成審查資料。",
+        startsAt: nextDate, location: "示範集合點", description: "此為合成審查資料。",
         capacity: 8, registrations: { create: { memberId: peerId } },
         messages: { create: { memberId: peerId, requestId: "review-introduction", body: "歡迎報名，請在這裡留言討論集合方式。" } },
       },
     });
+    if (meetup.startsAt <= now) {
+      const updated = await tx.meetup.update({ where: { id: meetup.id }, data: { startsAt: nextDate, revision: { increment: 1 } } });
+      await tx.phaseNotice.updateMany({
+        where: { meetupId: meetup.id, kind: "MEETUP_REMINDER", revision: meetup.revision },
+        data: { revision: updated.revision, availableAt: new Date(+nextDate - day), readAt: null },
+      });
+    }
     const need = await tx.resourceNeed.upsert({
       where: { ownerId_requestId: { ownerId: peerId, requestId: "review-resource" } }, update: {},
       create: { ownerId: peerId, organizationId, requestId: "review-resource", title: "公益講座保險協助", kind: "NEED", category: "保險",
-        description: "示範需求，歡迎回應可協助的方向。", targetDate: new Date(+now + 30 * 86_400_000), quantity: 1, quantityUnit: "位" },
+        description: "示範需求，歡迎回應可協助的方向。", targetDate: nextDate, quantity: 1, quantityUnit: "位" },
     });
+    if (need.targetDate <= now) {
+      await tx.resourceNeed.update({ where: { id: need.id }, data: { targetDate: nextDate, version: { increment: 1 } } });
+    }
     const invitation = {
       recipientId: reviewMember.id, kind: "COOPERATION_INVITE", sourceKey: need.id, revision: 1,
     };
-    await tx.phaseNotice.upsert({
+    const notice = await tx.phaseNotice.upsert({
       where: { recipientId_kind_sourceKey_revision: invitation }, update: {},
       create: { ...invitation, actorId: peerId, needId: need.id, availableAt: now,
         message: "想請你協助確認公益講座的保險需求。" },
     });
+    if (+notice.availableAt < +now - 29 * day) {
+      await tx.phaseNotice.update({ where: { id: notice.id }, data: { availableAt: now } });
+    }
     return { email, alreadyProvisioned: Boolean(reviewer) };
   }, { isolationLevel: "Serializable" });
 }

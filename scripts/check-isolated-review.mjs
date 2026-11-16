@@ -41,7 +41,7 @@ export async function checkIsolatedReview(origin, password, fetcher = fetch) {
   if (!refreshed?.accessToken || typeof refreshed.accessToken !== "string" || typeof refreshed.refreshToken !== "string") throw Error("REFRESH_INVALID_SESSION");
   const context = { token: refreshed.accessToken, memberId };
   const meetups = await request("MEETUPS", "/api/mobile/next-phase?view=meetups", context);
-  const example = Array.isArray(meetups?.meetups) && meetups.meetups.find(item => item.title === "志工交流晚餐" && item.isHost === false && typeof item.id === "string");
+  const example = Array.isArray(meetups?.meetups) && meetups.meetups.find(item => item.title === "志工交流晚餐" && item.isHost === false && typeof item.id === "string" && Date.parse(item.startsAt) > Date.now());
   if (meetups?.organizationName !== "LionClubs 審查示範分會" || !example) throw Error("MEETUPS_REVIEW_FIXTURE_MISSING");
   const query = new URLSearchParams({ view: "meetup", id: example.id });
   const detail = await request("MEETUP_DETAIL", `/api/mobile/next-phase?${query}`, context);
