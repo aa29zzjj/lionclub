@@ -68,7 +68,7 @@ export async function seedIsolatedReview(prisma, passwordHash, now = new Date())
       await tx.phaseNotice.update({ where: { id: notice.id }, data: { availableAt: now } });
     }
     return { email, alreadyProvisioned: Boolean(reviewer) };
-  }, { isolationLevel: "Serializable" });
+  }, { isolationLevel: "Serializable", timeout: 30_000 });
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
