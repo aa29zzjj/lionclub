@@ -38,6 +38,6 @@ export async function POST(req: NextRequest) {
       catch { console.error("Verification email failed"); }
     }
     return NextResponse.json({ ok: true, memberId: member.id, organizationName: organization.name,
-      organizationAssignmentStatus: "NEEDS_ASSIGNMENT", registrationMode, canLogin });
+      organizationAssignmentStatus: member.organizationAssignmentStatus, registrationMode, canLogin });
   } catch (error) { return onboardingErrorResponse(error); }
 }

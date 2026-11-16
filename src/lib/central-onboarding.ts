@@ -7,6 +7,7 @@ import { OAUTH_DATA_VERSION } from "./federated-auth";
 import { registrationTargetsInvitedClub } from "./club-registration-policy";
 
 type Database = PrismaClient | Prisma.TransactionClient;
+export const CLUB_APPLICATION_PENDING = "CLUB_APPLICATION_PENDING";
 export const ASSIGNMENT_MANAGER_ROLES = ["CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
 export const assignmentMemberSelect = {
   id: true, name: true, email: true, phone: true, status: true,
@@ -135,7 +136,7 @@ export async function createCentralMember(
             name: input.name, email: input.email, birthday: input.birthday ? new Date(input.birthday) : undefined,
             phone: input.phone, title: input.title, bio: input.bio,
             status: clubApplication ? "PENDING" : "ACTIVE", role: "MEMBER", organizationId: intake.id, memberNo,
-            organizationAssignmentStatus: "NEEDS_ASSIGNMENT",
+            organizationAssignmentStatus: clubApplication ? CLUB_APPLICATION_PENDING : "NEEDS_ASSIGNMENT",
             declaredOrganizationName: directClub || clubApplication ? intake.name : input.declaredOrganizationName || null,
             privacyConsentedAt: now,
             privacyConsentVersion: PRIVACY_POLICY_VERSION,

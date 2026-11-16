@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { selectableClubWhere } from "./central-onboarding";
+import { CLUB_APPLICATION_PENDING, selectableClubWhere } from "./central-onboarding";
 import { generateMemberNo } from "./member-no";
 import { z } from "zod";
 
@@ -38,7 +38,7 @@ export async function approvePendingClubApplication(
   pending: { id: string; organizationId: string; organizationAssignmentStatus: string; memberNo: string | null },
   actorId: string,
 ): Promise<Prisma.MemberUpdateManyMutationInput> {
-  if (pending.organizationAssignmentStatus !== "NEEDS_ASSIGNMENT") return {};
+  if (pending.organizationAssignmentStatus !== CLUB_APPLICATION_PENDING) return {};
   const organization = await tx.organization.findFirst({
     where: { ...selectableClubWhere(), id: pending.organizationId },
     select: { id: true, name: true },
@@ -48,7 +48,7 @@ export async function approvePendingClubApplication(
   await tx.memberOrganizationAssignment.create({ data: {
     memberId: pending.id, assignedById: actorId,
     toOrganizationId: organization.id, toOrganizationName: organization.name,
-    previousAssignmentStatus: "NEEDS_ASSIGNMENT", assignmentStatus: "ASSIGNED",
+    previousAssignmentStatus: CLUB_APPLICATION_PENDING, assignmentStatus: "ASSIGNED",
     reason: "核准會員自行選擇的分會",
   } });
   return { memberNo, organizationAssignmentStatus: "ASSIGNED", organizationAssignmentVersion: { increment: 1 } };

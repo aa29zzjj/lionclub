@@ -39,7 +39,7 @@ function harness(discover, platform = "ios") {
       if (name === "./foreground-session") return { createForegroundRevalidator: () => ({ dispose() {}, handleState() {}, unavailable() {} }), attachForegroundListener: () => () => {} };
       if (name === "./session-end-controller") return { createSessionEndController: () => ({ request: async () => {} }) };
       if (name === "./lions-logo.png") return { __esModule: true, default: "data:image/png;synthetic" };
-      if (["./Shell", "./HomeScreen", "./FriendsScreen", "./EventsScreen", "./NotificationsScreen", "./MyScreen"].includes(name)) return { __esModule: true, default: placeholder };
+      if (["./Shell", "./HomeScreen", "./FriendsScreen", "./EventsScreen", "./NotificationsScreen", "./MyScreen", "./NextPhaseScreen"].includes(name)) return { __esModule: true, default: placeholder };
       throw Error(`Unapproved synthetic dependency: ${name}`);
     },
   });

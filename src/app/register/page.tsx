@@ -388,7 +388,7 @@ function RegisterForm() {
           <p className="mt-1 font-semibold">{directClub ? currentVerifiedInvite.organizationName : centralOrganization.name}</p>
           {!directClub && centralOrganization.districtCode && <p className="mt-1 text-xs text-lion-muted">{centralOrganization.districtCode}</p>}
           <p className="mt-3 text-sm leading-relaxed text-lion-muted">{directClub ? "註冊後可立即使用聖迪獅子會的會員功能。正式會籍之後由授權管理者依名單人工核對；註冊不會授予幹部或管理權限。" : "掃邀請 QR 註冊完成即可使用。這是平台暫存分會，不代表正式獅子會會籍已核實；之後由授權管理者依名單或分會長確認結果分派。"}</p>
-          {currentVerifiedInvite && !directClub && <p className="mt-3 border-t border-lion-border pt-3 text-xs leading-relaxed text-lion-muted">邀請來源：{currentVerifiedInvite.organizationName}。邀請來源供分會核對。</p>}
+          {currentVerifiedInvite && !directClub && <p className="mt-3 border-t border-lion-border pt-3 text-xs leading-relaxed text-lion-muted">邀請來源：{currentVerifiedInvite.organizationName}。邀請來源只供核對，實際加入的是上述中央分會。</p>}
         </div>}
         {configurationReady && onboarding && step === "invite" && <form onSubmit={handleInviteSubmit} className="flex flex-col gap-5">
           {federated && <p role="status" className="rounded-xl border border-lion-border p-3 text-sm">第三方身分已驗證，尚未建立會員帳號。請在本瀏覽器開啟有效邀請 QR 連結，再完成資料與同意；驗證會逾時，請勿將邀請轉貼至公開場所。</p>}

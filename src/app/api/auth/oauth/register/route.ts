@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const canLogin = member.status === "ACTIVE";
     if (canLogin) await createSession({ userId: user.id, memberId: member.id, email: user.email, sessionVersion: user.sessionVersion });
     await clearOAuthCookie(OAUTH_PENDING_COOKIE);
-    return oauthJson({ ok: true, memberId: member.id, organizationName: organization.name, organizationAssignmentStatus: "NEEDS_ASSIGNMENT", registrationMode, canLogin });
+    return oauthJson({ ok: true, memberId: member.id, organizationName: organization.name, organizationAssignmentStatus: member.organizationAssignmentStatus, registrationMode, canLogin });
   } catch (error) {
     if (error instanceof OnboardingError) return oauthJson({ error: error.message }, error.status);
     return oauthErrorResponse(error);
