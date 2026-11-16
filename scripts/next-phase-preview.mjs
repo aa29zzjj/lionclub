@@ -23,6 +23,7 @@ try {
   const termsVersion = sim.load("src/lib/terms.ts").TERMS_VERSION;
   const now = new Date();
   const email = "member-next-phase@example.test";
+  await sim.prisma.adminRole.create({ data: { memberId: friend.id, role: "SUPER_ADMIN", scopeType: "GLOBAL" } });
   await sim.prisma.organization.update({ where: { id: ai.id }, data: { name: "青禾獅子會（測試分會）" } });
   for (const [actor, name] of [[chair, "林主揪"], [member, "陳獅友"], [friend, "許獅友"]]) {
     await sim.prisma.member.update({ where: { id: actor.id }, data: { name, organizationAssignmentStatus: "ASSIGNED", termsVersion, termsAcceptedAt: now, emailVerifiedAt: now } });
@@ -60,7 +61,9 @@ try {
     NEXT_PUBLIC_APP_URL: origin,
     MOBILE_APP_API_BASE_URL: origin,
     NEXT_PUBLIC_NEXT_PHASE_ENABLED: "true",
+    REGISTRATION_CLUB_APPLICATION_ENABLED: "true",
     NEXT_TELEMETRY_DISABLED: "1",
+    LIONCLUBS_WEB_PREVIEW: process.env.LIONCLUBS_WEB_PREVIEW,
   };
   const run = (script, ...args) => spawn(process.execPath, [script, ...args], { env, stdio: "inherit" });
   await new Promise((resolve, reject) => {
@@ -68,7 +71,7 @@ try {
     assets.once("error", reject);
     assets.once("exit", code => code === 0 ? resolve() : reject(new Error("Could not prepare OCR assets.")));
   });
-  await new Promise((resolve, reject) => {
+  if (env.LIONCLUBS_WEB_PREVIEW !== "true") await new Promise((resolve, reject) => {
     const native = run("mobile-app/build.mjs", "--web-preview");
     native.once("error", reject);
     native.once("exit", code => code === 0 ? resolve() : reject(new Error("Could not build the native preview.")));
@@ -76,7 +79,7 @@ try {
   child = run("node_modules/next/dist/bin/next", "dev", "--hostname", "127.0.0.1", "--port", String(port));
   child.once("error", failure => { console.error(failure); void close(1); });
   child.once("exit", code => void close(code ?? 0));
-  console.log(`Preview: ${origin}/login\nSynthetic accounts: ${email}, chair-next-phase@example.test, friend-next-phase@example.test\nShared test password: SimulationPass42!`);
+  console.log(`Preview: ${origin}/login\nSynthetic accounts: ${email}, chair-next-phase@example.test, friend-next-phase@example.test\nShared test password: SimulationPass42!\nRegistration preview: ${origin}/register?token=sim-invite-next-phase`);
 } catch (error) {
   console.error(error);
   await close(1);
