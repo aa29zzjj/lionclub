@@ -34,7 +34,9 @@ export function publicRuntimeEnvironment(environment = process.env) {
   const pushMode = optional("APNS_ENVIRONMENT"), pushTopic = optional("APNS_TOPIC");
   if (pushMode !== undefined) { if (!["sandbox", "production"].includes(pushMode)) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION"); result.APNS_ENVIRONMENT = pushMode; }
   if (pushTopic !== undefined) { if (pushTopic !== "com.lionclubsmembership.app") throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION"); result.APNS_TOPIC = pushTopic; }
-  for (const name of ["AVATAR_BUCKET_NAME", "AVATAR_PUBLIC_BASE_URL", "PASSWORD_RESET_FROM_EMAIL"]) {
+  const mediaAndMail = result.ISOLATED_APP_REVIEW_ENABLED === "true"
+    ? [] : ["AVATAR_BUCKET_NAME", "AVATAR_PUBLIC_BASE_URL", "PASSWORD_RESET_FROM_EMAIL"];
+  for (const name of mediaAndMail) {
     const value = optional(name); if (value === undefined) continue;
     if (/[\r\n\0$]/.test(value) || value.trim() !== value) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION");
     if (name === "AVATAR_BUCKET_NAME" && !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(value)) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION");

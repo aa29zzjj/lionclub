@@ -36,6 +36,9 @@ test("Amplify propagates only a noncredential database target for isolated revie
     assert.throws(() => publicRuntimeEnvironment({ ...isolated, LIONCLUBS_REVIEW_DB_CONFIRM: target }));
   }
   const target = { LIONCLUBS_REVIEW_DB_CONFIRM: "db.example.test:5432/review" };
-  assert.deepEqual(publicRuntimeEnvironment({ ...isolated, ...target }), { ...isolated, ...target });
+  const inherited = { AVATAR_BUCKET_NAME: "synthetic-production-bucket",
+    AVATAR_PUBLIC_BASE_URL: "https://media.example.test", PASSWORD_RESET_FROM_EMAIL: "sender@example.test" };
+  assert.deepEqual(publicRuntimeEnvironment({ ...isolated, ...target, ...inherited }), { ...isolated, ...target });
+  assert.deepEqual(publicRuntimeEnvironment(inherited), inherited);
   assert.deepEqual(publicRuntimeEnvironment(target), {});
 });

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getPrisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 import { getSession, destroySession } from "@/lib/session";
+import { getMediaStorage } from "@/lib/media-storage";
 import { AccountDeletionError, anonymizeAccount } from "@/lib/account-deletion";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 import { consumeRateLimit, rateLimitResponse } from "@/lib/rate-limit";
@@ -52,9 +53,10 @@ export async function POST(request: NextRequest) {
     if (await prisma.adminRole.count({ where: { memberId: me.id, OR: [{ validUntil: null }, { validUntil: { gt: now } }] } })) throw new AccountDeletionError(409, "您仍持有有效或預定的幹部權限，請先由其他管理者撤銷後再刪除帳號");
     if (await prisma.event.count({ where: { createdById: me.id, startAt: { gte: now } } })) throw new AccountDeletionError(409, "您有尚未開始的活動，請先安排交接後再刪除帳號");
     const identities = await revokeLinkedAppleBeforeDeletion(prisma, user.id, undefined, undefined, emailAuthorization ?? undefined);
+    const { bucket, region } = getMediaStorage();
     const result = await anonymizeAccount(prisma, { memberId: me.id, userId: user.id, expectedPasswordHash: user.passwordHash,
       expectedSessionVersion: session.sessionVersion, expectedFederatedIdentities: identities, emailActionChallengeId: emailAuthorization?.id,
-      bucket: process.env.AVATAR_BUCKET_NAME, region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-northeast-1" });
+      bucket, region });
     await destroySession();
     return NextResponse.json(result);
   } catch (error) {

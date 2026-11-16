@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentMember } from "@/lib/current-member";
 import { createS3UploadUrl } from "@/lib/aws-http";
+import { getMediaStorage } from "@/lib/media-storage";
 
 const inputSchema = z.object({
   contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
@@ -18,9 +19,7 @@ export async function POST(request: NextRequest) {
   const parsed = inputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "圖片需為 JPG、PNG 或 WebP，且不可超過 5 MB" }, { status: 400 });
 
-  const bucket = process.env.AVATAR_BUCKET_NAME;
-  const publicBaseUrl = process.env.AVATAR_PUBLIC_BASE_URL?.replace(/\/$/, "");
-  const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-northeast-1";
+  const { bucket, publicBaseUrl, region } = getMediaStorage();
   if (!bucket || !publicBaseUrl) {
     return NextResponse.json({ error: "活動封面儲存尚未完成 AWS 設定，請聯絡系統管理員" }, { status: 503 });
   }

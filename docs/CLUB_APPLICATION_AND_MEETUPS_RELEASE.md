@@ -12,7 +12,7 @@
 
 使用俄亥俄區 RDS 時，審查後端會載入隨伺服器打包的 AWS 公開根憑證，並要求驗證 TLS。部署後從 Amplify 實際執行環境確認可連線。
 
-使用獨立 PostgreSQL 資料庫與 HTTPS 網址，設定專用的 `AUTH_SECRET`，並將 `NEXT_PUBLIC_APP_URL` 指向審查環境。此環境只載入合成審查資料；使用自己的資料庫連線與媒體設定。維持 OAuth、對外郵件和手機推播關閉，直到擬測的功能及使用的服務確認可用。
+使用獨立 PostgreSQL 資料庫與 HTTPS 網址，設定專用的 `AUTH_SECRET`，並將 `NEXT_PUBLIC_APP_URL` 指向審查環境。審查站只載入合成資料。名片照片存於審查資料庫，頭像與活動封面的 S3 上傳在審查站停用。Amplify 審查分支的執行角色僅讀取審查機密，無需授予正式 S3、寄信或推播權限。
 
 在已遷移的審查資料庫執行 `node scripts/seed-isolated-review.mjs`。外部注入 `LIONCLUBS_REVIEW_DATABASE_URL` 和 `LIONCLUBS_REVIEW_PASSWORD`，並以 `LIONCLUBS_REVIEW_DB_CONFIRM` 指定該連線的主機、埠（如有）與資料庫路徑。初次執行會建立一個合成分會、審查帳號、無登入帳號的示範主揪，以及可報名的揪團、可回應的資源需求和一筆站內合作邀請。送審前可重跑以展延已過期的示範資料，保留既有帳密及審查員的操作紀錄。將審查密碼交由受控管道提供。
 
