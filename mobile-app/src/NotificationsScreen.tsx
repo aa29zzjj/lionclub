@@ -1,3 +1,7 @@
+import NextPhaseScreen, { NativePhaseInbox } from "./NextPhaseScreen";
+import ServiceScreen from "./ServiceScreen";
+import { nextPhaseEnabled } from "../../src/lib/next-phase-contract";
+import type { PhaseNoticeItem } from "../../src/lib/phase-notices";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createApiClient, ApiError, type NotificationItem, type FriendInvitation, type SentNotification } from "./contract";
 import { canSendNotification, notificationSendCount, readNotificationComposeData, NOTIFICATION_MESSAGE_LIMIT, type NotificationEventOption, type NotificationFriendOption } from "./notification-contract";
@@ -108,7 +112,7 @@ function ComposeForm({ onClose, onSent, onCheckSent }: {
   </div>;
 }
 
-export default function NotificationsScreen({ onOpenProfile }: { onOpenProfile?: () => void }) {
+export default function NotificationsScreen({ onOpenProfile, memberId }: { onOpenProfile?: () => void; memberId?: string }) {
   const [tab, setTab] = useState<Tab>("received");
   const [inbox, setInbox] = useState<NotificationItem[]>([]);
   const [invitations, setInvitations] = useState<FriendInvitation[]>([]);
@@ -120,6 +124,7 @@ export default function NotificationsScreen({ onOpenProfile }: { onOpenProfile?:
   const [busyId, setBusyId] = useState<string | null>(null);
   const [marking, setMarking] = useState(false);
   const [composing, setComposing] = useState(false);
+  const [phaseNotice, setPhaseNotice] = useState<PhaseNoticeItem | null>(null);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
   const screenRef = useRef<HTMLDivElement>(null);
   const generation = useRef(0);
@@ -128,7 +133,7 @@ export default function NotificationsScreen({ onOpenProfile }: { onOpenProfile?:
 
   // Inner pages reuse the shell viewport too; tab-only scroll resets do not
   // cover compose/detail navigation from a scrolled notification list.
-  useLayoutEffect(() => { screenRef.current?.closest(".shell-content")?.scrollTo(0, 0); }, [composing, openEventId, tab]);
+  useLayoutEffect(() => { screenRef.current?.closest(".shell-content")?.scrollTo(0, 0); }, [composing, openEventId, phaseNotice, tab]);
 
   const load = useCallback(async () => {
     if (markLock.current || respondLock.current) return;
@@ -179,7 +184,11 @@ export default function NotificationsScreen({ onOpenProfile }: { onOpenProfile?:
   const unreadIds = inbox.filter(item => !item.readAt).map(item => item.notificationId);
 
   return <div className="notifications-screen" ref={screenRef}>
-    {openEventId ? <EventDetailScreen key={openEventId} eventId={openEventId} onBack={() => setOpenEventId(null)} /> : composing ? <>
+    {phaseNotice && memberId ? <>
+      <button className="profile-back" type="button" onClick={() => setPhaseNotice(null)}>‹ 返回通知</button>
+      {phaseNotice.target === "meetup" ? <NextPhaseScreen memberId={memberId} view="meetups" meetupId={phaseNotice.targetId} />
+        : <ServiceScreen memberId={memberId} needId={phaseNotice.targetId} />}
+    </> : openEventId ? <EventDetailScreen key={openEventId} eventId={openEventId} onBack={() => setOpenEventId(null)} /> : composing ? <>
       <h1 className="screen-title">發送通知</h1>
       <ComposeForm onClose={() => setComposing(false)} onCheckSent={checkSent} onSent={count => {
         setToast("已通知 " + count + " 位會員"); checkSent();
@@ -200,6 +209,7 @@ export default function NotificationsScreen({ onOpenProfile }: { onOpenProfile?:
       {loading ? <p className="member-meta" role="status">讀取通知中…</p> : null}
       <section id="notification-panel" role="tabpanel" aria-labelledby={tab === "received" ? "notification-received-tab" : "notification-sent-tab"} aria-busy={loading}>
         {tab === "received" ? <>
+          {nextPhaseEnabled && memberId && <NativePhaseInbox memberId={memberId} open={setPhaseNotice} />}
           <ReviewNotifications onOpenProfile={onOpenProfile} />
           <section><h2 className="section-title">好友邀請（{invitations.length} 待回覆）</h2>
             {!loading && !error && !invitations.length ? <p className="member-meta">目前沒有待回覆的好友邀請。</p> : null}

@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 import { webcrypto } from "node:crypto";
 import { build } from "esbuild";
 import { createMobileSessionCoordinator, MOBILE_ACCESS_TOKEN_KEY as ACCESS, MOBILE_REFRESH_TOKEN_KEY as REFRESH } from "../mobile-app/src/mobile-session";
+import { isolatedReviewerEmail } from "../mobile-app/src/review-backend";
+import { signMobileAccessToken, signMobileRefreshToken } from "../src/lib/mobile-auth";
 import { createSessionEndController } from "../mobile-app/src/session-end-controller";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -24,10 +26,10 @@ function source() {
     } }] }).then(result => result.outputFiles[0].text);
 }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(r => { resolve = r; }); return { promise, resolve }; }
-async function harness(handler: (options: any) => Promise<any>, platform = "ios") {
+async function harness(handler: (options: any) => Promise<any>, platform = "ios", reviewOrigin = "") {
   const storage = new Map<string, string>([[ACCESS, "access-A"], [REFRESH, "refresh-A"]]);
   const operations: string[] = [];
-  const context = { module: { exports: {} as any }, exports: {}, require: createRequire(import.meta.url), __nativeTest: { storage, request: handler, platform, operations }, URL, setTimeout, clearTimeout, crypto: webcrypto, TextEncoder };
+  const context = { module: { exports: {} as any }, exports: {}, require: createRequire(import.meta.url), __nativeTest: { storage, request: handler, platform, operations }, REVIEW_API_ORIGIN: reviewOrigin, URL, atob, setTimeout, clearTimeout, crypto: webcrypto, TextEncoder };
   runInNewContext(await source(), context);
   const create = context.module.exports.createApiClient as (origin: string) => any;
   return { storage, operations, nativeOAuthAvailable: context.module.exports.nativeOAuthAvailable as () => boolean,
@@ -372,4 +374,54 @@ test("serialized storage fencing waits for an old partial write before clearing 
   const oldEpoch = session.beginChange(); const old = session.writePair(oldEpoch, pair("old")); const rejected = assert.rejects(old);
   await started.promise; const next = session.beginChange(); const clear = session.clear(next); const replacement = session.writePair(next, pair("B"));
   release.resolve(); await Promise.all([rejected, clear, replacement]); assert.equal(data.get(ACCESS), "access-B"); assert.equal(data.get(REFRESH), "refresh-B");
+});
+
+test("the native transport isolates review credentials through refresh, logout and account switching", async () => {
+  const review = "https://review.example.invalid";
+  const primary = "https://native.example.invalid";
+  const normalEmail = "member@example.invalid";
+  const key = new TextEncoder().encode("synthetic-key-for-review-transport-test");
+  async function credentials(email: string, sessionVersion: number) {
+    const identity = { email, sessionVersion, memberId: "synthetic-member", userId: "synthetic-user" };
+    return { accessToken: await signMobileAccessToken(identity, key), refreshToken: await signMobileRefreshToken(identity, key) };
+  }
+  const initial = await credentials(isolatedReviewerEmail, 0);
+  const renewed = await credentials(isolatedReviewerEmail, 1);
+  const normal = await credentials(normalEmail, 0);
+  const destinations: string[] = [];
+  const h = await harness(async options => {
+    const url = new URL(options.url);
+    destinations.push(url.origin);
+    if (url.origin === review) assert.equal(options.disableRedirects, true);
+    switch (url.pathname) {
+      case "/api/mobile/auth/login":
+        assert.equal(url.origin, options.data.email === isolatedReviewerEmail ? review : primary);
+        return response(200, url.origin === review ? initial : normal);
+      case "/api/mobile/auth/refresh":
+        assert.equal(url.origin, review);
+        assert.equal(options.data.refreshToken, initial.refreshToken);
+        return response(200, renewed);
+      case "/api/mobile/push/config": {
+        const expected = url.origin === review ? renewed.accessToken : normal.accessToken;
+        if (options.headers.Authorization === `Bearer ${initial.accessToken}`) return response(401);
+        assert.equal(options.headers.Authorization, `Bearer ${expected}`);
+        return response(200, { enabled: false, privacyMode: "generic" });
+      }
+      case "/api/mobile/auth/logout":
+        assert.equal(url.origin, review);
+        assert.equal(options.headers.Authorization, `Bearer ${renewed.accessToken}`);
+        return response(200);
+      default: throw Error("Unexpected transport path");
+    }
+  }, "ios", review);
+  await h.client.login(isolatedReviewerEmail, "synthetic-password");
+  await h.anotherClient.getPushConfig();
+  await h.client.logout();
+  assert.equal(h.storage.size, 0);
+  await h.client.login(normalEmail, "synthetic-password");
+  await h.anotherClient.getPushConfig();
+  assert.deepEqual(destinations, [review, review, review, review, review, primary, primary]);
+
+  const unconfigured = await harness(async () => { throw Error("Must not send review credentials"); });
+  await assert.rejects(unconfigured.client.login(isolatedReviewerEmail, "synthetic-password"), /審查環境目前未開放/);
 });

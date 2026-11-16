@@ -29,3 +29,16 @@ test("native v2 and Apple deployment flags propagate without copying Apple crede
     { MOBILE_OAUTH_V2_ENABLED: "false", APPLE_OAUTH_ENABLED: "false", APPLE_OAUTH_FRESH_REAUTH_ENABLED: "false" });
   for (const name of ["MOBILE_OAUTH_V2_ENABLED", "APPLE_OAUTH_ENABLED", "APPLE_OAUTH_FRESH_REAUTH_ENABLED"]) assert.throws(() => publicRuntimeEnvironment({ [name]: "yes" }));
 });
+
+test("Amplify propagates only a noncredential database target for isolated review", () => {
+  const isolated = { ISOLATED_APP_REVIEW_ENABLED: "true" };
+  for (const target of [undefined, "postgresql://name:password@db.example.test/review", "db.example.test/review?x=1"]) {
+    assert.throws(() => publicRuntimeEnvironment({ ...isolated, LIONCLUBS_REVIEW_DB_CONFIRM: target }));
+  }
+  const target = { LIONCLUBS_REVIEW_DB_CONFIRM: "db.example.test:5432/review" };
+  const inherited = { AVATAR_BUCKET_NAME: "synthetic-production-bucket",
+    AVATAR_PUBLIC_BASE_URL: "https://media.example.test", PASSWORD_RESET_FROM_EMAIL: "sender@example.test" };
+  assert.deepEqual(publicRuntimeEnvironment({ ...isolated, ...target, ...inherited }), { ...isolated, ...target });
+  assert.deepEqual(publicRuntimeEnvironment(inherited), inherited);
+  assert.deepEqual(publicRuntimeEnvironment(target), {});
+});

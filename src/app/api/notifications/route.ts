@@ -41,6 +41,7 @@ export async function GET() {
   })]);
 
   return NextResponse.json({
+    viewerId: me.id,
     inbox: received.map((row) => ({
       id: row.id, notificationId: row.notificationId, eventId: row.notification.event.id,
       eventTitle: row.notification.event.title, message: row.notification.message,

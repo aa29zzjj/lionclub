@@ -7,7 +7,7 @@ import { activeAdminRoleWhere } from "@/lib/active-admin-role";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
 import { enqueueMobilePush } from "@/lib/mobile-push";
 import { resolveMobilePushSettings } from "@/lib/mobile-push-runtime";
-import { pendingMemberReviewSchema, PendingMemberReviewError, assertPendingMemberSnapshot, approvedPendingMemberJoinDate } from "@/lib/pending-member-review";
+import { pendingMemberReviewSchema, PendingMemberReviewError, assertPendingMemberSnapshot, approvedPendingMemberJoinDate, approvePendingClubApplication } from "@/lib/pending-member-review";
 
 class ReviewError extends Error { constructor(public status: number, message: string) { super(message); } }
 
@@ -34,7 +34,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ mem
       const snapshot = { id: memberId, status: "PENDING", deletedAt: null, organizationId: pending.organizationId, updatedAt: pending.updatedAt };
       if (parsed.data.action === "approve") {
         const dates = approvedPendingMemberJoinDate(pending, parsed.data);
-        const changed = await tx.member.updateMany({ where: snapshot, data: { status: "ACTIVE", ...dates } });
+        const assignment = await approvePendingClubApplication(tx, pending, me.id);
+        const changed = await tx.member.updateMany({ where: snapshot, data: { status: "ACTIVE", ...dates, ...assignment } });
         if (changed.count !== 1) throw new ReviewError(409, "此申請已由其他管理者處理");
         const approved = await tx.member.findUniqueOrThrow({ where: { id: memberId }, select: { updatedAt: true } });
         await enqueueMobilePush(tx, { kind: "membership_review", sourceId: memberId, sourceRevision: approved.updatedAt.toISOString(), actorId: me.id, recipientMemberIds: [memberId] }, pushSettings);

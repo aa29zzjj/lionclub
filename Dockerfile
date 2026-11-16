@@ -16,8 +16,11 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY next.config.js postcss.config.js tailwind.config.ts tsconfig.json ./
 COPY prisma/schema.prisma ./prisma/schema.prisma
+COPY certificates/aws-rds-us-east-2-root.pem ./certificates/aws-rds-us-east-2-root.pem
 COPY src ./src
 COPY public ./public
+COPY scripts/copy-card-ocr.mjs ./scripts/copy-card-ocr.mjs
+ARG NEXT_PUBLIC_NEXT_PHASE_ENABLED=false
 # PublicServicePage imports this JSON at build time. Other docs stay outside
 # the build context, especially private handoffs and operational records.
 COPY docs/app-store/METADATA.zh-Hant.json ./docs/app-store/METADATA.zh-Hant.json

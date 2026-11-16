@@ -1,3 +1,5 @@
+import { isIsolatedReviewer } from "./review-backend";
+declare const REVIEW_API_ORIGIN: string;
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Browser } from "@capacitor/browser";
 import { createApiClient, ApiError, type Member } from "./contract";
@@ -5,6 +7,8 @@ import ProfileScreen from "./ProfileScreen";
 import SecurityScreen from "./SecurityScreen";
 import AdminScreen from "./AdminScreen";
 import ExperienceScreen from "./ExperienceScreen";
+import NextPhaseScreen from "./NextPhaseScreen";
+import { nextPhaseEnabled } from "../../src/lib/next-phase-contract";
 import ServiceScreen from "./ServiceScreen";
 import Avatar from "./Avatar";
 import NotificationSettings, { type MobilePushUi } from "./NotificationSettings";
@@ -13,7 +17,7 @@ import { colorFromId } from "../../src/lib/avatar-color";
 declare const API_BASE_URL: string;
 const api = createApiClient(API_BASE_URL);
 
-type View = "overview" | "profile" | "admin" | "experience" | "services";
+type View = "overview" | "profile" | "admin" | "experience" | "services" | "business-card";
 const WEBSITE_PAGES = {
   profile: { url: "https://lionclubsmembership.com/profile", error: "無法開啟帳號管理網頁，請確認連線後重試。App 內的設定尚未變更。" },
   delete: { url: "https://lionclubsmembership.com/account/delete", error: "無法開啟刪除帳號網頁，請確認連線後重試。尚未提出刪除申請。" },
@@ -84,7 +88,8 @@ export default function MyScreen({
     const owner = identity.current.id, isCurrent = api.captureSessionGuard();
     setOpeningWebsite(true); setWebsiteError(null);
     try {
-      await Browser.open({ url: WEBSITE_PAGES[target].url, presentationStyle: "popover" });
+      await Browser.open({ url: typeof REVIEW_API_ORIGIN === "string" && REVIEW_API_ORIGIN && isIsolatedReviewer(member.email ?? "")
+        ? new URL(new URL(WEBSITE_PAGES[target].url).pathname, REVIEW_API_ORIGIN).href : WEBSITE_PAGES[target].url, presentationStyle: "popover" });
     } catch {
       if (mounted.current && isCurrent() && identity.current.id === owner) setWebsiteError({ memberId: owner, target, text: WEBSITE_PAGES[target].error });
     } finally { websiteLock.current = false; if (mounted.current) setOpeningWebsite(false); }
@@ -111,6 +116,8 @@ export default function MyScreen({
       </div>
     );
   }
+
+  if (view === "business-card") return <div ref={screenRef}><button type="button" className="profile-back" onClick={() => setView("overview")}>‹ 返回</button><NextPhaseScreen memberId={member.id} view="card" /></div>;
 
   if (view === "services") return <div ref={screenRef}><button type="button" className="profile-back" onClick={() => setView("overview")}>‹ 返回</button><ServiceScreen key={member.id} memberId={member.id} /></div>;
 
@@ -163,6 +170,7 @@ export default function MyScreen({
         </button>
       </section>
 
+      {nextPhaseEnabled && <section className="my-screen-section"><h2 className="section-title">名片與專長</h2><p className="member-meta">掃描名片，讓專長參與資源媒合</p><button type="button" className="secondary" onClick={() => setView("business-card")}>編輯名片與專長</button></section>}
       <section className="my-screen-section"><h2 className="section-title">獅友服務中心</h2><p className="member-meta">資源媒合、活動成果與個人服務護照</p><button type="button" className="secondary" onClick={() => setView("services")}>開啟服務中心</button></section>
 
       <NotificationSettings push={push} />

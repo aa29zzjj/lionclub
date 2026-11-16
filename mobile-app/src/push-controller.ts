@@ -24,7 +24,7 @@ export type PushNative = {
   unregister(): Promise<void>;
   listen(callbacks: { token(token: string): void; error(): void; action(data: unknown): void; resume(): void }): Promise<() => void>;
 };
-const KINDS = new Set(["activity", "friend_invitation", "experience_review", "membership_review"]);
+const KINDS = new Set(["activity", "friend_invitation", "experience_review", "membership_review", "next_phase"]);
 export function isKnownPushAction(data: unknown): boolean {
   if (!data || typeof data !== "object" || Array.isArray(data)) return false;
   const value = data as Record<string, unknown>;

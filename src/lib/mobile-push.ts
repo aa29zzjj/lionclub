@@ -3,11 +3,13 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { activeAdminRoleWhere } from "./active-admin-role";
 import { APPROVER_ROLES, getAdministeredOrganizationIds } from "./admin-scope";
+import { nextPhaseEnabled } from "./next-phase-contract";
+import { authorizedPhasePush, hasPhaseNoticeSchema } from "./phase-notices";
 import { getBlockedMemberIds } from "./member-block";
 import { mobilePushSettings, MOBILE_PUSH_LEASE_MS, MOBILE_PUSH_RECEIPT_TTL_MS, MOBILE_PUSH_DELIVERY_TTL_MS, type MobilePushSettings } from "./mobile-push-config";
 import { encryptPushToken, normalizedPushToken, pushTokenHash } from "./mobile-push-crypto";
 
-export type MobilePushKind = "activity" | "friend_invitation" | "experience_review" | "membership_review";
+export type MobilePushKind = "activity" | "friend_invitation" | "experience_review" | "membership_review" | "next_phase";
 export type MobilePushEvent = { kind: MobilePushKind; sourceId: string; actorId: string; recipientMemberIds: string[]; sourceRevision?: string };
 export type MobilePushActor = { userId: string; memberId: string; sessionVersion: number };
 type Database = PrismaClient | Prisma.TransactionClient;
@@ -118,6 +120,9 @@ export async function authorizedMobilePushRecipients(db: Database, input: Mobile
     if (latest?.id !== source.id || !await db.adminRole.findFirst({ where: { memberId: input.actorId, role: source.reviewRole,
       scopeId: source.scopeId, ...activeAdminRoleWhere(now) }, select: { id: true } })) return [];
     permitted = [target.memberId];
+  } else if (input.kind === "next_phase") {
+    if (!nextPhaseEnabled || requested.length !== 1 || !await hasPhaseNoticeSchema(db)) return [];
+    permitted = await authorizedPhasePush(db, input.sourceId, input.actorId, requested[0], now) ? requested : [];
   } else if (input.kind === "membership_review") {
     const source = await db.member.findUnique({ where: { id: input.sourceId }, select: { id: true, organizationId: true, status: true, deletedAt: true, updatedAt: true } });
     if (!source || source.status !== "ACTIVE" || source.deletedAt || !input.sourceRevision || source.updatedAt.toISOString() !== input.sourceRevision) return [];
@@ -159,7 +164,7 @@ export async function enqueueMobilePush(tx: Prisma.TransactionClient, input: Mob
 
 export function genericMobilePushCopy(kind: MobilePushKind) {
   const titles: Record<MobilePushKind, string> = { activity: "有新的活動公告", friend_invitation: "有新的好友邀請",
-    experience_review: "資歷審核狀態已更新", membership_review: "會籍審核狀態已更新" };
+    experience_review: "資歷審核狀態已更新", membership_review: "會籍審核狀態已更新", next_phase: "有新的通知" };
   return { title: titles[kind], body: kind === "experience_review" ? "請到「我的」查看本人資歷。" : kind === "membership_review" ? "請到「我的」查看本人會籍。" : "開啟 App 通知查看。" };
 }
 export async function mobilePushReceiptFeed(db: Database, actor: MobilePushActor, settings = mobilePushSettings(), now = new Date()) {

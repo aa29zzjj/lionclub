@@ -44,6 +44,7 @@ model Organization {
   verifiedAt  DateTime?
 
   members            Member[]
+  meetups             Meetup[]
   hostedEvents        Event[]
   clubInvites         ClubInvite[]
   memberExperiences   MemberExperience[]
@@ -97,6 +98,12 @@ model Member {
   assignmentsMade               MemberOrganizationAssignment[] @relation("OrganizationAssignmentActor")
 
   tags Tag[] @relation("MemberTags")
+  businessCard BusinessCard?
+  phaseNotices PhaseNotice[] @relation("PhaseNoticeRecipient")
+  phaseNoticesSent PhaseNotice[] @relation("PhaseNoticeActor")
+  hostedMeetups Meetup[]
+  meetupRegistrations MeetupRegistration[]
+  meetupMessages MeetupMessage[]
 
   user User?
   dataConsents MemberDataConsent[]
@@ -829,6 +836,7 @@ model ResourceNeed {
   acceptedResponseId String? @unique
   acceptedResponse ResourceResponse? @relation("AcceptedResourceResponse", fields: [acceptedResponseId], references: [id], onDelete: Restrict)
   responses ResourceResponse[] @relation("ResourceResponses")
+  phaseNotices PhaseNotice[]
   completionNote String?
   completedAt DateTime?
   createdAt DateTime @default(now())
@@ -891,4 +899,87 @@ model ServiceAudit {
   reason String?
   createdAt DateTime @default(now())
   @@index([entityType, entityId, createdAt])
+}
+
+model Meetup {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  hostId         String
+  host           Member @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  requestId      String
+  title          String
+  category       String
+  location       String
+  description    String
+  startsAt       DateTime
+  capacity       Int
+  cancelledAt    DateTime?
+  revision       Int @default(1)
+  phaseNotices   PhaseNotice[]
+  createdAt      DateTime @default(now())
+  registrations  MeetupRegistration[]
+  messages       MeetupMessage[]
+
+  @@unique([hostId, requestId])
+  @@index([organizationId, startsAt, id])
+}
+
+model MeetupRegistration {
+  meetupId String
+  meetup   Meetup @relation(fields: [meetupId], references: [id], onDelete: Cascade)
+  memberId String
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@id([meetupId, memberId])
+  @@index([memberId])
+}
+
+model MeetupMessage {
+  id        String   @id @default(cuid())
+  meetupId  String
+  meetup    Meetup @relation(fields: [meetupId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  requestId String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@unique([memberId, requestId])
+  @@index([meetupId, createdAt, id])
+}
+
+model BusinessCard {
+  memberId  String @id
+  member    Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  image     Bytes
+  tags      String[]
+  shareTags Boolean @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@index([tags], type: Gin)
+}
+
+model PhaseNotice {
+  id           String   @id @default(cuid())
+  recipientId  String
+  recipient    Member   @relation("PhaseNoticeRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actorId      String
+  actor        Member   @relation("PhaseNoticeActor", fields: [actorId], references: [id], onDelete: Cascade)
+  meetupId     String?
+  meetup       Meetup?  @relation(fields: [meetupId], references: [id], onDelete: Cascade)
+  needId       String?
+  need         ResourceNeed? @relation(fields: [needId], references: [id], onDelete: Cascade)
+  sourceKey    String
+  kind         String
+  revision     Int      @default(1)
+  message      String?
+  availableAt  DateTime
+  pushQueuedAt DateTime?
+  readAt       DateTime?
+  @@unique([recipientId, kind, sourceKey, revision])
+  @@index([recipientId, availableAt])
+  @@index([pushQueuedAt, availableAt])
+  @@index([meetupId])
+  @@index([needId])
 }

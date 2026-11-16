@@ -6,6 +6,7 @@ import HomeScreen from "./HomeScreen";
 import FriendsScreen from "./FriendsScreen";
 import EventsScreen from "./EventsScreen";
 import NotificationsScreen from "./NotificationsScreen";
+import NextPhaseScreen from "./NextPhaseScreen";
 import MyScreen from "./MyScreen";
 import { useMobilePush } from "./NotificationSettings";
 import { attachForegroundListener, createForegroundRevalidator } from "./foreground-session";
@@ -236,7 +237,8 @@ export default function App() {
           );
           if (tab === "friends") return <FriendsScreen member={m} />;
           if (tab === "events") return <EventsScreen member={m} />;
-          if (tab === "notifications") return <NotificationsScreen onOpenProfile={() => setTab("security")} />;
+          if (tab === "meetups") return <NextPhaseScreen memberId={m.id} view="meetups" />;
+          if (tab === "notifications") return <NotificationsScreen memberId={m.id} onOpenProfile={() => setTab("security")} />;
           if (tab === "security") return <MyScreen member={m} onUpdated={setMember} onLogout={handleLogout} busy={busy} push={push} accountMessage={accountMessage} />;
           return null;
         }}

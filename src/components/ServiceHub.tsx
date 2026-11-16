@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { currentServiceYear, localDate, parseServiceAction, type ServiceHubData } from "../lib/service-contract";
+import { requestId } from "../lib/request-id";
 import { ServiceClientError, type ServiceTransport } from "../lib/service-client";
 
 type Field = { name: string; label: string; type?: "text" | "textarea" | "date" | "datetime-local" | "number" | "select"; optional?: boolean; options?: [string, string][]; min?: number; max?: number; step?: string; maxLength?: number };
@@ -13,11 +14,6 @@ const textField = (name: string, label: string, maxLength = 120): Field => ({ na
 const noteField = (name: string, label: string, optional = false): Field => ({ name, label, type: "textarea", optional, maxLength: 1000 });
 const hoursField: Field = { name: "hours", label: "服務時數（小時）", type: "number", min: 0.25, max: 16, step: "0.25" };
 const dayField: Field = { name: "date", label: "服務日期", type: "date" };
-function requestId() {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
-  const h = [...b].map(x => x.toString(16).padStart(2, "0")).join(""); return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
 function taipeiInput(iso: string) {
   const p = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(iso));
   const v = (name: string) => p.find(x => x.type === name)?.value;
@@ -42,13 +38,16 @@ export async function downloadServiceFile(file: Export) {
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
-export default function ServiceHub({ transport, onExport = downloadServiceFile, renderTerms }: {
+export default function ServiceHub({ transport, onExport = downloadServiceFile, renderTerms, renderMember, initialNeedId }: {
+  initialNeedId?: string;
+  renderMember?: (member: { id: string; name: string }) => ReactNode;
   transport: ServiceTransport; onExport?: (file: Export) => Promise<void>; renderTerms?: (done: () => void) => ReactNode;
 }) {
   const [tab, setTab] = useState<"needs" | "events" | "passport" | "review">("needs");
   const [year, setYear] = useState(currentServiceYear());
   const [yearInput, setYearInput] = useState(() => String(currentServiceYear()));
   const [reviewStatus, setReviewStatus] = useState("PENDING");
+  const [needId, setNeedId] = useState(initialNeedId);
   const [mine, setMine] = useState(false);
   const [data, setData] = useState<ServiceHubData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -60,7 +59,7 @@ export default function ServiceHub({ transport, onExport = downloadServiceFile, 
   const [needsTerms, setNeedsTerms] = useState(false);
   const active = useRef(false), generation = useRef(0), lock = useRef(false), root = useRef<HTMLDivElement>(null);
   const current = useCallback(() => active.current && transport.isCurrent(), [transport]);
-  const query = useCallback(() => new URLSearchParams({ year: String(year), reviewStatus, ...(mine ? { mine: "true" } : {}) }), [year, reviewStatus, mine]);
+  const query = useCallback(() => new URLSearchParams({ year: String(year), reviewStatus, ...(mine ? { mine: "true" } : {}), ...(needId ? { needId } : {}) }), [year, reviewStatus, mine, needId]);
   const fail = useCallback((failure: unknown, fallback: string) => {
     if (!active.current) return;
     if (!transport.isCurrent() || failure instanceof ServiceClientError && failure.code === "SESSION_CHANGED") { setData(null); setDraft(null); setExported(null); setError("登入帳號已切換，請返回首頁重新確認。"); return; }
@@ -87,7 +86,7 @@ export default function ServiceHub({ transport, onExport = downloadServiceFile, 
     event.preventDefault(); if (!draft || !current() || lock.current || loading || needsTerms) return;
     let body; try { body = serviceDraftPayload(draft); } catch (failure) { setError(failure instanceof Error ? failure.message : "請確認欄位內容"); return; }
     lock.current = true; setBusy(true); setError(""); setNotice(""); let saved = false;
-    try { await transport.mutate(body); saved = true; if (current()) { setDraft(null); setNotice("已儲存，正在更新列表。"); } }
+    try { await transport.mutate(body); saved = true; if (current()) { setDraft(null); setNotice(body.action === "need.invite" ? "合作邀請已送出。" : "已儲存，正在更新列表。"); } }
     catch (failure) { fail(failure, "儲存結果尚未確認，請先重新載入核對，草稿仍保留。"); }
     finally { lock.current = false; if (active.current) setBusy(false); }
     if (saved && current()) await load();
@@ -123,17 +122,28 @@ export default function ServiceHub({ transport, onExport = downloadServiceFile, 
     {draft ? <form className="sh-card sh-form" onSubmit={event => void submit(event)}>
       <h2>{draft.title}</h2>{draft.detail && <p className="sh-muted">{draft.detail}</p>}
       {draft.fields.map(field => <label key={field.name}><span>{field.label}</span>{field.type === "textarea" ? <textarea rows={4} required={!field.optional} maxLength={field.maxLength ?? 1000} value={draft.values[field.name] ?? ""} disabled={busy} onChange={e => setDraft({ ...draft, values: { ...draft.values, [field.name]: e.target.value } })} /> : field.type === "select" ? <select required={!field.optional} value={draft.values[field.name] ?? ""} disabled={busy} onChange={e => setDraft({ ...draft, values: { ...draft.values, [field.name]: e.target.value } })}>{field.options?.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select> : <input type={field.type ?? "text"} required={!field.optional} value={draft.values[field.name] ?? ""} disabled={busy} min={field.min} max={field.max} step={field.step} maxLength={field.maxLength} onChange={e => setDraft({ ...draft, values: { ...draft.values, [field.name]: e.target.value } })} />}</label>)}
-      <div className="sh-actions"><button className="sh-primary" type="submit" disabled={disabled || needsTerms}>{busy ? "處理中…" : "確認儲存"}</button><button type="button" disabled={busy} onClick={() => { setDraft(null); setError(""); }}>取消並返回列表</button></div>
+      <div className="sh-actions"><button className="sh-primary" type="submit" disabled={disabled || needsTerms}>{busy ? "處理中…" : draft.action === "need.invite" ? "送出合作邀請" : "確認儲存"}</button><button type="button" disabled={busy} onClick={() => { setDraft(null); setError(""); }}>取消並返回列表</button></div>
       <p className="sh-muted">若資料已更新，請先關閉此編輯並重新載入，再從最新紀錄操作。</p>
     </form> : exported ? <section className="sh-card"><h2>預覽匯出內容</h2><p className="sh-muted">分享前請確認內容。這是平台紀錄摘要，不是官方核定證書。</p><textarea className="sh-export" aria-label="匯出內容" readOnly value={exported.content} rows={18} /><div className="sh-actions"><button className="sh-primary" disabled={busy} onClick={() => void saveExport()}>儲存／分享</button><button disabled={busy} onClick={() => { setExported(null); setError(""); }}>返回列表</button></div></section> : <>
       <nav aria-label="服務功能" className="sh-tabs">{[["needs", "資源媒合"], ["events", "活動成果"], ["passport", "服務護照"], ...(data?.canReview ? [["review", "幹部核實"]] : [])].map(([value, label]) => <button type="button" key={value} aria-current={tab === value ? "page" : undefined} className={tab === value ? "sh-selected" : ""} onClick={() => { setTab(value as typeof tab); setError(""); setNotice(""); }}>{label}</button>)}</nav>
       {data && tab !== "needs" ? <label className="sh-year">獅年起始年<input aria-label="獅年起始年" type="number" min={1900} max={2200} value={yearInput} disabled={busy} onChange={e => { setYearInput(e.target.value); const y = Number(e.target.value); if (Number.isInteger(y) && y >= 1900 && y <= 2200) setYear(y); }} onBlur={() => { if (Number(yearInput) !== year) setYearInput(String(year)); }} /><span>{year} 年 7 月至 {year + 1} 年 6 月</span></label> : null}
       {!data && !loading ? <div className="sh-empty">服務資料尚未讀取完成。<button type="button" onClick={() => void load()}>重試讀取</button></div> : null}
       {data && tab === "needs" ? <>
+        {needId && <button type="button" disabled={disabled} onClick={() => setNeedId(undefined)}>查看所有需求</button>}
         <div className="sh-row"><p className="sh-muted">發布需求或提供資源，雙方確認後再合作。</p><button className="sh-primary" disabled={disabled} onClick={() => open({ title: "發布資源／需求", detail: "請填寫服務合作需要的資訊。聯絡方式不會由系統自動交換，請避免公開敏感資料。", action: "need.create", fixed: { requestId: requestId() }, fields: [{ name: "kind", label: "發布類型", type: "select", options: [["NEED", "我需要協助"], ["OFFER", "我能提供資源"]] }, textField("title", "標題"), textField("category", "資源類別", 40), noteField("description", "需求與可合作的內容"), { name: "targetDate", label: "預計日期", type: "date" }, { name: "quantity", label: "數量", type: "number", min: 1, max: 10000, step: "1" }, textField("quantityUnit", "單位（例如：位、處、趟）", 12)], values: { kind: "NEED", title: "", category: "", description: "", targetDate: localDate(new Date()), quantity: "1", quantityUnit: "" } })}>＋ 發布</button></div>
         <label className="sh-check"><input type="checkbox" checked={mine} disabled={disabled} onChange={e => setMine(e.target.checked)} />只看我發布的內容</label>
         {data.needs.length === 0 ? <p className="sh-empty">目前沒有符合的資源／需求。</p> : data.needs.map(need => <article className="sh-card" key={need.id}>
           <div className="sh-row"><span className="sh-kicker">{need.kind === "NEED" ? "需要協助" : "提供資源"} · {need.category}</span><span className="sh-badge">{statusLabels[need.status]}</span></div><h2>{need.title}</h2><p className="sh-muted">{need.owner.name} · {need.owner.organizationName}</p><p className="sh-prewrap">{need.description}</p><p>{need.targetDate} · {need.quantity} {need.quantityUnit}</p>{need.completionNote && <p className="sh-muted">處理說明：{need.completionNote}</p>}
+          {need.suggestedMembers?.length ? <section className="sh-replies" aria-label="相關專長的獅友">
+            <h3>相關專長的獅友</h3>
+            {need.suggestedMembers.map(member => <div key={member.id}><strong>{renderMember ? renderMember(member) : member.name}</strong>
+              <p className="sh-muted">{member.organizationName} · {member.matchingTags.join("、")}</p>
+              {member.inviteStatus === "available" ? <button type="button" disabled={disabled} onClick={() => open({
+                title: "邀請合作", detail: `${member.name} · ${need.title}`, action: "need.invite", fixed: { id: need.id, memberId: member.id },
+                fields: [{ ...noteField("message", "邀請留言（選填）", true), maxLength: 300 }], values: { message: "" },
+              })}>邀請合作</button> : member.inviteStatus && <span className="sh-badge">{member.inviteStatus === "sent" ? "已邀請" : "已回應"}</span>}
+            </div>)}
+          </section> : null}
           {need.myResponse && <p className="sh-notice">我的回應：{statusLabels[need.myResponse.status]} · {need.myResponse.message}</p>}
           {need.canManage && need.responses.length ? <section aria-label="管理回應" className="sh-replies"><h3>合作回應</h3>{need.responses.map(response => <div key={response.id}><strong>{response.member.name}</strong><p>{response.message}</p><span className="sh-muted">{statusLabels[response.status]}</span>{need.status === "RESPONDED" && response.status === "PENDING" ? <button disabled={disabled} onClick={() => open({ title: "確認接受這個合作回應", detail: `${response.member.name}：${response.message}`, action: "need.accept", fixed: { id: need.id, responseId: response.id, version: need.version }, fields: [], values: {} })}>接受回應</button> : null}</div>)}</section> : null}
           <div className="sh-actions">{need.canRespond && <button disabled={disabled} onClick={() => open({ title: "回應合作", detail: need.title, action: "need.respond", fixed: { id: need.id }, fields: [noteField("message", "可以如何協助／合作")], values: { message: "" } })}>我來回應</button>}{need.canManage && need.status === "MATCHED" ? <button disabled={disabled} onClick={() => open({ title: "確認合作已完成", detail: need.title, action: "need.complete", fixed: { id: need.id, version: need.version }, fields: [noteField("note", "完成說明（選填）", true)], values: { note: "" } })}>確認完成</button> : null}{need.canManage && ["OPEN", "RESPONDED", "MATCHED"].includes(need.status) ? <button disabled={disabled} onClick={() => open({ title: "關閉這個需求", detail: "關閉後保留合作紀錄，停止新回應。", action: "need.close", fixed: { id: need.id, version: need.version }, fields: [noteField("reason", "關閉原因")], values: { reason: "" } })}>關閉需求</button> : null}{need.owner.id !== data.viewerId ? <button disabled={disabled} onClick={() => open({ title: "檢舉資源內容", detail: "交由具權限的管理者依現行檢舉流程處理。", action: "need.report", fixed: { id: need.id }, fields: [noteField("reason", "檢舉原因")], values: { reason: "" } })}>檢舉</button> : null}</div>

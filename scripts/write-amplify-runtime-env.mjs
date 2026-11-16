@@ -3,7 +3,7 @@
 import { writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-const flags = ["SERVICE_FEATURES_ENABLED", "FEDERATED_AUTH_ENABLED", "OAUTH_RUNTIME_SECRETS_ENABLED", "GOOGLE_OAUTH_FRESH_REAUTH_ENABLED", "APPLE_OAUTH_ENABLED", "APPLE_OAUTH_FRESH_REAUTH_ENABLED", "EMAIL_ACTION_REAUTH_ENABLED", "MOBILE_OAUTH_V2_ENABLED", "MOBILE_PUSH_ENABLED", "MOBILE_PUSH_RUNTIME_SECRETS_ENABLED"];
+const flags = ["ISOLATED_APP_REVIEW_ENABLED", "REGISTRATION_CLUB_APPLICATION_ENABLED", "NEXT_PUBLIC_NEXT_PHASE_ENABLED", "SERVICE_FEATURES_ENABLED", "FEDERATED_AUTH_ENABLED", "OAUTH_RUNTIME_SECRETS_ENABLED", "GOOGLE_OAUTH_FRESH_REAUTH_ENABLED", "APPLE_OAUTH_ENABLED", "APPLE_OAUTH_FRESH_REAUTH_ENABLED", "EMAIL_ACTION_REAUTH_ENABLED", "MOBILE_OAUTH_V2_ENABLED", "MOBILE_PUSH_ENABLED", "MOBILE_PUSH_RUNTIME_SECRETS_ENABLED"];
 const origins = ["OAUTH_APP_ORIGIN", "NEXT_PUBLIC_APP_URL"];
 /** @param {Record<string, string | undefined>} environment */
 export function publicRuntimeEnvironment(environment = process.env) {
@@ -13,6 +13,11 @@ export function publicRuntimeEnvironment(environment = process.env) {
     const value = optional(name); if (value === undefined) continue;
     if (!["true", "false"].includes(value)) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION");
     result[name] = value;
+  }
+  if (result.ISOLATED_APP_REVIEW_ENABLED === "true") {
+    const target = optional("LIONCLUBS_REVIEW_DB_CONFIRM");
+    if (!target || !/^[a-z0-9.-]+(?::[0-9]+)?\/[a-z0-9_-]+$/i.test(target)) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION");
+    result.LIONCLUBS_REVIEW_DB_CONFIRM = target;
   }
   for (const name of origins) {
     const value = optional(name); if (value === undefined) continue;
@@ -29,7 +34,9 @@ export function publicRuntimeEnvironment(environment = process.env) {
   const pushMode = optional("APNS_ENVIRONMENT"), pushTopic = optional("APNS_TOPIC");
   if (pushMode !== undefined) { if (!["sandbox", "production"].includes(pushMode)) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION"); result.APNS_ENVIRONMENT = pushMode; }
   if (pushTopic !== undefined) { if (pushTopic !== "com.lionclubsmembership.app") throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION"); result.APNS_TOPIC = pushTopic; }
-  for (const name of ["AVATAR_BUCKET_NAME", "AVATAR_PUBLIC_BASE_URL", "PASSWORD_RESET_FROM_EMAIL"]) {
+  const mediaAndMail = result.ISOLATED_APP_REVIEW_ENABLED === "true"
+    ? [] : ["AVATAR_BUCKET_NAME", "AVATAR_PUBLIC_BASE_URL", "PASSWORD_RESET_FROM_EMAIL"];
+  for (const name of mediaAndMail) {
     const value = optional(name); if (value === undefined) continue;
     if (/[\r\n\0$]/.test(value) || value.trim() !== value) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION");
     if (name === "AVATAR_BUCKET_NAME" && !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(value)) throw Error("INVALID_PUBLIC_RUNTIME_CONFIGURATION");

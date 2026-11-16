@@ -32,12 +32,15 @@ export function pickApprovedSecrets(value: unknown): Partial<Record<SecretKey, s
 
 export function createRuntimeSecretsResolver(options: { environment: Environment; fetchSecret: (name: string) => Promise<unknown>; now?: () => number; cacheMs?: number }) {
   const env = options.environment, clock = options.now ?? Date.now;
+  const isolatedReview = env.ISOLATED_APP_REVIEW_ENABLED === "true";
   let cached: Partial<Record<SecretKey, string>> | undefined, expiresAt = 0;
   let pending: Promise<Partial<Record<SecretKey, string>>> | undefined;
   async function stored() {
     if (cached && expiresAt > clock()) return cached;
     if (!pending) {
-      const name = env.APP_SECRETS_NAME?.trim() || "lionclub/app-secrets";
+      const explicitName = env.APP_SECRETS_NAME?.trim();
+      if (isolatedReview && (!explicitName || /(?:^|:secret:)lionclub\/app-secrets(?:$|-)/.test(explicitName))) throw Error("REVIEW_SECRET_REQUIRED");
+      const name = explicitName || "lionclub/app-secrets";
       // This name is operator-controlled, never derived from an HTTP request.
       pending = options.fetchSecret(name).then(pickApprovedSecrets).then(value => {
         cached = value; expiresAt = clock() + (options.cacheMs ?? 5 * 60_000); return value;
@@ -47,12 +50,23 @@ export function createRuntimeSecretsResolver(options: { environment: Environment
   }
   function preferred(key: SecretKey, fallback?: Partial<Record<SecretKey, string>>) { return present(env[key]) ? env[key] : fallback?.[key]; }
   async function getAppSecrets(): Promise<AppSecrets> {
+    if (isolatedReview) {
+      // Keep the two required values from the same source.
+      const source = present(env.DATABASE_URL) && present(env.AUTH_SECRET) ? env : await stored();
+      const { DATABASE_URL, AUTH_SECRET } = source;
+      if (!present(DATABASE_URL) || !present(AUTH_SECRET)) throw Error("APP_SECRET_INCOMPLETE");
+      const database = new URL(DATABASE_URL);
+      if (!["postgres:", "postgresql:"].includes(database.protocol) ||
+        env.LIONCLUBS_REVIEW_DB_CONFIRM !== database.host + database.pathname) throw Error("REVIEW_TARGET_NOT_CONFIRMED");
+      return { DATABASE_URL, AUTH_SECRET };
+    }
     const fallback = present(env.DATABASE_URL) && present(env.AUTH_SECRET) ? undefined : await stored();
     const DATABASE_URL = preferred("DATABASE_URL", fallback), AUTH_SECRET = preferred("AUTH_SECRET", fallback);
     if (!DATABASE_URL || !AUTH_SECRET) throw Error("APP_SECRET_INCOMPLETE");
     return { DATABASE_URL, AUTH_SECRET };
   }
   async function getOAuthRuntimeSettings(): Promise<OAuthRuntimeSettings> {
+    if (isolatedReview) return { NODE_ENV: env.NODE_ENV, FEDERATED_AUTH_ENABLED: "false", APPLE_OAUTH_ENABLED: "false" };
     // Explicit false wins over a stored true. In unconfigured installations a
     // public providers request must not probe the AWS metadata credential chain.
     const hasGoogle = present(env.GOOGLE_OAUTH_CLIENT_ID) && present(env.GOOGLE_OAUTH_CLIENT_SECRET)
@@ -103,6 +117,7 @@ export function createRuntimeSecretsResolver(options: { environment: Environment
     return result;
   }
   async function getAppleCredentialSettings(): Promise<OAuthRuntimeSettings> {
+    if (isolatedReview) return { NODE_ENV: env.NODE_ENV };
     // Existing-account revocation survives a disabled sign-in flag. The source
     // remains the same explicit env or approved APP_SECRETS_NAME fallback.
     const complete = APPLE_CREDENTIAL_KEYS.every(key => present(env[key])) && present(env.OAUTH_APP_ORIGIN || env.NEXT_PUBLIC_APP_URL);

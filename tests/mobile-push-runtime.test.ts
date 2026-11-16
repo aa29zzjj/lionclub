@@ -30,3 +30,12 @@ test("Amplify artifacts allow only push flags/references, never encryption, APNs
   const rendered = renderPublicRuntimeEnvironment(environment);
   for (const key of ["PUSH_DEVICE_ENCRYPTION_KEY", "APNS_PRIVATE_KEY", "APNS_KEY_ID", "PUSH_DATABASE_URL", "PUSH_DELIVERY_ENABLED"]) assert.equal(rendered.includes(key), false);
 });
+
+test("isolated review disables both direct and Secrets Manager-backed push settings", async () => {
+  const environment = { ...base, ISOLATED_APP_REVIEW_ENABLED: "true", MOBILE_PUSH_RUNTIME_SECRETS_ENABLED: "true",
+    MOBILE_PUSH_SECRETS_NAME: "synthetic/push" };
+  const { mobilePushSettings } = await import("../src/lib/mobile-push-config");
+  assert.deepEqual(mobilePushSettings({ ...environment, PUSH_DEVICE_ENCRYPTION_KEY: "11".repeat(32) }), { enabled: false });
+  const resolve = createMobilePushRuntimeResolver({ environment, fetchSecret: async () => { assert.fail("Review must not read the APNs secret"); } });
+  assert.deepEqual(await resolve(), { enabled: false });
+});

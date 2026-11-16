@@ -64,7 +64,9 @@ test("build context is deny-by-default with only one docs JSON and defense-in-de
   const inclusions = patterns.filter((item) => item.startsWith("!"));
   assert.deepEqual(inclusions.filter((item) => item.startsWith("!docs")), ["!docs/", "!docs/app-store/", "!docs/app-store/METADATA.zh-Hant.json"]);
   assert.ok(patterns.includes("docs/**")); assert.ok(patterns.includes("docs/app-store/**"));
-  assert.ok(!inclusions.some((item) => /(?:\.env|\.aws|private|data\/|output\/|backups\/|scripts\/|tests\/)/.test(item)));
+  assert.deepEqual(inclusions.filter(item => item.startsWith("!scripts")), ["!scripts/", "!scripts/copy-card-ocr.mjs"]);
+  assert.ok(patterns.includes("scripts/**"));
+  assert.ok(!inclusions.some((item) => /(?:\.env|\.aws|private|data\/|output\/|backups\/|tests\/)/.test(item)));
   assert.ok(patterns.indexOf("**/.env*") > patterns.indexOf("!src/**"));
 });
 

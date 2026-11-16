@@ -12,7 +12,7 @@ const id = z.string().trim().min(1).max(200);
 const querySchema = z.object({
   year: z.coerce.number().int().min(1900).max(2200).default(() => currentServiceYear()),
   view: z.enum(["hub", "passport-export", "outcome-export"]).default("hub"), id: id.optional(),
-  needsCursor: id.optional(), entriesCursor: id.optional(), eventsCursor: id.optional(), reviewCursor: id.optional(),
+  needId: id.optional(), needsCursor: id.optional(), entriesCursor: id.optional(), eventsCursor: id.optional(), reviewCursor: id.optional(),
   category: z.string().trim().max(40).optional(), kind: z.enum(["NEED", "OFFER"]).optional(), mine: z.enum(["true", "false"]).optional(),
   reviewStatus: z.enum(["PENDING", "CONFIRMED", "REJECTED", "REVOKED"]).optional(),
 }).strict();

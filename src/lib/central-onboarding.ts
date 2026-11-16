@@ -7,6 +7,7 @@ import { OAUTH_DATA_VERSION } from "./federated-auth";
 import { registrationTargetsInvitedClub } from "./club-registration-policy";
 
 type Database = PrismaClient | Prisma.TransactionClient;
+export const CLUB_APPLICATION_PENDING = "CLUB_APPLICATION_PENDING";
 export const ASSIGNMENT_MANAGER_ROLES = ["CLUB_PRESIDENT", "ZONE_ADMIN", "DISTRICT_ADMIN", "MULTIDISTRICT_ADMIN", "SUPER_ADMIN"];
 export const assignmentMemberSelect = {
   id: true, name: true, email: true, phone: true, status: true,
@@ -37,8 +38,23 @@ export function requiresRegistrationInvite(_legacyValue?: string) {
   return true;
 }
 
+export function clubApplicationEnabled() {
+  return process.env.REGISTRATION_CLUB_APPLICATION_ENABLED === "true";
+}
+
+export function selectableClubWhere(now = new Date()): Prisma.OrganizationWhereInput {
+  return {
+    level: "club", isActive: true,
+    AND: [
+      { OR: [{ validFrom: null }, { validFrom: { lte: now } }] },
+      { OR: [{ validTo: null }, { validTo: { gt: now } }] },
+    ],
+  };
+}
+
 export const centralRegistrationSchema = z.object({
   organizationId: z.string().trim().min(1).max(200).optional(),
+  requestedOrganizationId: z.string().trim().min(1).max(200).optional(),
   token: z.string().trim().min(1).max(200).optional(),
   name: z.string().trim().min(1).max(100),
   email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
@@ -93,14 +109,19 @@ export async function createCentralMember(
         if (invites.length !== 1 || !invite || (input.organizationId && input.organizationId !== invite.organizationId)) {
           throw new OnboardingError(400, "邀請 QR Code 不正確或已過期，請索取新的共同邀請");
         }
-        const directClub = registrationTargetsInvitedClub(invite.organizationId);
+        const clubApplication = clubApplicationEnabled();
+        const directClub = !clubApplication && registrationTargetsInvitedClub(invite.organizationId);
+        if (clubApplication && !input.requestedOrganizationId) throw new OnboardingError(400, "請從清單選擇要申請加入的分會。");
         // Tonight's published native App accepts email/password only. A stale
         // third-party signup cookie must not create an unusable OAuth-only user.
         if (directClub && (federated || passwordHash === null)) throw new OnboardingError(400, "此活動請使用 Email 與密碼註冊，以便登入目前的 App；請先取消第三方驗證後繼續。");
-        const intake = directClub
-          ? await tx.organization.findFirst({ where: { id: invite.organizationId, level: "club", isActive: true }, select: { id: true, name: true, districtCode: true } })
+        const intake = clubApplication || directClub
+          ? await tx.organization.findFirst({
+            where: { ...selectableClubWhere(now), id: clubApplication ? input.requestedOrganizationId : invite.organizationId },
+            select: { id: true, name: true, districtCode: true },
+          })
           : await getIntakeOrganization(tx);
-        if (!intake) throw new OnboardingError(503, "申請分會暫時無法使用，請聯絡邀請人");
+        if (!intake) throw new OnboardingError(clubApplication ? 400 : 503, "此分會暫時無法申請，請重新選擇。");
         // Conditional increment makes a concurrent last-slot claim fail, not overbook.
         const claimed = await tx.clubInvite.updateMany({
           where: { id: invite.id, revokedAt: null, validFrom: { lte: now }, validUntil: { gte: now },
@@ -109,21 +130,21 @@ export async function createCentralMember(
         });
         if (claimed.count !== 1) throw new OnboardingError(400, "此邀請 QR Code 已達使用上限或已失效，請索取新的邀請");
 
-        const memberNo = await generateMemberNo(tx, intake.id);
+        const memberNo = clubApplication ? null : await generateMemberNo(tx, intake.id);
         const member = await tx.member.create({
           data: {
             name: input.name, email: input.email, birthday: input.birthday ? new Date(input.birthday) : undefined,
             phone: input.phone, title: input.title, bio: input.bio,
-            status: "ACTIVE", role: "MEMBER", organizationId: intake.id, memberNo,
-            organizationAssignmentStatus: "NEEDS_ASSIGNMENT",
-            declaredOrganizationName: directClub ? intake.name : input.declaredOrganizationName || null,
+            status: clubApplication ? "PENDING" : "ACTIVE", role: "MEMBER", organizationId: intake.id, memberNo,
+            organizationAssignmentStatus: clubApplication ? CLUB_APPLICATION_PENDING : "NEEDS_ASSIGNMENT",
+            declaredOrganizationName: directClub || clubApplication ? intake.name : input.declaredOrganizationName || null,
             privacyConsentedAt: now,
             privacyConsentVersion: PRIVACY_POLICY_VERSION,
             termsAcceptedAt: now,
             termsVersion: TERMS_VERSION,
             emailVerifiedAt: oauth ? now : undefined,
             tags: input.tags?.length ? { connectOrCreate: [...new Set(input.tags)].map((name) => ({ where: { name }, create: { name } })) } : undefined,
-            organizationAssignments: { create: {
+            organizationAssignments: clubApplication ? undefined : { create: {
               toOrganizationId: intake.id, toOrganizationName: intake.name,
               previousAssignmentStatus: "NEEDS_ASSIGNMENT", assignmentStatus: "NEEDS_ASSIGNMENT",
               reason: directClub ? "聖迪活動邀請：直接開通分會平台，一般會員身分待名單人工核對" : "中央註冊：先開通平台，正式分會待名單核對",
@@ -138,7 +159,7 @@ export async function createCentralMember(
           await tx.oAuthTransaction.update({ where: { id: oauth.id }, data: { userId: user.id, sessionVersion: user.sessionVersion,
             subject: null, email: null, providerName: null, refreshTokenCiphertext: null, inviteToken: null, codeVerifier: null, nonce: "", browserHash: "" } });
         }
-        return { member, user, organization: intake, registrationMode: directClub ? "direct_club" as const : "central" as const };
+        return { member, user, organization: intake, registrationMode: clubApplication ? "club_application" as const : directClub ? "direct_club" as const : "central" as const };
       }, { isolationLevel: "Serializable" });
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? error.code : undefined;

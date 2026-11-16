@@ -1,5 +1,6 @@
 node_modules
 .next
+/.next-club-preview/
 out
 npm-debug.log*
 .env
@@ -9,6 +10,7 @@ npm-debug.log*
 # Deployment secrets, database backups and native signing material stay local.
 backups/
 *.pem
+!/certificates/aws-rds-us-east-2-root.pem
 *.p8
 *.p12
 *.mobileprovision
@@ -28,3 +30,6 @@ private-data/
 *.private.json
 *.private.csv
 *.private.xlsx
+
+/public/card-ocr/
+/public/native-preview/

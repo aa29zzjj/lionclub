@@ -7,7 +7,7 @@ export function createMobilePushRuntimeResolver(options: { environment: Environm
   const env = options.environment, clock = options.now ?? Date.now;
   let cached: MobilePushSettings | undefined, expiresAt = 0, pending: Promise<MobilePushSettings> | undefined;
   return async function resolve(): Promise<MobilePushSettings> {
-    if (env.MOBILE_PUSH_ENABLED !== "true" || env.APNS_TOPIC !== MOBILE_PUSH_TOPIC || !["sandbox", "production"].includes(env.APNS_ENVIRONMENT ?? "")) return { enabled: false };
+    if (env.ISOLATED_APP_REVIEW_ENABLED === "true" || env.MOBILE_PUSH_ENABLED !== "true" || env.APNS_TOPIC !== MOBILE_PUSH_TOPIC || !["sandbox", "production"].includes(env.APNS_ENVIRONMENT ?? "")) return { enabled: false };
     if (env.PUSH_DEVICE_ENCRYPTION_KEY) return mobilePushSettings(env); // An explicit invalid key never borrows another source.
     const name = env.MOBILE_PUSH_SECRETS_NAME;
     if (env.MOBILE_PUSH_RUNTIME_SECRETS_ENABLED !== "true" || !name || !/^[A-Za-z0-9/_+=.@:-]{1,2048}$/.test(name)) return { enabled: false };

@@ -37,11 +37,17 @@ async function main() {
   if (!stat.isFile() || stat.isSymbolicLink() || stat.mode & 0o077 || stat.size > 16384) throw Error("PRIVATE_APNS_KEY_FILE_REQUIRED");
   const key = createPrivateKey(readFileSync(input.keyPath));
   const { createApnsProvider } = await import("../src/lib/apns-provider.ts");
+  const { queueDuePhasePushes } = await import("../src/lib/phase-push.ts");
   const { processMobilePushBatch } = await import("../src/lib/mobile-push-delivery.ts");
   const { PrismaClient } = await import("@prisma/client");
   const provider = createApnsProvider({ key, keyId: input.keyId, teamId: input.teamId });
   const prisma = new PrismaClient({ datasources: { db: { url: input.databaseUrl } } });
-  try { console.log(JSON.stringify(await processMobilePushBatch(prisma, provider.send, input.settings, new Date(), 25))); }
+  try {
+    const now = new Date();
+    const queuedPhaseDeliveries = process.env.NEXT_PUBLIC_NEXT_PHASE_ENABLED === "true" ? await queueDuePhasePushes(prisma, input.settings, now) : 0;
+    const result = await processMobilePushBatch(prisma, provider.send, input.settings, now, 25);
+    console.log(JSON.stringify({ ...result, queuedPhaseDeliveries }));
+  }
   finally { provider.close(); await prisma.$disconnect(); }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(() => {

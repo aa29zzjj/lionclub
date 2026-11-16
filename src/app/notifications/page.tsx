@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
+import { PhaseWebInbox } from "@/components/NextPhaseWeb";
+import { nextPhaseEnabled } from "@/lib/next-phase-contract";
 import Avatar from "@/components/Avatar";
 import { colorFromId } from "@/lib/avatar-color";
 
@@ -14,6 +16,7 @@ type InboxNotification = { id: string; notificationId: string; eventId: string; 
 
 export default function NotificationsPage() {
   const router = useRouter();
+  const [viewerId, setViewerId] = useState("");
   const [friends, setFriends] = useState<Friend[]>([]);
   const [events, setEvents] = useState<EventOption[]>([]);
   const [notifications, setNotifications] = useState<SentNotification[]>([]);
@@ -42,6 +45,7 @@ export default function NotificationsPage() {
       const results = await Promise.all(responses.map((response) => response.json().catch(() => ({}))));
       const notificationsData = results[2];
       if (!responses[2].ok) throw new Error(notificationsData.error ?? "活動通知無法載入");
+      setViewerId(notificationsData.viewerId ?? "");
       setNotifications(notificationsData.notifications ?? []); setInbox(notificationsData.inbox ?? []); setUnreadCount(notificationsData.unreadCount ?? 0);
       setFriendInvitations(notificationsData.friendInvitations ?? []);
       if (responses[0].ok) setFriends(results[0].friends ?? []);
@@ -103,6 +107,7 @@ export default function NotificationsPage() {
       <div role="tablist" aria-label="通知分類" className="mb-4 grid grid-cols-2 gap-1 rounded-xl bg-lion-soft p-1"><button type="button" role="tab" id="notification-received-tab" aria-controls="notification-panel" aria-selected={tab === "received"} onClick={() => setTab("received")} className={`min-h-12 rounded-lg px-2 text-base ${tab === "received" ? "bg-lion-action font-semibold text-lion-navyDeep" : "text-lion-muted"}`}>收到的通知{unreadCount ? `（${unreadCount} 未讀）` : ""}</button><button type="button" role="tab" id="notification-sent-tab" aria-controls="notification-panel" aria-selected={tab === "sent"} onClick={() => setTab("sent")} className={`min-h-12 rounded-lg px-2 text-base ${tab === "sent" ? "bg-lion-action font-semibold text-lion-navyDeep" : "text-lion-muted"}`}>已發送</button></div>
       {loading ? <p role="status" className="py-10 text-center">載入通知中…</p> : <section id="notification-panel" role="tabpanel" aria-labelledby={tab === "received" ? "notification-received-tab" : "notification-sent-tab"} className="space-y-3">
         {tab === "received" ? <>
+          {nextPhaseEnabled && viewerId && <PhaseWebInbox key={viewerId} memberId={viewerId} />}
           <h2 className="text-lg font-bold">好友邀請（{friendInvitations.length} 待回覆）</h2>
           {friendInvitations.length === 0 && <p className="text-base text-lion-muted">目前沒有待回覆的好友邀請。</p>}
           {friendInvitations.map((invitation) => <article key={invitation.friendshipId} className="rounded-2xl border border-lion-gold bg-lion-card p-4">
