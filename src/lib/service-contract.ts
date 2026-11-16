@@ -12,6 +12,7 @@ const needFields = { kind: z.enum(["NEED", "OFFER"]), title: text(2, 120), categ
 const entryFields = { title: text(2, 120), date: serviceDate, category: text(1, 40), minutes: z.number().int().min(15).max(960), note: text(0, 1000).default("") };
 export const serviceActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("need.create"), requestId: z.uuid(), ...needFields }).strict(),
+  z.object({ action: z.literal("need.invite"), id, memberId: id, message: text(0, 300).default("") }).strict(),
   z.object({ action: z.literal("need.respond"), id, message: text(2, 1000) }).strict(),
   z.object({ action: z.literal("need.accept"), id, responseId: id, version }).strict(),
   z.object({ action: z.literal("need.complete"), id, version, note: text(0, 1000).default("") }).strict(),
@@ -82,7 +83,7 @@ const response = z.object({ id: z.string(), member: person, message: z.string(),
 const entry = z.object({ id: z.string(), memberId: z.string(), memberName: z.string(), organizationName: z.string(), eventId: z.string().nullable(), title: z.string(), date: serviceDate, category: z.string(), minutes: z.number().int().min(15).max(960), note: z.string().nullable(), status: z.enum(["PENDING", "CONFIRMED", "REJECTED", "REVOKED"]), version: z.number().int(), reviewReason: z.string().nullable(), reviewedAt: z.string().nullable() });
 export const serviceHubSchema = z.object({
   viewerId: z.string(), year: z.number().int(), memberName: z.string(), organizationName: z.string(), canReview: z.boolean(),
-  needs: z.array(z.object({ id: z.string(), kind: z.enum(["NEED", "OFFER"]), owner: person, title: z.string(), category: z.string(), description: z.string(), targetDate: serviceDate, quantity: z.number().int(), quantityUnit: z.string(), status: z.enum(["OPEN", "RESPONDED", "MATCHED", "COMPLETED", "CLOSED"]), version: z.number().int(), canManage: z.boolean(), canRespond: z.boolean(), completionNote: z.string().nullable(), myResponse: response.nullable(), responses: z.array(response) })),
+  needs: z.array(z.object({ id: z.string(), kind: z.enum(["NEED", "OFFER"]), owner: person, suggestedMembers: z.array(person.extend({ matchingTags: z.array(z.string()), inviteStatus: z.enum(["available", "sent", "responded"]).optional() })).optional(), title: z.string(), category: z.string(), description: z.string(), targetDate: serviceDate, quantity: z.number().int(), quantityUnit: z.string(), status: z.enum(["OPEN", "RESPONDED", "MATCHED", "COMPLETED", "CLOSED"]), version: z.number().int(), canManage: z.boolean(), canRespond: z.boolean(), completionNote: z.string().nullable(), myResponse: response.nullable(), responses: z.array(response) })),
   entries: z.array(entry), reviewEntries: z.array(entry),
   totals: z.object({ confirmedMinutes: z.number(), pendingMinutes: z.number(), confirmedCount: z.number(), pendingCount: z.number() }),
   events: z.array(z.object({ id: z.string(), title: z.string(), location: z.string(), startAt: z.string(), registeredCount: z.number(), checkedInCount: z.number(), canManage: z.boolean(), canLinkService: z.boolean(), outcome: z.object({ endAt: z.string(), beneficiaryCount: z.number().nullable(), quantity: z.number(), quantityUnit: z.string(), totalServiceMinutes: z.number(), summary: z.string(), version: z.number() }).nullable() })),

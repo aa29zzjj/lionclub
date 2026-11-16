@@ -6,7 +6,7 @@ import { decryptPushToken } from "./mobile-push-crypto";
 
 export const MOBILE_PUSH_MAX_ATTEMPTS = 5;
 const CLAIM_TIMEOUT_MS = 5 * 60 * 1000;
-const KINDS: MobilePushKind[] = ["activity", "friend_invitation", "experience_review", "membership_review"];
+const KINDS: MobilePushKind[] = ["activity", "friend_invitation", "experience_review", "membership_review", "next_phase"];
 export type MobilePushPayload = { aps: { alert: { title: string; body: string }; sound: string }; data: { version: 1; kind: MobilePushKind } };
 export function mobilePushPayload(kind: MobilePushKind): MobilePushPayload {
   if (!KINDS.includes(kind)) throw new Error("INVALID_PUSH_KIND");

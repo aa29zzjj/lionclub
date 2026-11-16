@@ -1,4 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
+import { hasPhaseNoticeSchema } from "./phase-notices";
+import { hasNextPhaseSchema } from "./next-phase";
 import { hasServiceSchema } from "./service-hub";
 import { assertConsumedEmailAction } from "./email-action-reauth";
 
@@ -49,6 +51,13 @@ export async function anonymizeAccount(
         await tx.serviceEntry.deleteMany({ where: { memberId: input.memberId } });
         await tx.resourceNeed.updateMany({ where: { ownerId: input.memberId }, data: { title: "已刪除會員的媒合", description: "原發布內容已移除", category: "其他", quantity: 1, quantityUnit: "", completionNote: null, status: "CLOSED", version: { increment: 1 } } });
         await tx.resourceResponse.updateMany({ where: { memberId: input.memberId }, data: { message: "此回應的會員已刪除，原內容已移除" } });
+      }
+      if (await hasPhaseNoticeSchema(tx)) await tx.phaseNotice.deleteMany({ where: { OR: [{ actorId: input.memberId }, { recipientId: input.memberId }] } });
+      if (await hasNextPhaseSchema(tx)) {
+        await tx.businessCard.deleteMany({ where: { memberId: input.memberId } });
+        await tx.meetup.deleteMany({ where: { hostId: input.memberId } });
+        await tx.meetupMessage.deleteMany({ where: { memberId: input.memberId } });
+        await tx.meetupRegistration.deleteMany({ where: { memberId: input.memberId } });
       }
       await tx.memberExperience.deleteMany({ where: { memberId: input.memberId } });
       await tx.friendship.deleteMany({ where: { OR: [{ requesterId: input.memberId }, { addresseeId: input.memberId }] } });

@@ -109,9 +109,9 @@ async function getDescendantOrganizationIds(prisma: Database, rootId: string) {
  */
 export async function getAdministeredOrganizationIds(
   prisma: Database,
-  roles: { role: string; scopeId: string | null }[]
+  roles: { role: string; scopeId: string | null; scopeType: string }[]
 ): Promise<string[] | undefined> {
-  const isGlobal = roles.some((r) => r.role === "SUPER_ADMIN");
+  const isGlobal = roles.some((r) => r.role === "SUPER_ADMIN" && r.scopeType === "GLOBAL" && r.scopeId === null);
   if (isGlobal) return undefined;
 
   const scopeIds = Array.from(new Set(roles.map((r) => r.scopeId).filter(Boolean))) as string[];

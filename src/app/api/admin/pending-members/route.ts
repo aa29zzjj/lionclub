@@ -30,6 +30,7 @@ export async function GET() {
   });
 
   return NextResponse.json({
+    global: orgIds === undefined,
     members: members.map((m) => ({
       id: m.id,
       name: m.name,
@@ -41,5 +42,5 @@ export async function GET() {
       joinMonth: m.joinMonth,
       updatedAt: m.updatedAt,
     })),
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }

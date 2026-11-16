@@ -9,12 +9,10 @@ import FederatedAuthButtons from "@/components/FederatedAuthButtons";
 import { cancelFederatedSignup, OAuthClientError, oauthErrorMessage, readPendingFederatedProfile } from "@/lib/federated-auth-client";
 
 type Step = "invite" | "profile" | "done";
-type Onboarding = {
-  organization: { id: string; name: string; districtCode: string | null };
-  requiresInvite: true;
-  inviteMethod: "qr";
-  mode: "central";
-};
+type ClubOption = { id: string; name: string; districtCode: string | null };
+type Onboarding = { requiresInvite: true; inviteMethod: "qr" } & (
+  { mode: "central"; organization: ClubOption } | { mode: "club_application" }
+);
 type VerifiedInvite = { token: string; organizationId: string; organizationName: string; registrationMode: "direct_club" | "central" };
 type InviteStatus = "idle" | "loading" | "valid" | "invalid";
 
@@ -24,9 +22,10 @@ const secondaryButtonClass = "min-h-12 rounded-xl border border-lion-border bg-l
 
 function isOnboarding(value: unknown): value is Onboarding {
   if (!value || typeof value !== "object") return false;
-  const data = value as Partial<Onboarding>;
-  return data.mode === "central" && data.requiresInvite === true && data.inviteMethod === "qr"
-    && Boolean(data.organization)
+  const data = value as { mode?: string; requiresInvite?: boolean; inviteMethod?: string; organization?: Partial<ClubOption> };
+  if (data.requiresInvite !== true || data.inviteMethod !== "qr") return false;
+  if (data.mode === "club_application") return true;
+  return data.mode === "central" && Boolean(data.organization)
     && typeof data.organization?.id === "string" && Boolean(data.organization.id)
     && typeof data.organization.name === "string" && Boolean(data.organization.name)
     && (data.organization.districtCode === null || typeof data.organization.districtCode === "string");
@@ -60,6 +59,9 @@ function RegisterForm() {
   const [bio, setBio] = useState("");
   const [privacyConsent, setPrivacyConsent] = useState(false);
   const [termsConsent, setTermsConsent] = useState(false);
+  const [requestedClub, setRequestedClub] = useState<ClubOption | null>(null);
+  const [awaitingApproval, setAwaitingApproval] = useState(false);
+  const [clubSearchError, setClubSearchError] = useState(false);
   const [declaredOrganizationName, setDeclaredOrganizationName] = useState("");
   const [orgSuggestions, setOrgSuggestions] = useState<{ id: string; name: string; districtCode: string | null }[]>([]);
   const [orgSuggestionsOpen, setOrgSuggestionsOpen] = useState(false);
@@ -121,7 +123,9 @@ function RegisterForm() {
   }
 
   const currentVerifiedInvite = verifiedInvite?.token === tokenFromUrl ? verifiedInvite : null;
-  const directClub = currentVerifiedInvite?.registrationMode === "direct_club";
+  const clubApplication = onboarding?.mode === "club_application";
+  const centralOrganization = onboarding?.mode === "central" ? onboarding.organization : null;
+  const directClub = !clubApplication && currentVerifiedInvite?.registrationMode === "direct_club";
   const configurationReady = Boolean(onboarding) && !onboardingLoading && !onboardingError;
   const invitationReady = configurationReady && (Boolean(federated?.hasInvite)
     || (Boolean(tokenFromUrl) && inviteStatus === "valid" && Boolean(currentVerifiedInvite)));
@@ -205,12 +209,18 @@ function RegisterForm() {
     setSelectedTags((previous) => previous.includes(tag) ? previous.filter((item) => item !== tag) : [...previous, tag]);
   }
 
+  function chooseClub(club: ClubOption) {
+    setRequestedClub(club);
+    setDeclaredOrganizationName(club.name);
+    setOrgSuggestionsOpen(false);
+    setActiveOrgIndex(-1);
+  }
+
   useEffect(() => {
     const query = declaredOrganizationName.trim();
-    if (!query) {
-      setOrgSuggestions([]);
-      return;
-    }
+    setOrgSuggestions([]);
+    setClubSearchError(false);
+    if (!query && !clubApplication) return;
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
@@ -218,20 +228,20 @@ function RegisterForm() {
           cache: "no-store",
           signal: controller.signal,
         });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error("CLUB_SEARCH_FAILED");
         const data = await response.json().catch(() => null);
         if (controller.signal.aborted) return;
         setOrgSuggestions(Array.isArray(data?.organizations) ? data.organizations.slice(0, 20) : []);
         setActiveOrgIndex(-1);
       } catch {
-        // 搜尋分會清單失敗不影響手動輸入，保留原本文字即可。
+        if (!controller.signal.aborted) setClubSearchError(true);
       }
     }, 250);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [declaredOrganizationName]);
+  }, [declaredOrganizationName, clubApplication]);
 
   useEffect(() => {
     if (orgSuggestionsOpen && activeOrgIndex >= 0) document.getElementById(`${orgListId}-${activeOrgIndex}`)?.scrollIntoView({ block: "nearest" });
@@ -261,6 +271,7 @@ function RegisterForm() {
       return;
     }
     if (federated && !oauthConsent) { setProfileError("請先確認第三方身分資料使用同意。"); return; }
+    if (clubApplication && !requestedClub) { setProfileError("請從分會清單選擇要申請加入的分會。"); return; }
     setProfileError("");
     actionRef.current = true;
     setSubmitting(true);
@@ -272,12 +283,13 @@ function RegisterForm() {
           name: name.trim(), ...(federated ? { oauthConsent } : { email: email.trim(), password }),
           birthday: birthday || undefined, phone: phone.trim() || undefined,
           title: title || undefined, bio: bio.trim() || undefined, tags: selectedTags,
-          declaredOrganizationName: declaredOrganizationName.trim() || undefined, privacyConsent, termsConsent, ...invitePayload,
+          ...(clubApplication ? { requestedOrganizationId: requestedClub?.id } : { declaredOrganizationName: declaredOrganizationName.trim() || undefined }),
+          privacyConsent, termsConsent, ...invitePayload,
         }),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const message = federated ? oauthErrorMessage(data?.code) || "第三方註冊未完成，請重新確認身分與邀請。" : typeof data?.error === "string" ? data.error : "註冊失敗，請稍後再試。";
+        const message = federated ? oauthErrorMessage(data?.code) || data?.error || "第三方註冊未完成，請重新確認身分與分會。" : typeof data?.error === "string" ? data.error : "註冊失敗，請稍後再試。";
         if (/QR|邀請|invite|token/i.test(message)) {
           setInviteError(message);
           setStep("invite");
@@ -285,10 +297,11 @@ function RegisterForm() {
         } else setProfileError(message);
         return;
       }
-      if (data?.ok !== true || data?.canLogin !== true || typeof data.organizationName !== "string") {
+      if (data?.ok !== true || (data?.canLogin !== true && !(data?.canLogin === false && data?.registrationMode === "club_application")) || typeof data.organizationName !== "string") {
         setProfileError("帳號登入狀態尚未確認，請返回登入頁嘗試登入；若仍無法登入，請聯絡管理者。");
         return;
       }
+      setAwaitingApproval(data.canLogin === false);
       setRegisteredOrganizationName(data.organizationName);
       setRegisteredDirectClub(data.registrationMode === "direct_club");
       setPassword("");
@@ -318,12 +331,12 @@ function RegisterForm() {
           <button type="button" className={`${primaryButtonClass} mt-4 w-full`} onClick={() => setOnboardingAttempt((value) => value + 1)}>重新載入</button>
           <Link href="/login" className="mt-2 flex min-h-12 items-center justify-center text-sm text-lion-gold">返回登入</Link>
         </div>}
-        {configurationReady && onboarding && step !== "done" && (currentVerifiedInvite || (!tokenFromUrl && !federated?.hasInvite)) && <div className="mb-6 rounded-2xl border border-lion-border bg-lion-card p-5">
+        {configurationReady && centralOrganization && step !== "done" && (currentVerifiedInvite || (!tokenFromUrl && !federated?.hasInvite)) && <div className="mb-6 rounded-2xl border border-lion-border bg-lion-card p-5">
           <p className="text-xs text-lion-muted">{directClub ? "註冊加入分會" : "新帳號統一加入"}</p>
-          <p className="mt-1 font-semibold">{directClub ? currentVerifiedInvite.organizationName : onboarding.organization.name}</p>
-          {!directClub && onboarding.organization.districtCode && <p className="mt-1 text-xs text-lion-muted">{onboarding.organization.districtCode}</p>}
+          <p className="mt-1 font-semibold">{directClub ? currentVerifiedInvite.organizationName : centralOrganization.name}</p>
+          {!directClub && centralOrganization.districtCode && <p className="mt-1 text-xs text-lion-muted">{centralOrganization.districtCode}</p>}
           <p className="mt-3 text-sm leading-relaxed text-lion-muted">{directClub ? "註冊後可立即使用聖迪獅子會的會員功能。正式會籍之後由授權管理者依名單人工核對；註冊不會授予幹部或管理權限。" : "掃邀請 QR 註冊完成即可使用。這是平台暫存分會，不代表正式獅子會會籍已核實；之後由授權管理者依名單或分會長確認結果分派。"}</p>
-          {currentVerifiedInvite && !directClub && <p className="mt-3 border-t border-lion-border pt-3 text-xs leading-relaxed text-lion-muted">邀請來源：{currentVerifiedInvite.organizationName}。邀請來源只供核對，實際加入的是上述中央分會。</p>}
+          {currentVerifiedInvite && !directClub && <p className="mt-3 border-t border-lion-border pt-3 text-xs leading-relaxed text-lion-muted">邀請來源：{currentVerifiedInvite.organizationName}。邀請來源供分會核對。</p>}
         </div>}
         {configurationReady && onboarding && step === "invite" && <form onSubmit={handleInviteSubmit} className="flex flex-col gap-5">
           {federated && <p role="status" className="rounded-xl border border-lion-border p-3 text-sm">第三方身分已驗證，尚未建立會員帳號。請在本瀏覽器開啟有效邀請 QR 連結，再完成資料與同意；驗證會逾時，請勿將邀請轉貼至公開場所。</p>}
@@ -384,14 +397,15 @@ function RegisterForm() {
               <input id="register-phone" name="phone" type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="09xx-xxx-xxx" className={inputClass} />
             </div>
             <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOrgSuggestionsOpen(false); }}>
-              <label htmlFor="register-declared-organization" className="mb-1 block text-sm font-medium">原所屬分會（選填）</label>
+              <label htmlFor="register-declared-organization" className="mb-1 block text-sm font-medium">{clubApplication ? "申請加入的分會（必填）" : "原所屬分會（選填）"}</label>
               <input
                 id="register-declared-organization"
                 name="declaredOrganizationName"
                 value={declaredOrganizationName}
-                onChange={(event) => { setDeclaredOrganizationName(event.target.value); setOrgSuggestionsOpen(true); setActiveOrgIndex(-1); }}
+                onChange={(event) => { setDeclaredOrganizationName(event.target.value); setRequestedClub(null); setOrgSuggestionsOpen(true); setActiveOrgIndex(-1); }}
                 onFocus={() => setOrgSuggestionsOpen(true)}
                 role="combobox"
+                required={clubApplication}
                 aria-autocomplete="list"
                 aria-expanded={orgSuggestionsOpen && orgSuggestions.length > 0}
                 aria-controls={orgListId}
@@ -403,10 +417,10 @@ function RegisterForm() {
                     setActiveOrgIndex((index) => event.key === "ArrowDown" ? (index + 1) % orgSuggestions.length : (index <= 0 ? orgSuggestions.length - 1 : index - 1));
                   }
                   if (event.key === "Enter" && orgSuggestionsOpen && activeOrgIndex >= 0) {
-                    event.preventDefault(); setDeclaredOrganizationName(orgSuggestions[activeOrgIndex].name); setOrgSuggestionsOpen(false); setActiveOrgIndex(-1);
+                    event.preventDefault(); chooseClub(orgSuggestions[activeOrgIndex]);
                   }
                 }}
-                placeholder="輸入分會名稱搜尋，或直接手動輸入"
+                placeholder={clubApplication ? "輸入分會名稱，從清單選擇" : "輸入分會名稱搜尋，或直接手動輸入"}
                 autoComplete="off"
                 aria-describedby="register-declared-organization-help"
                 className={inputClass}
@@ -418,7 +432,7 @@ function RegisterForm() {
                       <button
                         type="button"
                         onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => { setDeclaredOrganizationName(org.name); setOrgSuggestionsOpen(false); setActiveOrgIndex(-1); document.getElementById("register-declared-organization")?.focus(); }}
+                        onClick={() => { chooseClub(org); }}
                         className={`flex min-h-12 w-full flex-col items-start px-4 py-2.5 text-left text-base hover:bg-lion-soft ${activeOrgIndex === index ? "bg-lion-soft" : ""}`}
                       >
                         <span>{org.name}</span>
@@ -428,7 +442,8 @@ function RegisterForm() {
                   ))}
                 </ul>
               )}
-              <p id="register-declared-organization-help" className="mt-2 text-xs leading-relaxed text-lion-muted">這是待核對的參考資料，不會直接更改加入分會或管理權限。可從清單選擇，或直接手動輸入分會名稱。</p>
+              <p id="register-declared-organization-help" className="mt-2 text-xs leading-relaxed text-lion-muted">{clubApplication ? requestedClub ? `已選擇 ${requestedClub.name}，送出後由分會幹部或全站管理員審核。` : "請從結果清單選擇分會，審核通過後即可登入。" : "這是待核對的參考資料，可從清單選擇或手動輸入。"}</p>
+              {clubApplication && clubSearchError && <p role="alert" className="text-sm text-lion-danger">暫時無法搜尋分會，請重新輸入分會名稱再試。</p>}
             </div>
           </fieldset>
           <fieldset disabled={formBusy || Boolean(federatedNotice)}>
@@ -476,18 +491,24 @@ function RegisterForm() {
           {profileError && <p className="text-sm text-lion-danger" role="alert">{profileError}</p>}
           <div className="flex gap-3">
             <button type="button" disabled={formBusy} onClick={() => setStep("invite")} className={`${secondaryButtonClass} flex-1`}>查看邀請</button>
-            <button type="submit" disabled={formBusy || Boolean(federatedNotice) || !invitationReady || !privacyConsent || !termsConsent || Boolean(federated && !oauthConsent)} className={`${primaryButtonClass} flex-1`}>{submitting ? "正在註冊…" : "完成註冊並開通"}</button>
+            <button type="submit" disabled={formBusy || Boolean(federatedNotice) || !invitationReady || (clubApplication && !requestedClub) || !privacyConsent || !termsConsent || Boolean(federated && !oauthConsent)} className={`${primaryButtonClass} flex-1`}>{submitting ? "正在送出…" : clubApplication ? "送出入會申請" : "完成註冊並開通"}</button>
           </div>
           <Link href="/login" className="flex min-h-12 items-center justify-center text-sm text-lion-muted" aria-disabled={formBusy} onClick={(event) => { if (formBusy) event.preventDefault(); }}>已有帳號？返回登入</Link>
         </form>}
         {step === "done" && <div className="flex flex-1 flex-col items-center justify-center gap-4 py-8 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-lion-gold bg-lion-gold/10 text-3xl text-lion-gold" aria-hidden="true">✓</div>
+          {awaitingApproval ? <>
+            <h2 className="text-xl font-bold">入會申請已送出</h2>
+            <p className="max-w-sm text-sm text-lion-muted">您已申請加入「{registeredOrganizationName}」。分會幹部或全站管理員審核通過後即可登入。</p>
+            <Link href="/login" className={secondaryButtonClass}>返回登入</Link>
+          </> : <>
           <h2 className="text-xl font-bold">註冊完成，可立即使用</h2>
           <p className="max-w-sm text-sm leading-relaxed text-lion-muted">{name} 您好，您已加入「{registeredOrganizationName}」，可以開始使用會員檔案、好友與活動功能。</p>
           <p className="max-w-sm text-sm leading-relaxed text-lion-muted">{registeredDirectClub ? "您可以開始使用 App。正式會籍之後再由授權管理者依名單人工核對。" : "正式會員名單核對後，授權管理者會再分派至您的所屬分會。"}</p>
           {registeredDirectClub && !federated && <><p className="max-w-sm text-sm leading-relaxed text-lion-muted">開啟 LionClubs App，使用剛才設定的 Email 與密碼登入，不需要再註冊一次。</p><a href="https://apps.apple.com/tw/app/lionclubs/id6826321953" className={`${primaryButtonClass} flex min-h-12 w-full items-center justify-center`}>下載／開啟 iPhone、iPad App</a></>}
           <Link href="/profile/experience" className={`${secondaryButtonClass} w-full`}>查看名冊帶入與歷任資歷（需另行同意）</Link>
           <button type="button" onClick={() => { router.push("/home"); router.refresh(); }} className={`${primaryButtonClass} mt-3 w-full`}>開始使用</button>
+          </>}
         </div>}
       </div>
     </div>

@@ -28,3 +28,6 @@ private-data/
 *.private.json
 *.private.csv
 *.private.xlsx
+
+/public/card-ocr/
+/public/native-preview/

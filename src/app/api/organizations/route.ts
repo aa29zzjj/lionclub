@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { selectableClubWhere } from "@/lib/central-onboarding";
 import { getPrisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
   const prisma = await getPrisma();
   const organizations = await prisma.organization.findMany({
     where: {
-      level: level ? (level as never) : undefined,
+      ...(level === "club" ? selectableClubWhere() : { level: level ? (level as never) : undefined }),
       districtCode: districtCode ?? undefined,
       isActive: true,
       name: q ? { contains: q } : undefined,

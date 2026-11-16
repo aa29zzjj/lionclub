@@ -4,6 +4,10 @@ import { canManageEvent } from "./event-scope";
 import { getBlockedMemberIds, isBlockedEitherWay } from "./member-block";
 import { isPersonalEventHidden, visibleEventsWhere } from "./event-visibility";
 import { activeAdminRoleWhere } from "./active-admin-role";
+import { hasPhaseNoticeSchema } from "./phase-notices";
+import { hasNextPhaseSchema } from "./next-phase";
+import { nextPhaseEnabled } from "./next-phase-contract";
+import { resourceProfessionalTags } from "./professional-tags";
 import { hasAcceptedCurrentTerms } from "./terms-gate";
 import { shortPositionLabel } from "./experience-data";
 import { ServiceError, parseServiceAction, serviceReviewOrganizationIds, assertReviewAllowed, validateOutcome, validateServiceDate, serviceDedupKey, serviceYearRange, needTransition, markdownText, localDate, type ServiceHubData } from "./service-contract";
@@ -47,7 +51,7 @@ export async function performServiceAction(prisma: PrismaClient, actorId: string
         const created = await db.resourceNeed.create({ data: { ...fields, targetDate: new Date(`${fields.targetDate}T00:00:00Z`), requestId, ownerId: actorId, organizationId: actor.organizationId } });
         await audit(db, actorId, "NEED", created.id, "CREATED", 1); return { ok: true, id: created.id };
       }
-      if (["need.respond", "need.accept", "need.complete", "need.close", "need.report"].includes(input.action) && "id" in input) {
+      if (["need.invite", "need.respond", "need.accept", "need.complete", "need.close", "need.report"].includes(input.action) && "id" in input) {
         const need = await db.resourceNeed.findUnique({ where: { id: input.id }, include: { owner: { select: { status: true, deletedAt: true } } } });
         if (!need || need.owner.status !== "ACTIVE" || need.owner.deletedAt || (actorId !== need.ownerId && await isBlockedEitherWay(db, actorId, need.ownerId))) throw new ServiceError(404, "找不到此需求");
         if (input.action === "need.report") {
@@ -55,6 +59,24 @@ export async function performServiceAction(prisma: PrismaClient, actorId: string
           const existing = await db.memberReport.findFirst({ where: { reporterId: actorId, targetId: need.ownerId, status: "PENDING", details: `資源媒合：${need.id}` } });
           if (!existing) await db.memberReport.create({ data: { reporterId: actorId, targetId: need.ownerId, reason: input.reason, details: `資源媒合：${need.id}` } });
           return { ok: true };
+        }
+        if (input.action === "need.invite") {
+          if (!nextPhaseEnabled || !await hasPhaseNoticeSchema(db)) throw new ServiceError(503, "合作邀請暫未開放。");
+          if (need.ownerId !== actorId) throw new ServiceError(403, "只有需求發起人可以邀請合作。");
+          if (input.memberId === actorId || need.kind !== "NEED" || !["OPEN", "RESPONDED"].includes(need.status)) throw new ServiceError(409, "這筆需求目前無法發送合作邀請。");
+          const tags = resourceProfessionalTags(need.category, need.title, need.description);
+          const card = await db.businessCard.findFirst({ where: { memberId: input.memberId, shareTags: true, tags: { hasSome: tags },
+            member: { status: "ACTIVE", deletedAt: null, user: { isNot: null } } }, select: { memberId: true } });
+          if (!card || await isBlockedEitherWay(db, actorId, input.memberId)) throw new ServiceError(404, "這位獅友目前無法邀請。");
+          const existing = await db.phaseNotice.findUnique({ where: { recipientId_kind_sourceKey_revision: {
+            recipientId: input.memberId, kind: "COOPERATION_INVITE", sourceKey: need.id, revision: 1,
+          } }, select: { id: true } });
+          if (existing) return { ok: true, id: existing.id, duplicate: true };
+          if (await db.resourceResponse.findUnique({ where: { needId_memberId: { needId: need.id, memberId: input.memberId } } })) throw new ServiceError(409, "這位獅友已回應此需求。");
+          if (await db.phaseNotice.count({ where: { needId: need.id } }) >= 30) throw new ServiceError(409, "這筆需求的邀請已達上限。");
+          const invitation = await db.phaseNotice.create({ data: { needId: need.id, sourceKey: need.id, recipientId: input.memberId,
+            actorId, kind: "COOPERATION_INVITE", message: input.message || null, availableAt: now }, select: { id: true } });
+          return { ok: true, id: invitation.id };
         }
         if (input.action === "need.respond") {
           if (need.ownerId === actorId) throw new ServiceError(400, "不能回應自己發布的需求");
@@ -144,7 +166,7 @@ export async function performServiceAction(prisma: PrismaClient, actorId: string
   }
 }
 
-export type ServiceQuery = { year: number; needsCursor?: string; entriesCursor?: string; eventsCursor?: string; reviewCursor?: string; category?: string; kind?: "NEED" | "OFFER"; mine?: boolean; reviewStatus?: "PENDING" | "CONFIRMED" | "REJECTED" | "REVOKED" };
+export type ServiceQuery = { year: number; needId?: string; needsCursor?: string; entriesCursor?: string; eventsCursor?: string; reviewCursor?: string; category?: string; kind?: "NEED" | "OFFER"; mine?: boolean; reviewStatus?: "PENDING" | "CONFIRMED" | "REJECTED" | "REVOKED" };
 const page = <T extends { id: string }>(rows: T[], limit: number) => ({ rows: rows.slice(0, limit), next: rows.length > limit ? rows[limit - 1].id : null });
 const cursor = (id?: string): { cursor?: { id: string }; skip?: number } => id ? { cursor: { id }, skip: 1 } : {};
 function entryDto(row: Prisma.ServiceEntryGetPayload<{ include: typeof entryInclude }>) {
@@ -155,10 +177,24 @@ export async function getServiceHub(prisma: PrismaClient, actorId: string, query
   const range = serviceYearRange(query.year);
   const blocked = await getBlockedMemberIds(prisma, actorId);
   const needs = page(await prisma.resourceNeed.findMany({
-    where: { ownerId: { notIn: blocked }, owner: { status: "ACTIVE", deletedAt: null }, ...(query.category ? { category: query.category } : {}), ...(query.kind ? { kind: query.kind } : {}), ...(query.mine ? { ownerId: actorId } : {}) },
+    where: { ...(query.needId ? { id: query.needId } : {}), ownerId: { notIn: blocked }, owner: { status: "ACTIVE", deletedAt: null }, ...(query.category ? { category: query.category } : {}), ...(query.kind ? { kind: query.kind } : {}), ...(query.mine ? { ownerId: actorId } : {}) },
     include: { owner: { select: personSelect }, responses: { where: { member: { status: "ACTIVE", deletedAt: null }, memberId: { notIn: blocked } }, select: { id: true, message: true, status: true, memberId: true, member: { select: personSelect } }, orderBy: { createdAt: "asc" } } },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 51, ...cursor(query.needsCursor),
   }), 50);
+  const tagQueries = new Map(needs.rows.filter(need => need.kind === "NEED" && ["OPEN", "RESPONDED"].includes(need.status))
+    .map(need => [need.id, resourceProfessionalTags(need.category, need.title, need.description)]));
+  const tags = [...new Set([...tagQueries.values()].flat())];
+  const professionals = nextPhaseEnabled && tags.length && await hasNextPhaseSchema(prisma) ? await prisma.businessCard.findMany({
+    where: { shareTags: true, tags: { hasSome: tags }, memberId: { notIn: [actorId, ...blocked] }, member: { status: "ACTIVE", deletedAt: null } },
+    select: { tags: true, member: { select: personSelect } },
+    orderBy: [{ updatedAt: "desc" }, { memberId: "asc" }], take: 200,
+  }) : [];
+  const ownedNeeds = needs.rows.filter(need => need.ownerId === actorId && tagQueries.has(need.id)).map(need => need.id);
+  const invitesAvailable = Boolean(nextPhaseEnabled && ownedNeeds.length && professionals.length && await hasPhaseNoticeSchema(prisma));
+  const sentInvites = invitesAvailable ? await prisma.phaseNotice.findMany({
+    where: { needId: { in: ownedNeeds }, actorId, kind: "COOPERATION_INVITE" }, select: { needId: true, recipientId: true },
+  }) : [];
+  const sent = new Set(sentInvites.map(invite => `${invite.needId}:${invite.recipientId}`));
   const entries = page(await prisma.serviceEntry.findMany({ where: { memberId: actorId, date: range }, include: entryInclude, orderBy: [{ date: "desc" }, { id: "desc" }], take: 101, ...cursor(query.entriesCursor) }), 100);
   const reviews = page(await prisma.serviceEntry.findMany({ where: { memberId: { not: actorId }, member: { status: "ACTIVE", deletedAt: null }, organizationId: { in: allowed }, status: query.reviewStatus ?? "PENDING", date: range }, include: entryInclude, orderBy: [{ date: "desc" }, { id: "desc" }], take: 101, ...cursor(query.reviewCursor) }), 100);
   const [confirmed, pending] = await Promise.all(["CONFIRMED", "PENDING"].map(status => prisma.serviceEntry.aggregate({ where: { memberId: actorId, date: range, status }, _count: true, _sum: { minutes: true } })));
@@ -167,9 +203,19 @@ export async function getServiceHub(prisma: PrismaClient, actorId: string, query
   return {
     viewerId: actorId, year: query.year, memberName: actor.name, organizationName: actor.organization.name, canReview: allowed.length > 0,
     needs: needs.rows.map(need => {
+      const relatedTags = tagQueries.get(need.id) ?? [];
+      const suggestedMembers = professionals.flatMap(card => {
+        const matchingTags = card.tags.filter(tag => relatedTags.includes(tag));
+        if (!matchingTags.length || card.member.id === need.ownerId) return [];
+        const inviteStatus = invitesAvailable && need.ownerId === actorId
+          ? need.responses.some(response => response.memberId === card.member.id) ? "responded" as const
+            : sent.has(`${need.id}:${card.member.id}`) ? "sent" as const : "available" as const
+          : undefined;
+        return [{ ...person(card.member), matchingTags, inviteStatus }];
+      }).slice(0, 5);
       const canManage = need.ownerId === actorId || allowed.includes(need.organizationId);
       const dto = (r: typeof need.responses[number]) => ({ id: r.id, member: person(r.member), message: r.message, status: r.status as "PENDING" | "ACCEPTED" | "NOT_SELECTED" });
-      return { id: need.id, kind: need.kind as "NEED" | "OFFER", owner: person(need.owner), title: need.title, category: need.category, description: need.description, targetDate: date(need.targetDate), quantity: need.quantity, quantityUnit: need.quantityUnit, status: need.status as ServiceHubData["needs"][number]["status"], version: need.version, canManage, canRespond: need.ownerId !== actorId && !need.responses.some(r => r.memberId === actorId) && ["OPEN", "RESPONDED"].includes(need.status), completionNote: need.completionNote, myResponse: need.responses.find(r => r.memberId === actorId) ? dto(need.responses.find(r => r.memberId === actorId)!) : null, responses: canManage ? need.responses.map(dto) : [] };
+      return { id: need.id, ...(suggestedMembers.length ? { suggestedMembers } : {}), kind: need.kind as "NEED" | "OFFER", owner: person(need.owner), title: need.title, category: need.category, description: need.description, targetDate: date(need.targetDate), quantity: need.quantity, quantityUnit: need.quantityUnit, status: need.status as ServiceHubData["needs"][number]["status"], version: need.version, canManage, canRespond: need.ownerId !== actorId && !need.responses.some(r => r.memberId === actorId) && ["OPEN", "RESPONDED"].includes(need.status), completionNote: need.completionNote, myResponse: need.responses.find(r => r.memberId === actorId) ? dto(need.responses.find(r => r.memberId === actorId)!) : null, responses: canManage ? need.responses.map(dto) : [] };
     }),
     entries: entries.rows.map(entryDto) as ServiceHubData["entries"], reviewEntries: reviews.rows.map(entryDto) as ServiceHubData["reviewEntries"],
     totals: { confirmedMinutes: confirmed._sum.minutes ?? 0, pendingMinutes: pending._sum.minutes ?? 0, confirmedCount: confirmed._count, pendingCount: pending._count },

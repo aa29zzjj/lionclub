@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-card-ocr.mjs --web",
+    "prebuild": "node scripts/copy-card-ocr.mjs --web",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -18,6 +20,7 @@
     "cleanup:rate-limit": "node scripts/cleanup-rate-limit-attempts.mjs",
     "test:onboarding": "node --import tsx --test tests/*.test.ts",
     "test:simulation": "node --test tests/*.test.mjs",
+    "next-phase:preview": "node scripts/next-phase-preview.mjs",
     "simulation:preview": "node scripts/simulation-preview.mjs",
     "test:all": "node --import tsx --test tests/*.test.ts && node --test tests/*.test.mjs scripts/demo-*.test.mjs",
     "demo:preview": "node scripts/demo-preview.mjs",
@@ -44,6 +47,8 @@
     "@capacitor/share": "^8.0.3",
     "@prisma/client": "^6.19.3",
     "@smithy/signature-v4": "^5.7.4",
+    "@tesseract.js-data/chi_tra": "1.0.0",
+    "@tesseract.js-data/eng": "1.0.0",
     "bcryptjs": "^3.0.3",
     "html5-qrcode": "^2.3.8",
     "jose": "^6.2.12",
@@ -54,6 +59,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "server-only": "^0.0.1",
+    "tesseract.js": "6.0.1",
     "zod": "^4.6.6"
   },
   "devDependencies": {

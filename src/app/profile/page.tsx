@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { nextPhaseEnabled } from "@/lib/next-phase-contract";
 import AppShell from "@/components/AppShell";
 import Avatar from "@/components/Avatar";
 import ThemeSelector from "@/components/ThemeSelector";
@@ -348,6 +349,7 @@ export default function ProfilePage() {
               <span className="w-9 h-9 rounded-full bg-lion-action text-lion-navyDeep flex items-center justify-center text-lg">→</span>
             </Link>
 
+            {nextPhaseEnabled && <Link href="/profile/business-card" className="theme-brand-panel rounded-2xl border border-lion-gold/25 p-4 block"><p className="font-semibold">名片與專長 →</p><p className="text-xs text-lion-muted mt-1">掃描名片，讓專長參與資源媒合</p></Link>}
             <Link href="/services" className="theme-brand-panel rounded-2xl border border-lion-gold/25 p-4 block"><p className="font-semibold">獅友服務中心 →</p><p className="text-xs text-lion-muted mt-1">資源媒合、活動成果與個人服務護照</p></Link>
 
             <ThemeSelector />

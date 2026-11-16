@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { nextPhaseEnabled } from "../lib/next-phase-contract";
 import { usePathname } from "next/navigation";
-import { HomeIcon, PeopleIcon, BellIcon, CalendarIcon, UserIcon } from "./icons";
+import { HomeIcon, PeopleIcon, PinIcon, BellIcon, CalendarIcon, UserIcon } from "./icons";
 
 const tabs = [
   { href: "/home", label: "首頁", Icon: HomeIcon },
   { href: "/friends", label: "好友", Icon: PeopleIcon },
   { href: "/events", label: "活動", Icon: CalendarIcon },
+  ...(nextPhaseEnabled ? [{ href: "/meetups", label: "揪團", Icon: PinIcon }] : []),
   { href: "/notifications", label: "通知", Icon: BellIcon },
   { href: "/profile", label: "我的", Icon: UserIcon },
 ];

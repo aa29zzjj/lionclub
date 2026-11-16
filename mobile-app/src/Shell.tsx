@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import type { Member } from "./contract";
-import { HomeIcon, PeopleIcon, CalendarIcon, BellIcon, UserIcon } from "../../src/components/icons";
+import { HomeIcon, PeopleIcon, PinIcon, CalendarIcon, BellIcon, UserIcon } from "../../src/components/icons";
+import { nextPhaseEnabled } from "../../src/lib/next-phase-contract";
 import ScreenErrorBoundary from "./ScreenErrorBoundary";
 
-export type TabKey = "home" | "friends" | "events" | "notifications" | "security";
+export type TabKey = "home" | "friends" | "events" | "meetups" | "notifications" | "security";
 
 /** Mirrors the website's bottom nav (src/components/BottomNav.tsx) exactly —
- * five tabs, no separate "admin" tab. Admin tools live inside the "我的" tab,
+ * Admin tools live inside the "我的" tab,
  * the same way the website reaches /admin/* from /profile. */
 const TABS: { key: TabKey; label: string; Icon: ComponentType<{ className?: string }> }[] = [
   { key: "home", label: "首頁", Icon: HomeIcon },
   { key: "friends", label: "好友", Icon: PeopleIcon },
   { key: "events", label: "活動", Icon: CalendarIcon },
+  ...(nextPhaseEnabled ? [{ key: "meetups" as const, label: "揪團", Icon: PinIcon }] : []),
   { key: "notifications", label: "通知", Icon: BellIcon },
   { key: "security", label: "我的", Icon: UserIcon },
 ];
@@ -32,7 +34,7 @@ function ComingSoon({ label }: { label: string }) {
 }
 
 // Invoke renderTab inside the boundary as well, so an exception in the render
-// callback cannot remove the surrounding Shell or its five navigation buttons.
+// callback cannot remove the surrounding Shell or its navigation buttons.
 function ScreenContent({ tab, member, renderTab, setTab }: {
   tab: TabKey; member: Member; renderTab: RenderTab; setTab: (tab: TabKey) => void;
 }) {

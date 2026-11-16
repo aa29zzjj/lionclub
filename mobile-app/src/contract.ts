@@ -694,13 +694,18 @@ export function createApiClient(baseUrl: string) {
     if (response.status !== 200) throw new ApiError("UNKNOWN", response.data?.error ?? `刪除資歷失敗（HTTP ${response.status}）`, response.status);
   }
 
+  async function nextPhaseRequest(method: "GET" | "POST", query: string, body: unknown, expectedMemberId: string) {
+    const response = await authedRequest(`/api/mobile/next-phase${query ? `?${query}` : ""}`, { method, body, expectedMemberId });
+    return { status: response.status, data: response.data as unknown };
+  }
+
   async function serviceRequest(method: "GET" | "POST", query: string, body: unknown, expectedMemberId: string) {
     const response = await authedRequest(`/api/mobile/services${query ? `?${query}` : ""}`, { method, body, expectedMemberId });
     return { status: response.status, data: response.data as unknown };
   }
 
   return {
-    serviceRequest, getOAuthProviders,
+    serviceRequest, nextPhaseRequest, getOAuthProviders,
     onSessionInvalidated(listener: (isCurrent: () => boolean) => void) { invalidatedListeners.add(listener); return () => { invalidatedListeners.delete(listener); }; },
     captureSessionGuard() { const epoch = mobileSession.capture(); return () => mobileSession.isCurrent(epoch); },
     getPushConfig, registerPushDevice, disablePushDevice, getPushReceipts, markPushReceiptsRead,
