@@ -203,6 +203,13 @@ export default function ProfilePage() {
   const joinDate = formatJoinDate(me.joinYear, me.joinMonth);
   const adminTools = [
     {
+      href: "/admin",
+      title: "全站管理後台",
+      description: "跨分會處理會員申請與會籍",
+      Icon: PeopleIcon,
+      visible: me.adminRoles.some(role => role.role === "SUPER_ADMIN"),
+    },
+    {
       href: "/admin/invites",
       title: "入會邀請",
       description: "產生共同入會 QR，設定註冊有效期",

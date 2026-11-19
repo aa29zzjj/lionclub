@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
+import { clubApplicationEnabled } from "@/lib/central-onboarding";
 import { registrationTargetsInvitedClub } from "@/lib/club-registration-policy";
 
 export async function GET(req: NextRequest) {
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
     valid: true,
     organizationId: invite.organization.id,
     organizationName: invite.organization.name,
-    approvalRequired: false,
-    registrationMode: registrationTargetsInvitedClub(invite.organization.id) ? "direct_club" : "central",
+    approvalRequired: clubApplicationEnabled(),
+    registrationMode: clubApplicationEnabled() ? "club_application" : registrationTargetsInvitedClub(invite.organization.id) ? "direct_club" : "central",
   }, { headers: { "Cache-Control": "no-store" } });
 }

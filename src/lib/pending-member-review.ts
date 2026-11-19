@@ -1,3 +1,6 @@
+import type { Prisma } from "@prisma/client";
+import { CLUB_APPLICATION_PENDING, selectableClubWhere } from "./central-onboarding";
+import { generateMemberNo } from "./member-no";
 import { z } from "zod";
 
 const joinYear = z.number().int().min(1900).max(2100).nullable();
@@ -28,4 +31,25 @@ export function approvedPendingMemberJoinDate(pending: { joinYear: number | null
   }
   if (value.joinYear === null && value.joinMonth !== null) throw new PendingMemberReviewError(400, "填寫入會月份前，請先確認入會年份；年份未知時月份也須留空。");
   return value;
+}
+
+export async function approvePendingClubApplication(
+  tx: Prisma.TransactionClient,
+  pending: { id: string; organizationId: string; organizationAssignmentStatus: string; memberNo: string | null },
+  actorId: string,
+): Promise<Prisma.MemberUpdateManyMutationInput> {
+  if (pending.organizationAssignmentStatus !== CLUB_APPLICATION_PENDING) return {};
+  const organization = await tx.organization.findFirst({
+    where: { ...selectableClubWhere(), id: pending.organizationId },
+    select: { id: true, name: true },
+  });
+  if (!organization) throw new PendingMemberReviewError(409, "申請的分會目前停用，無法核准。");
+  const memberNo = pending.memberNo ?? await generateMemberNo(tx, organization.id);
+  await tx.memberOrganizationAssignment.create({ data: {
+    memberId: pending.id, assignedById: actorId,
+    toOrganizationId: organization.id, toOrganizationName: organization.name,
+    previousAssignmentStatus: CLUB_APPLICATION_PENDING, assignmentStatus: "ASSIGNED",
+    reason: "核准會員自行選擇的分會",
+  } });
+  return { memberNo, organizationAssignmentStatus: "ASSIGNED", organizationAssignmentVersion: { increment: 1 } };
 }

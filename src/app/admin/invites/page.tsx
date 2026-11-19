@@ -43,7 +43,7 @@ function AdminInvitesForm() {
   const [error, setError] = useState("");
   const [validDays, setValidDays] = useState(3);
   const [targetOrganization, setTargetOrganization] = useState<{ id: string; name: string } | null>(null);
-  const [registrationMode, setRegistrationMode] = useState<"direct_club" | "central">("central");
+  const [registrationMode, setRegistrationMode] = useState<"direct_club" | "central" | "club_application">("central");
   const [copyNotice, setCopyNotice] = useState("");
   const [selectedQr, setSelectedQr] = useState<{ url: string; validUntil: string; organizationName: string; directClub: boolean } | null>(null);
   const contextKey = requestedOrganizationId || me?.organization.id || "";
@@ -119,7 +119,7 @@ function AdminInvitesForm() {
         if (!active || !data) return;
         if (data.organization?.id !== targetId || typeof data.organization.name !== "string" || !data.organization.name) throw new Error("邀請分會尚未確認，請重新載入");
         setTargetOrganization(data.organization);
-        setRegistrationMode(data.registrationMode === "direct_club" ? "direct_club" : "central");
+        setRegistrationMode(data.registrationMode === "club_application" ? "club_application" : data.registrationMode === "direct_club" ? "direct_club" : "central");
         setInvites(data.invites ?? []);
       })
       .catch((error) => { if (active) setError(error instanceof Error && !(error instanceof TypeError) ? error.message : "連線暫時中斷，邀請紀錄尚未載入"); })
@@ -193,7 +193,7 @@ function AdminInvitesForm() {
       <div className="px-5 pt-6 pb-4">
         <h1 className="text-xl font-bold mb-1">產生邀請 QR</h1>
         {targetContextReady && targetOrganization && <p className="text-xs text-lion-muted mb-4">{targetOrganization.name}</p>}
-        {targetContextReady && targetOrganization && <p className="mb-4 rounded-xl border border-lion-border bg-lion-card p-3 text-xs leading-relaxed text-lion-muted">{registrationMode === "direct_club" ? `此 QR 專供${targetOrganization.name}註冊：新帳號加入本分會後即可使用，以相同 Email 與密碼登入 App。正式會籍之後依名單人工核對；不會自動授予幹部或管理權限。` : "現場只用共同邀請 QR：新註冊統一暫存於 AI臺科大獅子會、立即可使用。QR 是平台邀請，不代表正式獅子會會籍已核實；分會之後依名單或分會長確認結果分派，不需當場逐人審核。"}</p>}
+        {targetContextReady && targetOrganization && <p className="mb-4 rounded-xl border border-lion-border bg-lion-card p-3 text-xs leading-relaxed text-lion-muted">{registrationMode === "club_application" ? "受邀者從清單選擇申請加入的分會，審核通過後即可登入。" : registrationMode === "direct_club" ? `此 QR 專供${targetOrganization.name}註冊：新帳號加入本分會後即可使用，以相同 Email 與密碼登入 App。正式會籍之後依名單人工核對；不會自動授予幹部或管理權限。` : "現場只用共同邀請 QR：新註冊統一暫存於 AI臺科大獅子會、立即可使用。QR 是平台邀請，不代表正式獅子會會籍已核實；分會之後依名單或分會長確認結果分派，不需當場逐人審核。"}</p>}
         <label htmlFor="invite-valid-days" className="mb-2 block text-sm font-medium">QR 註冊有效期</label>
         <select id="invite-valid-days" value={validDays} onChange={(event) => setValidDays(Number(event.target.value))} disabled={creating} className="mb-2 min-h-12 w-full rounded-xl border border-lion-border bg-lion-soft px-3 text-base">
           {[1, 3, 7, 30].map((days) => <option key={days} value={days}>{days} 天{days === 3 ? "（晚宴建議）" : ""}</option>)}
