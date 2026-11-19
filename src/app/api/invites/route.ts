@@ -6,6 +6,7 @@ import { getCurrentMember } from "@/lib/current-member";
 import { onboardingErrorResponse } from "@/lib/onboarding-response";
 import { resolveInviteOrganization } from "@/lib/invite-organization";
 import { isTrustedBrowserMutation } from "@/lib/browser-origin";
+import { clubApplicationEnabled } from "@/lib/central-onboarding";
 import { registrationTargetsInvitedClub } from "@/lib/club-registration-policy";
 
 function generatePin() {
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
       return { organization, invites };
     }, { isolationLevel: "Serializable" });
     const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).origin;
-    return NextResponse.json({ organization, approvalRequired: false, registrationMode: registrationTargetsInvitedClub(organization.id) ? "direct_club" : "central", invites: invites.map(invite => {
+    return NextResponse.json({ organization, approvalRequired: clubApplicationEnabled(), registrationMode: clubApplicationEnabled() ? "club_application" : registrationTargetsInvitedClub(organization.id) ? "direct_club" : "central", invites: invites.map(invite => {
       const registerUrl = new URL("/register", origin);
       registerUrl.searchParams.set("org", invite.organizationId);
       registerUrl.searchParams.set("token", invite.token);
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
     registerUrl.searchParams.set("org", invite.organizationId);
     registerUrl.searchParams.set("token", invite.token);
 
-    return NextResponse.json({ organization, approvalRequired: false, registrationMode: registrationTargetsInvitedClub(organization.id) ? "direct_club" : "central", invite: qrInvite(invite), registerUrl: registerUrl.toString() }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ organization, approvalRequired: clubApplicationEnabled(), registrationMode: clubApplicationEnabled() ? "club_application" : registrationTargetsInvitedClub(organization.id) ? "direct_club" : "central", invite: qrInvite(invite), registerUrl: registerUrl.toString() }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return inviteErrorResponse(error);
   }

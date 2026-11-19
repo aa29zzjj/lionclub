@@ -11,9 +11,14 @@ type PendingMember = {
   phone: string | null;
   organization: { id: string; name: string };
   createdAt: string;
+  updatedAt: string;
+  joinYear: number | null;
+  joinMonth: number | null;
 };
 
-export default function PendingMembersPage() {
+export default function PendingMembersPage() { return <PendingMembersPanel />; }
+
+function PendingMembersPanel() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
@@ -21,11 +26,13 @@ export default function PendingMembersPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
-  const now = new Date();
+  const [global, setGlobal] = useState(false);
+  const [clubFilter, setClubFilter] = useState("");
   const [joinDates, setJoinDates] = useState<Record<string, { year: string; month: string }>>({});
 
   function joinDateFor(memberId: string) {
-    return joinDates[memberId] ?? { year: String(now.getFullYear()), month: String(now.getMonth() + 1) };
+    const member = members.find(entry => entry.id === memberId);
+    return joinDates[memberId] ?? { year: String(member?.joinYear ?? ""), month: String(member?.joinMonth ?? "") };
   }
 
   function setJoinDateField(memberId: string, field: "year" | "month", value: string) {
@@ -34,7 +41,7 @@ export default function PendingMembersPage() {
 
   function load() {
     setLoading(true); setError("");
-    return fetch("/api/admin/pending-members")
+    return fetch("/api/admin/pending-members", { cache: "no-store" })
       .then(async (res) => {
         if (res.status === 401) {
           setMembers([]); router.replace("/login?reason=session-expired");
@@ -49,7 +56,7 @@ export default function PendingMembersPage() {
         return res.json();
       })
       .then((data) => {
-        if (data) setMembers(data.members ?? []);
+        if (data) { setMembers(data.members ?? []); setGlobal(data.global === true); }
       })
       .catch(() => setError("待審核名單連線中斷，請重新載入"))
       .finally(() => setLoading(false));
@@ -67,11 +74,13 @@ export default function PendingMembersPage() {
     if (action === "reject" && !window.confirm(`確定拒絕 ${member.name}（${member.email || member.organization.name}）的申請嗎？這會刪除這筆待審核帳號及申請，無法復原。`)) return;
     setBusyId(memberId);
     setError(""); setToast("");
-    const body: { action: "approve" | "reject"; joinYear?: number; joinMonth?: number } = { action };
+    const body: { action: "approve" | "reject"; joinYear?: number | null; joinMonth?: number | null; expectedOrganizationId: string; expectedUpdatedAt: string } = {
+      action, expectedOrganizationId: member.organization.id, expectedUpdatedAt: member.updatedAt,
+    };
     if (action === "approve") {
       const { year, month } = joinDateFor(memberId);
-      if (year) body.joinYear = Number(year);
-      if (month) body.joinMonth = Number(month);
+      body.joinYear = year ? Number(year) : null;
+      body.joinMonth = month ? Number(month) : null;
     }
     try {
     const res = await fetch(`/api/admin/pending-members/${memberId}`, {
@@ -114,11 +123,18 @@ export default function PendingMembersPage() {
     );
   }
 
+  const clubs = [...new Map(members.map(member => [member.organization.id, member.organization])).values()].sort((a, b) => a.name.localeCompare(b.name, "zh-TW"));
+  const visible = global && clubs.some(club => club.id === clubFilter) ? members.filter(member => member.organization.id === clubFilter) : members;
   return (
     <AppShell>
       <div className="px-5 pt-6 pb-4">
         <h1 className="text-xl font-bold mb-1">審核新會員</h1>
-        <p className="text-xs text-lion-muted mb-4">待審核 {members.length} 筆</p>
+        <p className="text-sm text-lion-muted mb-4">{global ? "超級管理員・全站入會審核" : "分會入會審核"} · 待審核 {visible.length} 筆</p>
+        {global && clubs.length > 0 && <label className="mb-4 block text-sm">篩選分會
+          <select value={clubFilter} onChange={event => setClubFilter(event.target.value)} className="mt-1 min-h-12 w-full rounded-lg border border-lion-border bg-lion-card px-3">
+            <option value="">所有分會</option>{clubs.map(club => <option key={club.id} value={club.id}>{club.name}</option>)}
+          </select>
+        </label>}
 
         {toast && (
           <div role="status" className="mb-4 rounded-xl border border-lion-border bg-lion-card text-base px-3 py-3">
@@ -131,7 +147,7 @@ export default function PendingMembersPage() {
           {members.length === 0 && !error && (
             <p className="text-sm text-lion-muted text-center py-12">目前沒有待審核的申請</p>
           )}
-          {members.map((m) => (
+          {visible.map((m) => (
             <div key={m.id} className="rounded-2xl bg-lion-card border border-white/[0.06] p-4">
               <p className="font-semibold text-sm">{m.name}</p>
               <p className="text-xs text-lion-muted mt-0.5">{m.organization.name}</p>
